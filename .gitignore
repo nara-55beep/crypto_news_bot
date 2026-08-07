@@ -1,0 +1,79 @@
+# Local credentials and machine-specific configuration
+config.py
+.env
+.env.*
+!.env.example
+crypto-trading-bot/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
+# Authentication/session material
+*.session
+*.session-journal
+*.cookie
+*.cookies
+
+# Runtime state, databases, and private exports
+data/
+output/
+**/logs/
+**/data_cache/
+*.db
+*.sqlite
+*.sqlite3
+
+# Downloaded market data and generated research artifacts
+**/cache/
+research/ta_strat/*_out/
+*.part
+*.part.*
+*.bak
+*.bak_*
+*.pre_*
+*.log
+*.log.*
+*.out
+*.err
+_picked.json
+_ranked.json
+_verified.json
+
+# Dependencies, bytecode, and test/build outputs
+venv/
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+.coverage
+htmlcov/
+dist/
+build/
+.next/
+
+# Local tooling and IDE state
+.agents/
+.claude/
+.vscode/
+.idea/
+*.iml
+
+# Vendor binary is installed locally, not versioned
+lighter-signer-windows-amd64.dll
+*.jfx
+
+# QuantConnect/LEAN local account and organization metadata
+qc_lean/lean.json
+qc_lean/**/config.json
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini

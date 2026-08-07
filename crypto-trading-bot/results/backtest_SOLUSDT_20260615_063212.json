@@ -1,0 +1,2978 @@
+{
+  "symbol": "SOL/USDT",
+  "params": {
+    "entry_mode": "pullback",
+    "htf": "1h",
+    "entry_tf": "15m",
+    "risk_per_trade": 0.005,
+    "atr_stop_mult": 1.5,
+    "rr": 2.0,
+    "fee_rate": 0.0004,
+    "slippage": 0.0005,
+    "days": 120
+  },
+  "metrics": {
+    "num_trades": 147,
+    "total_return_pct": -16.96,
+    "final_equity": 8303.7,
+    "win_rate_pct": 32.65,
+    "profit_factor": 0.771,
+    "max_drawdown_pct": -21.12,
+    "sharpe": -3.7,
+    "sortino": -6.24,
+    "avg_trade": -8.32,
+    "best_trade": 98.65,
+    "worst_trade": -62.98,
+    "max_consecutive_losses": 11,
+    "gross_profit": 4114.55,
+    "gross_loss": 5337.13
+  },
+  "trades": [
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-17T08:30:00+00:00",
+      "entry_price": 86.037,
+      "qty": 80.701101,
+      "stop": 86.6565,
+      "take": 84.7978,
+      "exit_time": "2026-02-17T11:00:00+00:00",
+      "exit_price": 84.8402,
+      "pnl": 93.84,
+      "pnl_pct": 1.352,
+      "fees": 5.516,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-17T23:45:00+00:00",
+      "entry_price": 84.9775,
+      "qty": 77.137241,
+      "stop": 85.6316,
+      "take": 83.6693,
+      "exit_time": "2026-02-18T08:15:00+00:00",
+      "exit_price": 85.6744,
+      "pnl": -56.4,
+      "pnl_pct": -0.86,
+      "fees": 5.2654,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-18T10:00:00+00:00",
+      "entry_price": 85.0275,
+      "qty": 99.674363,
+      "stop": 85.5307,
+      "take": 84.021,
+      "exit_time": "2026-02-18T11:00:00+00:00",
+      "exit_price": 84.063,
+      "pnl": 92.78,
+      "pnl_pct": 1.095,
+      "fees": 6.7416,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-19T04:45:00+00:00",
+      "entry_price": 81.4193,
+      "qty": 97.411746,
+      "stop": 81.9388,
+      "take": 80.3802,
+      "exit_time": "2026-02-19T06:00:00+00:00",
+      "exit_price": 81.9798,
+      "pnl": -57.79,
+      "pnl_pct": -0.729,
+      "fees": 6.3668,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-19T09:00:00+00:00",
+      "entry_price": 81.6292,
+      "qty": 95.106297,
+      "stop": 82.1581,
+      "take": 80.5714,
+      "exit_time": "2026-02-19T13:00:00+00:00",
+      "exit_price": 80.6116,
+      "pnl": 93.71,
+      "pnl_pct": 1.207,
+      "fees": 6.172,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-20T11:30:00+00:00",
+      "entry_price": 83.3783,
+      "qty": 78.902323,
+      "stop": 84.0216,
+      "take": 82.0918,
+      "exit_time": "2026-02-20T13:30:00+00:00",
+      "exit_price": 82.1328,
+      "pnl": 95.68,
+      "pnl_pct": 1.454,
+      "fees": 5.2237,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-21T03:00:00+00:00",
+      "entry_price": 84.2579,
+      "qty": 100.274322,
+      "stop": 84.7687,
+      "take": 83.2362,
+      "exit_time": "2026-02-21T09:15:00+00:00",
+      "exit_price": 84.811,
+      "pnl": -58.87,
+      "pnl_pct": -0.697,
+      "fees": 6.7813,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-21T20:30:00+00:00",
+      "entry_price": 85.2574,
+      "qty": 99.487219,
+      "stop": 85.7691,
+      "take": 84.2339,
+      "exit_time": "2026-02-21T21:30:00+00:00",
+      "exit_price": 85.812,
+      "pnl": -58.59,
+      "pnl_pct": -0.691,
+      "fees": 6.8077,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-22T00:00:00+00:00",
+      "entry_price": 85.0275,
+      "qty": 120.647705,
+      "stop": 85.4469,
+      "take": 84.1887,
+      "exit_time": "2026-02-22T02:00:00+00:00",
+      "exit_price": 85.4896,
+      "pnl": -59.88,
+      "pnl_pct": -0.584,
+      "fees": 8.229,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-23T00:00:00+00:00",
+      "entry_price": 82.6986,
+      "qty": 97.032796,
+      "stop": 83.2168,
+      "take": 81.6623,
+      "exit_time": "2026-02-23T00:45:00+00:00",
+      "exit_price": 81.7031,
+      "pnl": 93.43,
+      "pnl_pct": 1.164,
+      "fees": 6.3809,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-23T14:15:00+00:00",
+      "entry_price": 80.1599,
+      "qty": 76.12967,
+      "stop": 80.8263,
+      "take": 78.8272,
+      "exit_time": "2026-02-23T16:00:00+00:00",
+      "exit_price": 78.8666,
+      "pnl": 96.06,
+      "pnl_pct": 1.574,
+      "fees": 4.8427,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-24T01:30:00+00:00",
+      "entry_price": 77.6312,
+      "qty": 54.924557,
+      "stop": 78.5633,
+      "take": 75.7668,
+      "exit_time": "2026-02-24T14:30:00+00:00",
+      "exit_price": 75.8047,
+      "pnl": 98.65,
+      "pnl_pct": 2.314,
+      "fees": 3.371,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-02-25T00:00:00+00:00",
+      "entry_price": 78.7506,
+      "qty": 81.001784,
+      "stop": 79.3887,
+      "take": 77.4745,
+      "exit_time": "2026-02-25T01:00:00+00:00",
+      "exit_price": 79.4284,
+      "pnl": -57.47,
+      "pnl_pct": -0.901,
+      "fees": 5.1251,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-02-26T09:00:00+00:00",
+      "entry_price": 88.3542,
+      "qty": 62.523878,
+      "stop": 87.5323,
+      "take": 89.9978,
+      "exit_time": "2026-02-26T10:30:00+00:00",
+      "exit_price": 87.4886,
+      "pnl": -56.31,
+      "pnl_pct": -1.019,
+      "fees": 4.3977,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-02-26T14:00:00+00:00",
+      "entry_price": 87.9239,
+      "qty": 71.700443,
+      "stop": 87.2114,
+      "take": 89.3491,
+      "exit_time": "2026-02-26T14:30:00+00:00",
+      "exit_price": 87.1678,
+      "pnl": -56.72,
+      "pnl_pct": -0.9,
+      "fees": 5.0217,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-02-27T01:45:00+00:00",
+      "entry_price": 86.133,
+      "qty": 72.954966,
+      "stop": 85.4368,
+      "take": 87.5255,
+      "exit_time": "2026-02-27T03:45:00+00:00",
+      "exit_price": 87.4818,
+      "pnl": 95.84,
+      "pnl_pct": 1.525,
+      "fees": 5.0664,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-01T14:00:00+00:00",
+      "entry_price": 86.4032,
+      "qty": 56.443588,
+      "stop": 85.495,
+      "take": 88.2195,
+      "exit_time": "2026-03-01T14:30:00+00:00",
+      "exit_price": 85.4522,
+      "pnl": -55.6,
+      "pnl_pct": -1.14,
+      "fees": 3.8801,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-01T15:00:00+00:00",
+      "entry_price": 86.3532,
+      "qty": 55.017316,
+      "stop": 85.4267,
+      "take": 88.2061,
+      "exit_time": "2026-03-01T16:00:00+00:00",
+      "exit_price": 85.3839,
+      "pnl": -55.2,
+      "pnl_pct": -1.162,
+      "fees": 3.7794,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-02T10:15:00+00:00",
+      "entry_price": 83.8119,
+      "qty": 61.149253,
+      "stop": 82.983,
+      "take": 85.4697,
+      "exit_time": "2026-03-02T13:45:00+00:00",
+      "exit_price": 82.9415,
+      "pnl": -55.25,
+      "pnl_pct": -1.078,
+      "fees": 4.0787,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T05:00:00+00:00",
+      "entry_price": 86.3832,
+      "qty": 61.23042,
+      "stop": 85.56,
+      "take": 88.0295,
+      "exit_time": "2026-03-03T05:45:00+00:00",
+      "exit_price": 85.5172,
+      "pnl": -55.12,
+      "pnl_pct": -1.042,
+      "fees": 4.2102,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T07:00:00+00:00",
+      "entry_price": 86.103,
+      "qty": 64.994181,
+      "stop": 85.332,
+      "take": 87.6452,
+      "exit_time": "2026-03-03T07:45:00+00:00",
+      "exit_price": 85.2893,
+      "pnl": -55.11,
+      "pnl_pct": -0.985,
+      "fees": 4.4558,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T12:00:00+00:00",
+      "entry_price": 84.9425,
+      "qty": 57.182326,
+      "stop": 84.0711,
+      "take": 86.6852,
+      "exit_time": "2026-03-03T12:45:00+00:00",
+      "exit_price": 84.029,
+      "pnl": -54.15,
+      "pnl_pct": -1.115,
+      "fees": 3.8649,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T15:30:00+00:00",
+      "entry_price": 84.5222,
+      "qty": 42.408491,
+      "stop": 83.3539,
+      "take": 86.8589,
+      "exit_time": "2026-03-03T16:15:00+00:00",
+      "exit_price": 86.8155,
+      "pnl": 95.78,
+      "pnl_pct": 2.672,
+      "fees": 2.9065,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T16:45:00+00:00",
+      "entry_price": 85.3827,
+      "qty": 34.091806,
+      "stop": 83.9155,
+      "take": 88.3171,
+      "exit_time": "2026-03-04T08:45:00+00:00",
+      "exit_price": 88.2729,
+      "pnl": 97.33,
+      "pnl_pct": 3.344,
+      "fees": 2.3681,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-05T06:45:00+00:00",
+      "entry_price": 90.8554,
+      "qty": 67.402146,
+      "stop": 90.1062,
+      "take": 92.3539,
+      "exit_time": "2026-03-05T07:45:00+00:00",
+      "exit_price": 90.0611,
+      "pnl": -55.97,
+      "pnl_pct": -0.914,
+      "fees": 4.8777,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-05T08:30:00+00:00",
+      "entry_price": 90.3652,
+      "qty": 63.897557,
+      "stop": 89.5794,
+      "take": 91.9367,
+      "exit_time": "2026-03-05T10:15:00+00:00",
+      "exit_price": 91.8907,
+      "pnl": 95.13,
+      "pnl_pct": 1.648,
+      "fees": 4.6583,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-06T02:30:00+00:00",
+      "entry_price": 88.6843,
+      "qty": 66.314812,
+      "stop": 87.9202,
+      "take": 90.2126,
+      "exit_time": "2026-03-06T04:30:00+00:00",
+      "exit_price": 87.8762,
+      "pnl": -55.92,
+      "pnl_pct": -0.951,
+      "fees": 4.6834,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-06T07:15:00+00:00",
+      "entry_price": 88.6543,
+      "qty": 71.615514,
+      "stop": 87.9508,
+      "take": 90.0613,
+      "exit_time": "2026-03-06T09:00:00+00:00",
+      "exit_price": 87.9068,
+      "pnl": -56.05,
+      "pnl_pct": -0.883,
+      "fees": 5.0578,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-08T11:30:00+00:00",
+      "entry_price": 82.6786,
+      "qty": 89.137678,
+      "stop": 83.2406,
+      "take": 81.5548,
+      "exit_time": "2026-03-08T12:15:00+00:00",
+      "exit_price": 81.5956,
+      "pnl": 93.63,
+      "pnl_pct": 1.27,
+      "fees": 5.8572,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-09T07:00:00+00:00",
+      "entry_price": 82.7086,
+      "qty": 56.899108,
+      "stop": 83.5969,
+      "take": 80.9321,
+      "exit_time": "2026-03-09T08:15:00+00:00",
+      "exit_price": 83.6387,
+      "pnl": -54.82,
+      "pnl_pct": -1.165,
+      "fees": 3.786,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-09T11:15:00+00:00",
+      "entry_price": 83.1284,
+      "qty": 66.424082,
+      "stop": 83.885,
+      "take": 81.6152,
+      "exit_time": "2026-03-09T12:15:00+00:00",
+      "exit_price": 83.927,
+      "pnl": -55.27,
+      "pnl_pct": -1.001,
+      "fees": 4.4386,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-11T00:00:00+00:00",
+      "entry_price": 86.063,
+      "qty": 68.322348,
+      "stop": 85.3316,
+      "take": 87.5258,
+      "exit_time": "2026-03-11T07:30:00+00:00",
+      "exit_price": 85.2889,
+      "pnl": -55.22,
+      "pnl_pct": -0.939,
+      "fees": 4.6829,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-11T14:00:00+00:00",
+      "entry_price": 86.053,
+      "qty": 53.64209,
+      "stop": 85.1268,
+      "take": 87.9054,
+      "exit_time": "2026-03-11T15:30:00+00:00",
+      "exit_price": 85.0842,
+      "pnl": -53.79,
+      "pnl_pct": -1.165,
+      "fees": 3.6721,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-12T07:30:00+00:00",
+      "entry_price": 85.7529,
+      "qty": 100.32729,
+      "stop": 85.2604,
+      "take": 86.7377,
+      "exit_time": "2026-03-12T10:30:00+00:00",
+      "exit_price": 86.6944,
+      "pnl": 90.98,
+      "pnl_pct": 1.057,
+      "fees": 6.9205,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-14T03:30:00+00:00",
+      "entry_price": 88.4942,
+      "qty": 108.452607,
+      "stop": 88.0346,
+      "take": 89.4134,
+      "exit_time": "2026-03-14T05:30:00+00:00",
+      "exit_price": 87.9906,
+      "pnl": -58.43,
+      "pnl_pct": -0.609,
+      "fees": 7.6561,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-14T22:00:00+00:00",
+      "entry_price": 87.2936,
+      "qty": 177.837317,
+      "stop": 87.0151,
+      "take": 87.8507,
+      "exit_time": "2026-03-14T23:00:00+00:00",
+      "exit_price": 87.8067,
+      "pnl": 85.0,
+      "pnl_pct": 0.548,
+      "fees": 12.4558,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-15T19:00:00+00:00",
+      "entry_price": 88.124,
+      "qty": 97.892124,
+      "stop": 87.614,
+      "take": 89.144,
+      "exit_time": "2026-03-15T21:30:00+00:00",
+      "exit_price": 89.0995,
+      "pnl": 92.0,
+      "pnl_pct": 1.066,
+      "fees": 6.9395,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T07:15:00+00:00",
+      "entry_price": 94.5272,
+      "qty": 63.314451,
+      "stop": 93.7317,
+      "take": 96.1183,
+      "exit_time": "2026-03-17T09:45:00+00:00",
+      "exit_price": 93.6849,
+      "pnl": -55.71,
+      "pnl_pct": -0.931,
+      "fees": 4.7666,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T13:30:00+00:00",
+      "entry_price": 93.9269,
+      "qty": 68.361322,
+      "stop": 93.1944,
+      "take": 95.392,
+      "exit_time": "2026-03-17T15:30:00+00:00",
+      "exit_price": 93.1478,
+      "pnl": -55.81,
+      "pnl_pct": -0.869,
+      "fees": 5.1155,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T16:15:00+00:00",
+      "entry_price": 94.5172,
+      "qty": 55.902386,
+      "stop": 93.6267,
+      "take": 96.2984,
+      "exit_time": "2026-03-18T10:30:00+00:00",
+      "exit_price": 93.5798,
+      "pnl": -54.49,
+      "pnl_pct": -1.031,
+      "fees": 4.206,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-19T03:00:00+00:00",
+      "entry_price": 90.2351,
+      "qty": 93.755841,
+      "stop": 89.7071,
+      "take": 91.2911,
+      "exit_time": "2026-03-19T03:15:00+00:00",
+      "exit_price": 91.2454,
+      "pnl": 91.3,
+      "pnl_pct": 1.079,
+      "fees": 6.8059,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-20T14:45:00+00:00",
+      "entry_price": 88.8356,
+      "qty": 67.355047,
+      "stop": 89.577,
+      "take": 87.3526,
+      "exit_time": "2026-03-20T21:15:00+00:00",
+      "exit_price": 89.6218,
+      "pnl": -55.37,
+      "pnl_pct": -0.925,
+      "fees": 4.808,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-22T07:30:00+00:00",
+      "entry_price": 87.7961,
+      "qty": 97.732602,
+      "stop": 88.3041,
+      "take": 86.78,
+      "exit_time": "2026-03-22T11:45:00+00:00",
+      "exit_price": 86.8234,
+      "pnl": 91.67,
+      "pnl_pct": 1.068,
+      "fees": 6.8264,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-23T07:45:00+00:00",
+      "entry_price": 85.897,
+      "qty": 67.682634,
+      "stop": 86.6372,
+      "take": 84.4168,
+      "exit_time": "2026-03-23T11:00:00+00:00",
+      "exit_price": 86.6805,
+      "pnl": -55.37,
+      "pnl_pct": -0.952,
+      "fees": 4.6722,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-24T20:15:00+00:00",
+      "entry_price": 89.6548,
+      "qty": 63.140868,
+      "stop": 88.866,
+      "take": 91.2324,
+      "exit_time": "2026-03-25T00:00:00+00:00",
+      "exit_price": 91.1868,
+      "pnl": 94.43,
+      "pnl_pct": 1.668,
+      "fees": 4.5674,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-03-25T22:30:00+00:00",
+      "entry_price": 91.7459,
+      "qty": 85.192129,
+      "stop": 91.1558,
+      "take": 92.9259,
+      "exit_time": "2026-03-26T02:15:00+00:00",
+      "exit_price": 91.1102,
+      "pnl": -57.25,
+      "pnl_pct": -0.733,
+      "fees": 6.2312,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-28T01:30:00+00:00",
+      "entry_price": 82.4288,
+      "qty": 110.212315,
+      "stop": 82.8821,
+      "take": 81.5221,
+      "exit_time": "2026-03-28T06:15:00+00:00",
+      "exit_price": 82.9236,
+      "pnl": -58.19,
+      "pnl_pct": -0.641,
+      "fees": 7.2895,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-28T12:15:00+00:00",
+      "entry_price": 82.9585,
+      "qty": 150.895309,
+      "stop": 83.2876,
+      "take": 82.3004,
+      "exit_time": "2026-03-28T13:30:00+00:00",
+      "exit_price": 83.3292,
+      "pnl": -60.97,
+      "pnl_pct": -0.487,
+      "fees": 10.0368,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-28T21:00:00+00:00",
+      "entry_price": 83.0185,
+      "qty": 129.208891,
+      "stop": 83.4002,
+      "take": 82.255,
+      "exit_time": "2026-03-28T23:00:00+00:00",
+      "exit_price": 82.2961,
+      "pnl": 89.08,
+      "pnl_pct": 0.83,
+      "fees": 8.544,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-29T06:15:00+00:00",
+      "entry_price": 82.2988,
+      "qty": 128.828224,
+      "stop": 82.685,
+      "take": 81.5265,
+      "exit_time": "2026-03-29T11:00:00+00:00",
+      "exit_price": 82.7263,
+      "pnl": -59.34,
+      "pnl_pct": -0.56,
+      "fees": 8.504,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-30T14:30:00+00:00",
+      "entry_price": 83.6582,
+      "qty": 76.09895,
+      "stop": 84.3077,
+      "take": 82.359,
+      "exit_time": "2026-03-30T14:45:00+00:00",
+      "exit_price": 84.3499,
+      "pnl": -55.21,
+      "pnl_pct": -0.867,
+      "fees": 5.1141,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-03-31T04:15:00+00:00",
+      "entry_price": 83.2584,
+      "qty": 80.049197,
+      "stop": 83.8723,
+      "take": 82.0305,
+      "exit_time": "2026-03-31T09:00:00+00:00",
+      "exit_price": 82.0715,
+      "pnl": 92.37,
+      "pnl_pct": 1.386,
+      "fees": 5.2938,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-01T01:45:00+00:00",
+      "entry_price": 82.6387,
+      "qty": 85.126036,
+      "stop": 83.2212,
+      "take": 81.4735,
+      "exit_time": "2026-04-01T03:00:00+00:00",
+      "exit_price": 83.2628,
+      "pnl": -55.97,
+      "pnl_pct": -0.796,
+      "fees": 5.649,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-01T08:00:00+00:00",
+      "entry_price": 83.5182,
+      "qty": 81.031156,
+      "stop": 84.1266,
+      "take": 82.3015,
+      "exit_time": "2026-04-01T16:15:00+00:00",
+      "exit_price": 84.1687,
+      "pnl": -55.43,
+      "pnl_pct": -0.819,
+      "fees": 5.4351,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T02:15:00+00:00",
+      "entry_price": 79.0205,
+      "qty": 92.120825,
+      "stop": 79.5525,
+      "take": 77.9565,
+      "exit_time": "2026-04-03T05:30:00+00:00",
+      "exit_price": 79.5922,
+      "pnl": -55.6,
+      "pnl_pct": -0.764,
+      "fees": 5.8446,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T12:30:00+00:00",
+      "entry_price": 79.7201,
+      "qty": 90.22411,
+      "stop": 80.26,
+      "take": 78.6403,
+      "exit_time": "2026-04-03T14:45:00+00:00",
+      "exit_price": 80.3002,
+      "pnl": -55.23,
+      "pnl_pct": -0.768,
+      "fees": 5.7751,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T19:00:00+00:00",
+      "entry_price": 79.9,
+      "qty": 107.491824,
+      "stop": 80.3505,
+      "take": 78.9991,
+      "exit_time": "2026-04-03T21:00:00+00:00",
+      "exit_price": 80.3907,
+      "pnl": -56.2,
+      "pnl_pct": -0.654,
+      "fees": 6.892,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T23:30:00+00:00",
+      "entry_price": 80.1699,
+      "qty": 133.012718,
+      "stop": 80.5317,
+      "take": 79.4463,
+      "exit_time": "2026-04-04T15:00:00+00:00",
+      "exit_price": 80.572,
+      "pnl": -57.77,
+      "pnl_pct": -0.542,
+      "fees": 8.5523,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-04T20:00:00+00:00",
+      "entry_price": 80.6796,
+      "qty": 116.256595,
+      "stop": 81.0909,
+      "take": 79.8571,
+      "exit_time": "2026-04-05T06:00:00+00:00",
+      "exit_price": 79.897,
+      "pnl": 87.27,
+      "pnl_pct": 0.93,
+      "fees": 7.4672,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-05T21:15:00+00:00",
+      "entry_price": 79.5402,
+      "qty": 109.837559,
+      "stop": 79.9793,
+      "take": 78.6619,
+      "exit_time": "2026-04-05T22:30:00+00:00",
+      "exit_price": 80.0193,
+      "pnl": -56.14,
+      "pnl_pct": -0.643,
+      "fees": 7.0103,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-06T06:15:00+00:00",
+      "entry_price": 81.2394,
+      "qty": 85.830258,
+      "stop": 81.7978,
+      "take": 80.1224,
+      "exit_time": "2026-04-06T07:15:00+00:00",
+      "exit_price": 81.8387,
+      "pnl": -54.25,
+      "pnl_pct": -0.778,
+      "fees": 5.5988,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-08T17:30:00+00:00",
+      "entry_price": 84.022,
+      "qty": 76.603127,
+      "stop": 83.4,
+      "take": 85.2661,
+      "exit_time": "2026-04-08T18:15:00+00:00",
+      "exit_price": 83.3583,
+      "pnl": -53.4,
+      "pnl_pct": -0.83,
+      "fees": 5.1287,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-09T06:00:00+00:00",
+      "entry_price": 82.2211,
+      "qty": 120.90248,
+      "stop": 81.8293,
+      "take": 83.0047,
+      "exit_time": "2026-04-09T06:30:00+00:00",
+      "exit_price": 81.7884,
+      "pnl": -56.27,
+      "pnl_pct": -0.566,
+      "fees": 7.9317,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-09T07:30:00+00:00",
+      "entry_price": 82.3612,
+      "qty": 129.881542,
+      "stop": 81.9988,
+      "take": 83.086,
+      "exit_time": "2026-04-09T11:15:00+00:00",
+      "exit_price": 81.9578,
+      "pnl": -56.65,
+      "pnl_pct": -0.53,
+      "fees": 8.5368,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-09T15:00:00+00:00",
+      "entry_price": 82.4612,
+      "qty": 86.6486,
+      "stop": 81.9215,
+      "take": 83.5406,
+      "exit_time": "2026-04-09T15:45:00+00:00",
+      "exit_price": 83.4988,
+      "pnl": 87.01,
+      "pnl_pct": 1.218,
+      "fees": 5.7521,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-10T04:45:00+00:00",
+      "entry_price": 83.3517,
+      "qty": 90.418492,
+      "stop": 82.8298,
+      "take": 84.3954,
+      "exit_time": "2026-04-10T07:45:00+00:00",
+      "exit_price": 82.7884,
+      "pnl": -53.92,
+      "pnl_pct": -0.715,
+      "fees": 6.0089,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-10T09:15:00+00:00",
+      "entry_price": 83.4117,
+      "qty": 115.418969,
+      "stop": 83.0053,
+      "take": 84.2244,
+      "exit_time": "2026-04-10T12:30:00+00:00",
+      "exit_price": 84.1823,
+      "pnl": 85.05,
+      "pnl_pct": 0.883,
+      "fees": 7.7374,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-11T08:00:00+00:00",
+      "entry_price": 84.3522,
+      "qty": 168.457898,
+      "stop": 84.0713,
+      "take": 84.9138,
+      "exit_time": "2026-04-11T10:15:00+00:00",
+      "exit_price": 84.0293,
+      "pnl": -60.05,
+      "pnl_pct": -0.423,
+      "fees": 11.3461,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-11T14:00:00+00:00",
+      "entry_price": 84.2721,
+      "qty": 136.233063,
+      "stop": 83.9273,
+      "take": 84.9618,
+      "exit_time": "2026-04-11T16:30:00+00:00",
+      "exit_price": 84.9193,
+      "pnl": 83.54,
+      "pnl_pct": 0.728,
+      "fees": 9.2198,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-13T08:15:00+00:00",
+      "entry_price": 81.899,
+      "qty": 112.560801,
+      "stop": 82.3199,
+      "take": 81.0573,
+      "exit_time": "2026-04-13T12:45:00+00:00",
+      "exit_price": 82.361,
+      "pnl": -55.71,
+      "pnl_pct": -0.604,
+      "fees": 7.3957,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-14T13:15:00+00:00",
+      "entry_price": 86.133,
+      "qty": 104.614997,
+      "stop": 85.6831,
+      "take": 87.033,
+      "exit_time": "2026-04-14T13:30:00+00:00",
+      "exit_price": 86.9895,
+      "pnl": 85.96,
+      "pnl_pct": 0.954,
+      "fees": 7.2445,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T00:15:00+00:00",
+      "entry_price": 83.9319,
+      "qty": 83.247369,
+      "stop": 83.3615,
+      "take": 85.0728,
+      "exit_time": "2026-04-15T02:30:00+00:00",
+      "exit_price": 83.3198,
+      "pnl": -53.73,
+      "pnl_pct": -0.769,
+      "fees": 5.5693,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T11:00:00+00:00",
+      "entry_price": 83.2616,
+      "qty": 101.076507,
+      "stop": 82.7946,
+      "take": 84.1956,
+      "exit_time": "2026-04-15T14:15:00+00:00",
+      "exit_price": 84.1535,
+      "pnl": 86.75,
+      "pnl_pct": 1.031,
+      "fees": 6.7687,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-19T00:00:00+00:00",
+      "entry_price": 86.1831,
+      "qty": 151.694398,
+      "stop": 85.8691,
+      "take": 86.8109,
+      "exit_time": "2026-04-19T00:30:00+00:00",
+      "exit_price": 85.8262,
+      "pnl": -59.34,
+      "pnl_pct": -0.454,
+      "fees": 10.4371,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-19T11:00:00+00:00",
+      "entry_price": 85.3126,
+      "qty": 105.956204,
+      "stop": 84.8662,
+      "take": 86.2054,
+      "exit_time": "2026-04-19T13:00:00+00:00",
+      "exit_price": 86.1623,
+      "pnl": 86.38,
+      "pnl_pct": 0.956,
+      "fees": 7.2675,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-22T00:15:00+00:00",
+      "entry_price": 86.3131,
+      "qty": 81.9313,
+      "stop": 85.7308,
+      "take": 87.4778,
+      "exit_time": "2026-04-22T02:30:00+00:00",
+      "exit_price": 87.4341,
+      "pnl": 88.98,
+      "pnl_pct": 1.258,
+      "fees": 5.6941,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T06:15:00+00:00",
+      "entry_price": 86.113,
+      "qty": 110.208481,
+      "stop": 85.6762,
+      "take": 86.9867,
+      "exit_time": "2026-04-23T08:15:00+00:00",
+      "exit_price": 85.6334,
+      "pnl": -56.64,
+      "pnl_pct": -0.597,
+      "fees": 7.5712,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T12:00:00+00:00",
+      "entry_price": 86.003,
+      "qty": 131.335452,
+      "stop": 85.6387,
+      "take": 86.7315,
+      "exit_time": "2026-04-23T13:15:00+00:00",
+      "exit_price": 85.5959,
+      "pnl": -57.96,
+      "pnl_pct": -0.513,
+      "fees": 9.0148,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T14:15:00+00:00",
+      "entry_price": 85.8329,
+      "qty": 113.171514,
+      "stop": 85.4129,
+      "take": 86.6728,
+      "exit_time": "2026-04-23T17:00:00+00:00",
+      "exit_price": 85.3702,
+      "pnl": -56.23,
+      "pnl_pct": -0.579,
+      "fees": 7.7501,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T23:15:00+00:00",
+      "entry_price": 85.953,
+      "qty": 101.606624,
+      "stop": 85.4881,
+      "take": 86.8826,
+      "exit_time": "2026-04-24T03:30:00+00:00",
+      "exit_price": 85.4454,
+      "pnl": -55.04,
+      "pnl_pct": -0.63,
+      "fees": 6.9661,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-04-25T07:30:00+00:00",
+      "entry_price": 86.3832,
+      "qty": 196.25523,
+      "stop": 86.144,
+      "take": 86.8615,
+      "exit_time": "2026-04-25T15:45:00+00:00",
+      "exit_price": 86.1009,
+      "pnl": -62.15,
+      "pnl_pct": -0.367,
+      "fees": 13.5404,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-28T22:00:00+00:00",
+      "entry_price": 83.6282,
+      "qty": 152.777656,
+      "stop": 83.9331,
+      "take": 83.0183,
+      "exit_time": "2026-04-28T23:30:00+00:00",
+      "exit_price": 83.9751,
+      "pnl": -58.13,
+      "pnl_pct": -0.455,
+      "fees": 10.2424,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-29T08:00:00+00:00",
+      "entry_price": 84.5277,
+      "qty": 158.76677,
+      "stop": 84.8192,
+      "take": 83.9448,
+      "exit_time": "2026-04-29T09:30:00+00:00",
+      "exit_price": 84.8616,
+      "pnl": -58.4,
+      "pnl_pct": -0.435,
+      "fees": 10.7574,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-04-30T14:15:00+00:00",
+      "entry_price": 82.9085,
+      "qty": 104.589873,
+      "stop": 83.3479,
+      "take": 82.0298,
+      "exit_time": "2026-04-30T14:45:00+00:00",
+      "exit_price": 83.3896,
+      "pnl": -53.8,
+      "pnl_pct": -0.62,
+      "fees": 6.9572,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-01T07:15:00+00:00",
+      "entry_price": 83.5982,
+      "qty": 132.099597,
+      "stop": 83.9439,
+      "take": 82.9067,
+      "exit_time": "2026-05-01T08:00:00+00:00",
+      "exit_price": 83.9859,
+      "pnl": -55.65,
+      "pnl_pct": -0.504,
+      "fees": 8.8551,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-01T11:15:00+00:00",
+      "entry_price": 83.8281,
+      "qty": 149.526162,
+      "stop": 84.1315,
+      "take": 83.2212,
+      "exit_time": "2026-05-01T12:00:00+00:00",
+      "exit_price": 84.1735,
+      "pnl": -56.69,
+      "pnl_pct": -0.452,
+      "fees": 10.0483,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-02T18:00:00+00:00",
+      "entry_price": 83.888,
+      "qty": 236.7961,
+      "stop": 84.0783,
+      "take": 83.5075,
+      "exit_time": "2026-05-02T18:15:00+00:00",
+      "exit_price": 84.1204,
+      "pnl": -62.98,
+      "pnl_pct": -0.317,
+      "fees": 15.9135,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-02T23:45:00+00:00",
+      "entry_price": 84.1879,
+      "qty": 150.08045,
+      "stop": 84.4858,
+      "take": 83.5921,
+      "exit_time": "2026-05-03T02:00:00+00:00",
+      "exit_price": 83.6339,
+      "pnl": 78.12,
+      "pnl_pct": 0.618,
+      "fees": 10.0747,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-03T16:00:00+00:00",
+      "entry_price": 83.968,
+      "qty": 181.759302,
+      "stop": 84.216,
+      "take": 83.4721,
+      "exit_time": "2026-05-03T16:30:00+00:00",
+      "exit_price": 84.2581,
+      "pnl": -58.85,
+      "pnl_pct": -0.386,
+      "fees": 12.2307,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-03T21:30:00+00:00",
+      "entry_price": 83.888,
+      "qty": 153.243508,
+      "stop": 84.18,
+      "take": 83.304,
+      "exit_time": "2026-05-03T22:00:00+00:00",
+      "exit_price": 84.2221,
+      "pnl": -56.36,
+      "pnl_pct": -0.438,
+      "fees": 10.3047,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-03T23:15:00+00:00",
+      "entry_price": 83.998,
+      "qty": 101.581094,
+      "stop": 84.4354,
+      "take": 83.123,
+      "exit_time": "2026-05-04T01:45:00+00:00",
+      "exit_price": 84.4777,
+      "pnl": -52.16,
+      "pnl_pct": -0.611,
+      "fees": 6.8456,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-07T05:00:00+00:00",
+      "entry_price": 88.5743,
+      "qty": 84.006682,
+      "stop": 88.0486,
+      "take": 89.6256,
+      "exit_time": "2026-05-07T07:30:00+00:00",
+      "exit_price": 89.5808,
+      "pnl": 81.55,
+      "pnl_pct": 1.096,
+      "fees": 5.9865,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-08T03:15:00+00:00",
+      "entry_price": 88.2041,
+      "qty": 93.401695,
+      "stop": 87.7271,
+      "take": 89.1581,
+      "exit_time": "2026-05-08T07:00:00+00:00",
+      "exit_price": 87.6832,
+      "pnl": -51.93,
+      "pnl_pct": -0.63,
+      "fees": 6.5713,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-09T17:30:00+00:00",
+      "entry_price": 93.3667,
+      "qty": 97.389165,
+      "stop": 92.912,
+      "take": 94.2759,
+      "exit_time": "2026-05-10T00:00:00+00:00",
+      "exit_price": 92.8656,
+      "pnl": -52.42,
+      "pnl_pct": -0.576,
+      "fees": 7.2548,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-10T02:45:00+00:00",
+      "entry_price": 93.0465,
+      "qty": 133.820767,
+      "stop": 92.7177,
+      "take": 93.7041,
+      "exit_time": "2026-05-10T08:00:00+00:00",
+      "exit_price": 93.6572,
+      "pnl": 76.71,
+      "pnl_pct": 0.616,
+      "fees": 9.9939,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-11T07:45:00+00:00",
+      "entry_price": 95.3376,
+      "qty": 71.999807,
+      "stop": 94.7216,
+      "take": 96.5698,
+      "exit_time": "2026-05-11T08:15:00+00:00",
+      "exit_price": 94.6742,
+      "pnl": -50.49,
+      "pnl_pct": -0.736,
+      "fees": 5.4723,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-11T10:15:00+00:00",
+      "entry_price": 95.4977,
+      "qty": 79.300083,
+      "stop": 94.9417,
+      "take": 96.6097,
+      "exit_time": "2026-05-11T11:00:00+00:00",
+      "exit_price": 94.8943,
+      "pnl": -50.86,
+      "pnl_pct": -0.672,
+      "fees": 6.0392,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-11T13:30:00+00:00",
+      "entry_price": 95.3476,
+      "qty": 64.622193,
+      "stop": 94.6696,
+      "take": 96.7038,
+      "exit_time": "2026-05-11T14:30:00+00:00",
+      "exit_price": 94.6222,
+      "pnl": -49.32,
+      "pnl_pct": -0.801,
+      "fees": 4.9105,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-11T15:00:00+00:00",
+      "entry_price": 95.3276,
+      "qty": 52.298826,
+      "stop": 94.4947,
+      "take": 96.9935,
+      "exit_time": "2026-05-11T16:00:00+00:00",
+      "exit_price": 96.945,
+      "pnl": 82.56,
+      "pnl_pct": 1.656,
+      "fees": 4.0223,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-12T06:15:00+00:00",
+      "entry_price": 96.7283,
+      "qty": 88.51669,
+      "stop": 96.2317,
+      "take": 97.7217,
+      "exit_time": "2026-05-12T06:45:00+00:00",
+      "exit_price": 96.1835,
+      "pnl": -51.63,
+      "pnl_pct": -0.603,
+      "fees": 6.8304,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-05-14T14:00:00+00:00",
+      "entry_price": 91.0455,
+      "qty": 82.009588,
+      "stop": 90.5128,
+      "take": 92.111,
+      "exit_time": "2026-05-14T14:45:00+00:00",
+      "exit_price": 92.0649,
+      "pnl": 80.58,
+      "pnl_pct": 1.079,
+      "fees": 6.0067,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T00:15:00+00:00",
+      "entry_price": 86.4068,
+      "qty": 181.639273,
+      "stop": 86.6494,
+      "take": 85.9215,
+      "exit_time": "2026-05-17T00:45:00+00:00",
+      "exit_price": 85.9644,
+      "pnl": 74.1,
+      "pnl_pct": 0.472,
+      "fees": 12.5238,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T02:30:00+00:00",
+      "entry_price": 85.897,
+      "qty": 117.533737,
+      "stop": 86.2749,
+      "take": 85.1412,
+      "exit_time": "2026-05-17T03:15:00+00:00",
+      "exit_price": 86.3181,
+      "pnl": -53.54,
+      "pnl_pct": -0.53,
+      "fees": 8.0964,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T08:00:00+00:00",
+      "entry_price": 86.6666,
+      "qty": 135.131676,
+      "stop": 86.9932,
+      "take": 86.0135,
+      "exit_time": "2026-05-17T10:00:00+00:00",
+      "exit_price": 87.0367,
+      "pnl": -54.71,
+      "pnl_pct": -0.467,
+      "fees": 9.3891,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T13:00:00+00:00",
+      "entry_price": 86.3968,
+      "qty": 137.822013,
+      "stop": 86.7148,
+      "take": 85.7607,
+      "exit_time": "2026-05-17T19:45:00+00:00",
+      "exit_price": 86.7582,
+      "pnl": -54.59,
+      "pnl_pct": -0.458,
+      "fees": 9.5458,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-19T01:15:00+00:00",
+      "entry_price": 84.9975,
+      "qty": 90.342279,
+      "stop": 85.4794,
+      "take": 84.0337,
+      "exit_time": "2026-05-19T06:30:00+00:00",
+      "exit_price": 85.5221,
+      "pnl": -50.49,
+      "pnl_pct": -0.657,
+      "fees": 6.1621,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T00:00:00+00:00",
+      "entry_price": 83.908,
+      "qty": 113.536575,
+      "stop": 84.2891,
+      "take": 83.1459,
+      "exit_time": "2026-05-20T00:30:00+00:00",
+      "exit_price": 84.3312,
+      "pnl": -51.88,
+      "pnl_pct": -0.545,
+      "fees": 7.6405,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T02:45:00+00:00",
+      "entry_price": 83.908,
+      "qty": 98.591668,
+      "stop": 84.344,
+      "take": 83.036,
+      "exit_time": "2026-05-20T05:00:00+00:00",
+      "exit_price": 84.3862,
+      "pnl": -50.47,
+      "pnl_pct": -0.61,
+      "fees": 6.637,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T11:30:00+00:00",
+      "entry_price": 84.6776,
+      "qty": 149.835782,
+      "stop": 84.9627,
+      "take": 84.1074,
+      "exit_time": "2026-05-20T12:30:00+00:00",
+      "exit_price": 85.0052,
+      "pnl": -54.18,
+      "pnl_pct": -0.427,
+      "fees": 10.1698,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T13:15:00+00:00",
+      "entry_price": 84.6577,
+      "qty": 128.00414,
+      "stop": 84.9891,
+      "take": 83.9948,
+      "exit_time": "2026-05-20T14:15:00+00:00",
+      "exit_price": 85.0316,
+      "pnl": -52.22,
+      "pnl_pct": -0.482,
+      "fees": 8.6884,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T22:00:00+00:00",
+      "entry_price": 85.6971,
+      "qty": 78.689365,
+      "stop": 86.2327,
+      "take": 84.6261,
+      "exit_time": "2026-05-21T00:00:00+00:00",
+      "exit_price": 86.2758,
+      "pnl": -48.25,
+      "pnl_pct": -0.715,
+      "fees": 5.413,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-21T05:45:00+00:00",
+      "entry_price": 86.4168,
+      "qty": 104.335592,
+      "stop": 86.8182,
+      "take": 85.6139,
+      "exit_time": "2026-05-21T08:00:00+00:00",
+      "exit_price": 86.8616,
+      "pnl": -50.04,
+      "pnl_pct": -0.555,
+      "fees": 7.2316,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-21T09:30:00+00:00",
+      "entry_price": 86.4168,
+      "qty": 99.039729,
+      "stop": 86.837,
+      "take": 85.5764,
+      "exit_time": "2026-05-21T11:00:00+00:00",
+      "exit_price": 85.6191,
+      "pnl": 75.6,
+      "pnl_pct": 0.883,
+      "fees": 6.8154,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-22T00:00:00+00:00",
+      "entry_price": 86.9865,
+      "qty": 94.273131,
+      "stop": 87.4318,
+      "take": 86.0959,
+      "exit_time": "2026-05-22T08:15:00+00:00",
+      "exit_price": 87.4755,
+      "pnl": -49.4,
+      "pnl_pct": -0.602,
+      "fees": 6.5788,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-22T14:00:00+00:00",
+      "entry_price": 86.8865,
+      "qty": 87.38666,
+      "stop": 87.3639,
+      "take": 85.9318,
+      "exit_time": "2026-05-22T18:30:00+00:00",
+      "exit_price": 85.9748,
+      "pnl": 76.67,
+      "pnl_pct": 1.01,
+      "fees": 6.0423,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-24T02:15:00+00:00",
+      "entry_price": 85.6771,
+      "qty": 88.492655,
+      "stop": 86.1527,
+      "take": 84.726,
+      "exit_time": "2026-05-24T06:00:00+00:00",
+      "exit_price": 86.1958,
+      "pnl": -48.95,
+      "pnl_pct": -0.646,
+      "fees": 6.0838,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-25T11:45:00+00:00",
+      "entry_price": 85.6971,
+      "qty": 124.337005,
+      "stop": 86.0335,
+      "take": 85.0244,
+      "exit_time": "2026-05-25T12:15:00+00:00",
+      "exit_price": 86.0765,
+      "pnl": -51.45,
+      "pnl_pct": -0.483,
+      "fees": 8.5431,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-25T19:00:00+00:00",
+      "entry_price": 85.7771,
+      "qty": 128.91284,
+      "stop": 86.0994,
+      "take": 85.1326,
+      "exit_time": "2026-05-25T22:00:00+00:00",
+      "exit_price": 85.1751,
+      "pnl": 73.21,
+      "pnl_pct": 0.662,
+      "fees": 8.8152,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-26T13:15:00+00:00",
+      "entry_price": 84.8576,
+      "qty": 95.17751,
+      "stop": 85.2977,
+      "take": 83.9773,
+      "exit_time": "2026-05-26T13:45:00+00:00",
+      "exit_price": 85.3403,
+      "pnl": -49.2,
+      "pnl_pct": -0.609,
+      "fees": 6.4796,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-26T14:30:00+00:00",
+      "entry_price": 84.8775,
+      "qty": 65.441683,
+      "stop": 85.5136,
+      "take": 83.6054,
+      "exit_time": "2026-05-26T17:15:00+00:00",
+      "exit_price": 83.6472,
+      "pnl": 78.33,
+      "pnl_pct": 1.41,
+      "fees": 4.4114,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-27T12:00:00+00:00",
+      "entry_price": 83.6082,
+      "qty": 109.648478,
+      "stop": 83.9913,
+      "take": 82.842,
+      "exit_time": "2026-05-27T12:15:00+00:00",
+      "exit_price": 84.0333,
+      "pnl": -50.3,
+      "pnl_pct": -0.549,
+      "fees": 7.3527,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-27T13:00:00+00:00",
+      "entry_price": 83.6282,
+      "qty": 80.898261,
+      "stop": 84.1441,
+      "take": 82.5963,
+      "exit_time": "2026-05-27T15:00:00+00:00",
+      "exit_price": 84.1862,
+      "pnl": -47.86,
+      "pnl_pct": -0.707,
+      "fees": 5.4304,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-28T22:15:00+00:00",
+      "entry_price": 81.999,
+      "qty": 77.035456,
+      "stop": 82.5375,
+      "take": 80.922,
+      "exit_time": "2026-05-29T09:15:00+00:00",
+      "exit_price": 82.5788,
+      "pnl": -47.21,
+      "pnl_pct": -0.747,
+      "fees": 5.0713,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-29T10:30:00+00:00",
+      "entry_price": 82.0589,
+      "qty": 121.761914,
+      "stop": 82.3976,
+      "take": 81.3816,
+      "exit_time": "2026-05-29T12:30:00+00:00",
+      "exit_price": 81.4223,
+      "pnl": 73.55,
+      "pnl_pct": 0.736,
+      "fees": 7.9623,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-29T18:45:00+00:00",
+      "entry_price": 81.989,
+      "qty": 58.062837,
+      "stop": 82.7052,
+      "take": 80.5566,
+      "exit_time": "2026-05-30T01:30:00+00:00",
+      "exit_price": 82.7465,
+      "pnl": -45.91,
+      "pnl_pct": -0.964,
+      "fees": 3.826,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-30T22:00:00+00:00",
+      "entry_price": 82.6587,
+      "qty": 143.728028,
+      "stop": 82.9463,
+      "take": 82.0833,
+      "exit_time": "2026-05-31T01:00:00+00:00",
+      "exit_price": 82.9878,
+      "pnl": -52.08,
+      "pnl_pct": -0.438,
+      "fees": 9.5232,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-05-31T06:00:00+00:00",
+      "entry_price": 82.8186,
+      "qty": 156.200901,
+      "stop": 83.0814,
+      "take": 82.2928,
+      "exit_time": "2026-05-31T13:15:00+00:00",
+      "exit_price": 83.123,
+      "pnl": -52.74,
+      "pnl_pct": -0.408,
+      "fees": 10.3681,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-03T11:45:00+00:00",
+      "entry_price": 75.0525,
+      "qty": 74.497008,
+      "stop": 75.5997,
+      "take": 73.9579,
+      "exit_time": "2026-06-03T14:15:00+00:00",
+      "exit_price": 73.9949,
+      "pnl": 76.58,
+      "pnl_pct": 1.37,
+      "fees": 4.4414,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-04T00:45:00+00:00",
+      "entry_price": 70.6746,
+      "qty": 40.113671,
+      "stop": 71.7003,
+      "take": 68.6234,
+      "exit_time": "2026-06-04T01:45:00+00:00",
+      "exit_price": 68.6577,
+      "pnl": 79.81,
+      "pnl_pct": 2.815,
+      "fees": 2.2357,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-04T07:15:00+00:00",
+      "entry_price": 69.5952,
+      "qty": 41.755668,
+      "stop": 70.5899,
+      "take": 67.6057,
+      "exit_time": "2026-06-04T10:45:00+00:00",
+      "exit_price": 67.6395,
+      "pnl": 80.53,
+      "pnl_pct": 2.771,
+      "fees": 2.2921,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-07T12:00:00+00:00",
+      "entry_price": 63.888,
+      "qty": 61.220132,
+      "stop": 64.573,
+      "take": 62.5182,
+      "exit_time": "2026-06-07T14:15:00+00:00",
+      "exit_price": 64.6053,
+      "pnl": -45.49,
+      "pnl_pct": -1.163,
+      "fees": 3.1466,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-07T18:45:00+00:00",
+      "entry_price": 64.8676,
+      "qty": 77.210137,
+      "stop": 65.4076,
+      "take": 63.7875,
+      "exit_time": "2026-06-07T19:15:00+00:00",
+      "exit_price": 63.8194,
+      "pnl": 78.96,
+      "pnl_pct": 1.577,
+      "fees": 3.9744,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T01:15:00+00:00",
+      "entry_price": 65.4573,
+      "qty": 44.244373,
+      "stop": 66.4084,
+      "take": 63.555,
+      "exit_time": "2026-06-08T02:00:00+00:00",
+      "exit_price": 66.4416,
+      "pnl": -44.73,
+      "pnl_pct": -1.544,
+      "fees": 2.3343,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T04:00:00+00:00",
+      "entry_price": 65.8571,
+      "qty": 53.884543,
+      "stop": 66.6338,
+      "take": 64.3037,
+      "exit_time": "2026-06-08T11:15:00+00:00",
+      "exit_price": 66.6671,
+      "pnl": -45.08,
+      "pnl_pct": -1.27,
+      "fees": 2.8564,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T17:00:00+00:00",
+      "entry_price": 66.6067,
+      "qty": 61.674915,
+      "stop": 67.2815,
+      "take": 65.257,
+      "exit_time": "2026-06-08T17:45:00+00:00",
+      "exit_price": 67.3151,
+      "pnl": -45.36,
+      "pnl_pct": -1.104,
+      "fees": 3.3038,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T20:00:00+00:00",
+      "entry_price": 67.0265,
+      "qty": 68.126399,
+      "stop": 67.6339,
+      "take": 65.8115,
+      "exit_time": "2026-06-08T21:00:00+00:00",
+      "exit_price": 67.6678,
+      "pnl": -45.53,
+      "pnl_pct": -0.997,
+      "fees": 3.6705,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T22:00:00+00:00",
+      "entry_price": 66.9665,
+      "qty": 67.545083,
+      "stop": 67.5757,
+      "take": 65.7481,
+      "exit_time": "2026-06-09T00:30:00+00:00",
+      "exit_price": 65.781,
+      "pnl": 78.3,
+      "pnl_pct": 1.731,
+      "fees": 3.5866,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-09T08:00:00+00:00",
+      "entry_price": 66.5167,
+      "qty": 73.039475,
+      "stop": 67.0853,
+      "take": 65.3795,
+      "exit_time": "2026-06-09T14:00:00+00:00",
+      "exit_price": 65.4122,
+      "pnl": 78.76,
+      "pnl_pct": 1.621,
+      "fees": 3.8544,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-10T02:15:00+00:00",
+      "entry_price": 64.6577,
+      "qty": 73.383854,
+      "stop": 65.2288,
+      "take": 63.5153,
+      "exit_time": "2026-06-10T08:30:00+00:00",
+      "exit_price": 63.5471,
+      "pnl": 79.63,
+      "pnl_pct": 1.678,
+      "fees": 3.7633,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-11T07:30:00+00:00",
+      "entry_price": 64.8276,
+      "qty": 92.966178,
+      "stop": 65.2826,
+      "take": 63.9175,
+      "exit_time": "2026-06-11T08:15:00+00:00",
+      "exit_price": 65.3152,
+      "pnl": -47.77,
+      "pnl_pct": -0.793,
+      "fees": 4.8396,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-11T12:15:00+00:00",
+      "entry_price": 65.0475,
+      "qty": 84.686626,
+      "stop": 65.544,
+      "take": 64.0543,
+      "exit_time": "2026-06-11T13:45:00+00:00",
+      "exit_price": 65.5768,
+      "pnl": -47.05,
+      "pnl_pct": -0.854,
+      "fees": 4.4249,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T01:00:00+00:00",
+      "entry_price": 66.6367,
+      "qty": 94.634982,
+      "stop": 67.0784,
+      "take": 65.7531,
+      "exit_time": "2026-06-12T02:00:00+00:00",
+      "exit_price": 67.112,
+      "pnl": -47.52,
+      "pnl_pct": -0.754,
+      "fees": 5.0629,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T03:15:00+00:00",
+      "entry_price": 66.7566,
+      "qty": 94.505335,
+      "stop": 67.1963,
+      "take": 65.8772,
+      "exit_time": "2026-06-12T04:30:00+00:00",
+      "exit_price": 67.2299,
+      "pnl": -47.27,
+      "pnl_pct": -0.749,
+      "fees": 5.065,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T05:00:00+00:00",
+      "entry_price": 66.6966,
+      "qty": 102.619145,
+      "stop": 67.0992,
+      "take": 65.8916,
+      "exit_time": "2026-06-12T06:30:00+00:00",
+      "exit_price": 65.9245,
+      "pnl": 76.53,
+      "pnl_pct": 1.118,
+      "fees": 5.4438,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T13:30:00+00:00",
+      "entry_price": 66.5167,
+      "qty": 94.633987,
+      "stop": 66.9571,
+      "take": 65.6359,
+      "exit_time": "2026-06-12T14:00:00+00:00",
+      "exit_price": 66.9906,
+      "pnl": -47.38,
+      "pnl_pct": -0.753,
+      "fees": 5.0537,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-06-14T09:30:00+00:00",
+      "entry_price": 68.4142,
+      "qty": 131.59295,
+      "stop": 68.0994,
+      "take": 69.0438,
+      "exit_time": "2026-06-14T10:45:00+00:00",
+      "exit_price": 68.0653,
+      "pnl": -49.49,
+      "pnl_pct": -0.55,
+      "fees": 7.1839,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2026-06-14T20:30:00+00:00",
+      "entry_price": 67.9039,
+      "qty": 121.153727,
+      "stop": 67.5642,
+      "take": 68.5834,
+      "exit_time": "2026-06-14T21:15:00+00:00",
+      "exit_price": 68.5491,
+      "pnl": 74.84,
+      "pnl_pct": 0.91,
+      "fees": 6.6127,
+      "reason": "take_profit"
+    }
+  ],
+  "equity_curve": [
+    [
+      "2026-02-15T11:15:00+00:00",
+      10000.0
+    ],
+    [
+      "2026-02-17T11:00:00+00:00",
+      10091.062370738184
+    ],
+    [
+      "2026-02-18T08:15:00+00:00",
+      10032.03892018788
+    ],
+    [
+      "2026-02-18T11:00:00+00:00",
+      10121.430346822019
+    ],
+    [
+      "2026-02-19T06:00:00+00:00",
+      10060.465501035114
+    ],
+    [
+      "2026-02-19T13:00:00+00:00",
+      10151.066685752749
+    ],
+    [
+      "2026-02-20T13:30:00+00:00",
+      10244.115053739468
+    ],
+    [
+      "2026-02-21T09:15:00+00:00",
+      10181.863111522222
+    ],
+    [
+      "2026-02-21T21:30:00+00:00",
+      10119.879649354514
+    ],
+    [
+      "2026-02-22T02:00:00+00:00",
+      10055.89677075728
+    ],
+    [
+      "2026-02-23T00:45:00+00:00",
+      10146.112833717949
+    ],
+    [
+      "2026-02-23T16:00:00+00:00",
+      10239.730766122937
+    ],
+    [
+      "2026-02-24T14:30:00+00:00",
+      10336.676384527385
+    ],
+    [
+      "2026-02-25T01:00:00+00:00",
+      10276.652580069507
+    ],
+    [
+      "2026-02-26T10:30:00+00:00",
+      10218.135138990148
+    ],
+    [
+      "2026-02-26T14:30:00+00:00",
+      10158.896254394109
+    ],
+    [
+      "2026-02-27T03:45:00+00:00",
+      10252.226080619284
+    ],
+    [
+      "2026-03-01T14:30:00+00:00",
+      10194.67207322564
+    ],
+    [
+      "2026-03-01T16:00:00+00:00",
+      10137.56933444679
+    ],
+    [
+      "2026-03-02T13:45:00+00:00",
+      10080.265577333157
+    ],
+    [
+      "2026-03-03T05:45:00+00:00",
+      10023.0345973369
+    ],
+    [
+      "2026-03-03T07:45:00+00:00",
+      9965.690582497353
+    ],
+    [
+      "2026-03-03T12:45:00+00:00",
+      9909.593567701651
+    ],
+    [
+      "2026-03-03T16:15:00+00:00",
+      10003.941254875888
+    ],
+    [
+      "2026-03-04T08:45:00+00:00",
+      10100.107129916585
+    ],
+    [
+      "2026-03-05T07:45:00+00:00",
+      10041.692255416241
+    ],
+    [
+      "2026-03-05T10:15:00+00:00",
+      10134.513630798043
+    ],
+    [
+      "2026-03-06T04:30:00+00:00",
+      10076.242424789523
+    ],
+    [
+      "2026-03-06T09:00:00+00:00",
+      10017.654084752141
+    ],
+    [
+      "2026-03-08T12:15:00+00:00",
+      10108.33861400967
+    ],
+    [
+      "2026-03-09T08:15:00+00:00",
+      10051.63262106902
+    ],
+    [
+      "2026-03-09T12:15:00+00:00",
+      9994.149863977924
+    ],
+    [
+      "2026-03-11T07:30:00+00:00",
+      9936.581219341891
+    ],
+    [
+      "2026-03-11T15:30:00+00:00",
+      9880.943059218238
+    ],
+    [
+      "2026-03-12T10:30:00+00:00",
+      9968.480944757544
+    ],
+    [
+      "2026-03-14T05:30:00+00:00",
+      9906.208649465338
+    ],
+    [
+      "2026-03-14T23:00:00+00:00",
+      9985.00342142274
+    ],
+    [
+      "2026-03-15T21:30:00+00:00",
+      10073.5506915739
+    ],
+    [
+      "2026-03-17T09:45:00+00:00",
+      10015.449033611418
+    ],
+    [
+      "2026-03-17T15:30:00+00:00",
+      9957.070871359792
+    ],
+    [
+      "2026-03-18T10:30:00+00:00",
+      9900.462510007686
+    ],
+    [
+      "2026-03-19T03:15:00+00:00",
+      9988.381655377361
+    ],
+    [
+      "2026-03-20T21:15:00+00:00",
+      9930.615012408249
+    ],
+    [
+      "2026-03-22T11:45:00+00:00",
+      10018.854140722258
+    ],
+    [
+      "2026-03-23T11:00:00+00:00",
+      9961.155754008316
+    ],
+    [
+      "2026-03-25T00:00:00+00:00",
+      10053.319666400765
+    ],
+    [
+      "2026-03-26T02:15:00+00:00",
+      9992.93902958761
+    ],
+    [
+      "2026-03-28T06:15:00+00:00",
+      9931.117474753519
+    ],
+    [
+      "2026-03-28T13:30:00+00:00",
+      9865.141220781496
+    ],
+    [
+      "2026-03-28T23:00:00+00:00",
+      9949.934551826902
+    ],
+    [
+      "2026-03-29T11:00:00+00:00",
+      9886.354838212792
+    ],
+    [
+      "2026-03-30T14:45:00+00:00",
+      9828.601105738548
+    ],
+    [
+      "2026-03-31T09:00:00+00:00",
+      9918.310067613116
+    ],
+    [
+      "2026-04-01T03:00:00+00:00",
+      9859.527355997423
+    ],
+    [
+      "2026-04-01T16:15:00+00:00",
+      9801.386136634774
+    ],
+    [
+      "2026-04-03T05:30:00+00:00",
+      9742.870373918899
+    ],
+    [
+      "2026-04-03T14:45:00+00:00",
+      9684.760250955129
+    ],
+    [
+      "2026-04-03T21:00:00+00:00",
+      9625.125960945694
+    ],
+    [
+      "2026-04-04T15:00:00+00:00",
+      9563.092175424117
+    ],
+    [
+      "2026-04-05T06:00:00+00:00",
+      9646.613905952407
+    ],
+    [
+      "2026-04-05T22:30:00+00:00",
+      9586.978216431604
+    ],
+    [
+      "2026-04-06T07:15:00+00:00",
+      9529.93414604782
+    ],
+    [
+      "2026-04-08T18:15:00+00:00",
+      9473.96138646245
+    ],
+    [
+      "2026-04-09T06:30:00+00:00",
+      9413.713237231817
+    ],
+    [
+      "2026-04-09T11:15:00+00:00",
+      9352.782810024297
+    ],
+    [
+      "2026-04-09T15:45:00+00:00",
+      9436.939217918754
+    ],
+    [
+      "2026-04-10T07:45:00+00:00",
+      9380.000995692262
+    ],
+    [
+      "2026-04-10T12:30:00+00:00",
+      9461.203051919128
+    ],
+    [
+      "2026-04-11T10:15:00+00:00",
+      9395.469721871925
+    ],
+    [
+      "2026-04-11T16:30:00+00:00",
+      9474.41733187728
+    ],
+    [
+      "2026-04-13T12:45:00+00:00",
+      9415.016550576216
+    ],
+    [
+      "2026-04-14T13:30:00+00:00",
+      9497.369751219674
+    ],
+    [
+      "2026-04-15T02:30:00+00:00",
+      9440.843780850608
+    ],
+    [
+      "2026-04-15T14:15:00+00:00",
+      9524.228422535652
+    ],
+    [
+      "2026-04-19T00:30:00+00:00",
+      9459.657209070572
+    ],
+    [
+      "2026-04-19T13:00:00+00:00",
+      9542.419247225407
+    ],
+    [
+      "2026-04-22T02:30:00+00:00",
+      9628.565719844604
+    ],
+    [
+      "2026-04-23T08:15:00+00:00",
+      9568.130605429382
+    ],
+    [
+      "2026-04-23T13:15:00+00:00",
+      9505.651446178674
+    ],
+    [
+      "2026-04-23T17:00:00+00:00",
+      9445.539907317629
+    ],
+    [
+      "2026-04-24T03:30:00+00:00",
+      9387.003043494002
+    ],
+    [
+      "2026-04-25T15:45:00+00:00",
+      9318.074557417805
+    ],
+    [
+      "2026-04-28T23:30:00+00:00",
+      9254.830219109928
+    ],
+    [
+      "2026-04-29T09:30:00+00:00",
+      9191.065478020904
+    ],
+    [
+      "2026-04-30T14:45:00+00:00",
+      9133.794237598153
+    ],
+    [
+      "2026-05-01T08:00:00+00:00",
+      9073.725674930314
+    ],
+    [
+      "2026-05-01T12:00:00+00:00",
+      9012.018863361443
+    ],
+    [
+      "2026-05-02T18:15:00+00:00",
+      8941.090565712895
+    ],
+    [
+      "2026-05-03T02:00:00+00:00",
+      9014.153989701796
+    ],
+    [
+      "2026-05-03T16:30:00+00:00",
+      8949.199041202592
+    ],
+    [
+      "2026-05-03T22:00:00+00:00",
+      8887.698308755276
+    ],
+    [
+      "2026-05-04T01:45:00+00:00",
+      8832.125718428639
+    ],
+    [
+      "2026-05-07T07:30:00+00:00",
+      8910.695913198546
+    ],
+    [
+      "2026-05-08T07:00:00+00:00",
+      8855.474236830296
+    ],
+    [
+      "2026-05-10T00:00:00+00:00",
+      8799.417753657866
+    ],
+    [
+      "2026-05-10T08:00:00+00:00",
+      8871.148224153021
+    ],
+    [
+      "2026-05-11T08:15:00+00:00",
+      8817.91018749338
+    ],
+    [
+      "2026-05-11T11:00:00+00:00",
+      8764.01695215898
+    ],
+    [
+      "2026-05-11T14:30:00+00:00",
+      8712.227482514718
+    ],
+    [
+      "2026-05-11T16:00:00+00:00",
+      8792.791181012319
+    ],
+    [
+      "2026-05-12T06:45:00+00:00",
+      8737.737802009062
+    ],
+    [
+      "2026-05-14T14:45:00+00:00",
+      8815.331466088524
+    ],
+    [
+      "2026-05-17T00:45:00+00:00",
+      8883.157674486369
+    ],
+    [
+      "2026-05-17T03:15:00+00:00",
+      8825.575345299927
+    ],
+    [
+      "2026-05-17T10:00:00+00:00",
+      8766.18057069459
+    ],
+    [
+      "2026-05-17T19:45:00+00:00",
+      8706.828238209993
+    ],
+    [
+      "2026-05-19T06:30:00+00:00",
+      8653.270845985367
+    ],
+    [
+      "2026-05-20T00:30:00+00:00",
+      8597.579019378678
+    ],
+    [
+      "2026-05-20T05:00:00+00:00",
+      8543.796350218287
+    ],
+    [
+      "2026-05-20T12:30:00+00:00",
+      8484.542312754826
+    ],
+    [
+      "2026-05-20T14:15:00+00:00",
+      8427.991756324853
+    ],
+    [
+      "2026-05-21T00:00:00+00:00",
+      8377.046025891063
+    ],
+    [
+      "2026-05-21T08:00:00+00:00",
+      8323.400039063321
+    ],
+    [
+      "2026-05-21T11:00:00+00:00",
+      8395.580953382472
+    ],
+    [
+      "2026-05-22T08:15:00+00:00",
+      8342.902985191111
+    ],
+    [
+      "2026-05-22T18:30:00+00:00",
+      8416.535058042717
+    ],
+    [
+      "2026-05-24T06:00:00+00:00",
+      8364.556646694506
+    ],
+    [
+      "2026-05-25T12:15:00+00:00",
+      8308.842161651033
+    ],
+    [
+      "2026-05-25T22:00:00+00:00",
+      8377.628069117833
+    ],
+    [
+      "2026-05-26T13:45:00+00:00",
+      8325.20111632797
+    ],
+    [
+      "2026-05-26T17:15:00+00:00",
+      8401.306072306008
+    ],
+    [
+      "2026-05-27T12:15:00+00:00",
+      8347.342132272765
+    ],
+    [
+      "2026-05-27T15:00:00+00:00",
+      8296.771512134039
+    ],
+    [
+      "2026-05-29T09:15:00+00:00",
+      8247.037169966905
+    ],
+    [
+      "2026-05-29T12:30:00+00:00",
+      8316.590631958938
+    ],
+    [
+      "2026-05-30T01:30:00+00:00",
+      8268.78062676737
+    ],
+    [
+      "2026-05-31T01:00:00+00:00",
+      8211.95265559571
+    ],
+    [
+      "2026-05-31T13:15:00+00:00",
+      8154.036107242985
+    ],
+    [
+      "2026-06-03T14:15:00+00:00",
+      8228.38021438119
+    ],
+    [
+      "2026-06-04T01:45:00+00:00",
+      8307.051996087814
+    ],
+    [
+      "2026-06-04T10:45:00+00:00",
+      8386.418923496176
+    ],
+    [
+      "2026-06-07T14:15:00+00:00",
+      8339.363694811422
+    ],
+    [
+      "2026-06-07T19:15:00+00:00",
+      8416.320438841145
+    ],
+    [
+      "2026-06-08T02:00:00+00:00",
+      8370.435425778545
+    ],
+    [
+      "2026-06-08T11:15:00+00:00",
+      8323.931583056423
+    ],
+    [
+      "2026-06-08T17:45:00+00:00",
+      8276.933287798609
+    ],
+    [
+      "2026-06-08T21:00:00+00:00",
+      8229.574299996899
+    ],
+    [
+      "2026-06-09T00:30:00+00:00",
+      8306.062985859786
+    ],
+    [
+      "2026-06-09T14:00:00+00:00",
+      8382.881564519144
+    ],
+    [
+      "2026-06-10T08:30:00+00:00",
+      8460.616617592683
+    ],
+    [
+      "2026-06-11T08:15:00+00:00",
+      8410.439445042888
+    ],
+    [
+      "2026-06-11T13:45:00+00:00",
+      8361.187045826568
+    ],
+    [
+      "2026-06-12T02:00:00+00:00",
+      8311.14420815851
+    ],
+    [
+      "2026-06-12T04:30:00+00:00",
+      8261.348304992634
+    ],
+    [
+      "2026-06-12T06:30:00+00:00",
+      8335.137130685735
+    ],
+    [
+      "2026-06-12T14:00:00+00:00",
+      8285.239503888355
+    ],
+    [
+      "2026-06-14T10:45:00+00:00",
+      8232.148709580222
+    ],
+    [
+      "2026-06-14T21:15:00+00:00",
+      8303.702909939722
+    ]
+  ]
+}

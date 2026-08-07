@@ -1,0 +1,207 @@
+{
+  "symbol": "SOL/USDT",
+  "strategy": "V3",
+  "params": {
+    "timeframe": "1d",
+    "donchian": 55,
+    "regime_ma": 200,
+    "atr_stop": 2.5,
+    "trail_atr": 3.0,
+    "risk_per_trade": 0.005,
+    "fee_rate": 0.0004,
+    "slippage": 0.0005,
+    "days": 1300
+  },
+  "metrics": {
+    "num_trades": 8,
+    "total_return_pct": 0.97,
+    "final_equity": 10096.61,
+    "win_rate_pct": 37.5,
+    "profit_factor": 1.661,
+    "max_drawdown_pct": -0.75,
+    "sharpe": 0.33,
+    "sortino": 0.23,
+    "avg_trade": 12.08,
+    "best_trade": 160.9,
+    "worst_trade": -39.71,
+    "max_consecutive_losses": 3,
+    "gross_profit": 242.66,
+    "gross_loss": 146.06
+  },
+  "trades": [
+    {
+      "mode": "backtest",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2023-07-13T00:00:00+00:00",
+      "entry_price": 26.031,
+      "qty": 11.801517,
+      "stop": 21.7943,
+      "take": null,
+      "exit_time": "2023-07-14T00:00:00+00:00",
+      "exit_price": 27.0533,
+      "pnl": 11.81,
+      "pnl_pct": 3.846,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 0.236
+    },
+    {
+      "mode": "backtest",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2023-10-20T00:00:00+00:00",
+      "entry_price": 27.0235,
+      "qty": 13.948424,
+      "stop": 23.4346,
+      "take": null,
+      "exit_time": "2023-11-01T00:00:00+00:00",
+      "exit_price": 38.585,
+      "pnl": 160.9,
+      "pnl_pct": 42.686,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 3.214
+    },
+    {
+      "mode": "backtest",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2023-12-24T00:00:00+00:00",
+      "entry_price": 112.6273,
+      "qty": 2.456922,
+      "stop": 91.9251,
+      "take": null,
+      "exit_time": "2023-12-28T00:00:00+00:00",
+      "exit_price": 99.7618,
+      "pnl": -31.82,
+      "pnl_pct": -11.498,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.626
+    },
+    {
+      "mode": "backtest",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2024-02-28T00:00:00+00:00",
+      "entry_price": 119.4847,
+      "qty": 2.852661,
+      "stop": 101.7103,
+      "take": null,
+      "exit_time": "2024-03-05T00:00:00+00:00",
+      "exit_price": 114.1625,
+      "pnl": -15.45,
+      "pnl_pct": -4.533,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.305
+    },
+    {
+      "mode": "backtest",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2024-03-15T00:00:00+00:00",
+      "entry_price": 184.2471,
+      "qty": 1.553629,
+      "stop": 151.6606,
+      "take": null,
+      "exit_time": "2024-03-19T00:00:00+00:00",
+      "exit_price": 166.3326,
+      "pnl": -28.05,
+      "pnl_pct": -9.799,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.554
+    },
+    {
+      "mode": "backtest",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2024-11-06T00:00:00+00:00",
+      "entry_price": 186.7033,
+      "qty": 1.99217,
+      "stop": 161.3606,
+      "take": null,
+      "exit_time": "2024-12-02T00:00:00+00:00",
+      "exit_price": 221.981,
+      "pnl": 69.95,
+      "pnl_pct": 18.808,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 1.386
+    },
+    {
+      "mode": "backtest",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2025-01-18T00:00:00+00:00",
+      "entry_price": 262.0309,
+      "qty": 1.229109,
+      "stop": 220.6703,
+      "take": null,
+      "exit_time": "2025-01-20T00:00:00+00:00",
+      "exit_price": 236.9846,
+      "pnl": -31.03,
+      "pnl_pct": -9.635,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.61
+    },
+    {
+      "mode": "backtest",
+      "symbol": "SOL/USDT",
+      "side": "long",
+      "entry_time": "2025-07-21T00:00:00+00:00",
+      "entry_price": 195.8479,
+      "qty": 2.196985,
+      "stop": 172.7792,
+      "take": null,
+      "exit_time": "2025-07-25T00:00:00+00:00",
+      "exit_price": 177.9244,
+      "pnl": -39.71,
+      "pnl_pct": -9.228,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.783
+    }
+  ],
+  "equity_curve": [
+    [
+      "2023-01-18T00:00:00+00:00",
+      10000.0
+    ],
+    [
+      "2023-07-14T00:00:00+00:00",
+      10011.814105886566
+    ],
+    [
+      "2023-11-01T00:00:00+00:00",
+      10172.712738771688
+    ],
+    [
+      "2023-12-28T00:00:00+00:00",
+      10140.894616442949
+    ],
+    [
+      "2024-03-05T00:00:00+00:00",
+      10125.445557887
+    ],
+    [
+      "2024-03-19T00:00:00+00:00",
+      10097.395221676266
+    ],
+    [
+      "2024-12-02T00:00:00+00:00",
+      10167.348813873052
+    ],
+    [
+      "2025-01-20T00:00:00+00:00",
+      10136.318752914609
+    ],
+    [
+      "2025-07-25T00:00:00+00:00",
+      10096.612761210534
+    ]
+  ]
+}

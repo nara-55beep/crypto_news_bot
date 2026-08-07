@@ -1,0 +1,10 @@
+# --- crypto-trading-bot dependencies ---
+# Pinned to known-good major versions. Install with:  pip install -r requirements.txt
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+ccxt==4.4.34
+pandas==2.2.3
+numpy==2.1.3
+pydantic==2.10.4
+python-dotenv==1.0.1
+# uvicorn[standard] already pulls in websockets + httptools for the WebSocket dashboard feed.

@@ -1,0 +1,74 @@
+{
+  "params": {
+    "market": "ES",
+    "contracts": 1,
+    "min_score": 8,
+    "entry_model": "ote",
+    "target_model": "fixed3",
+    "stop_model": "ob",
+    "rr_min": 1.5,
+    "use_premium": true,
+    "use_smt": false,
+    "bias_mode": "none",
+    "time_filter": "nyam",
+    "profile": "reversal"
+  },
+  "apex": {
+    "windows": 701,
+    "passes": 90,
+    "fails": 92,
+    "daily_fails": 0,
+    "rate": 0.12838801711840228,
+    "median": 571.3638753812411,
+    "worst": -2524.2134969867184,
+    "best": 4281.043846283792,
+    "worst_dd_usd": -2524.2134969867184,
+    "avg_days": 21.31111111111111
+  },
+  "year": {
+    "days": 301,
+    "pnl": 6491.025122603978,
+    "trades": 53,
+    "trades_week": 1.2325581395348837,
+    "max_dd": -3727.1073400650275,
+    "win_days": 0.4339622641509434
+  },
+  "recent_signals": [
+    {
+      "day": "2026-05-12",
+      "pnl": -571.102168181078,
+      "trades": 1,
+      "signal": "EQH/OTE/SL score=9"
+    },
+    {
+      "day": "2026-05-26",
+      "pnl": -196.6874999999891,
+      "trades": 1,
+      "signal": "asia_h/OTE/time score=11"
+    },
+    {
+      "day": "2026-05-27",
+      "pnl": -558.6735977787885,
+      "trades": 1,
+      "signal": "EQH/OTE/SL score=9"
+    },
+    {
+      "day": "2026-05-29",
+      "pnl": -526.3454547443234,
+      "trades": 1,
+      "signal": "PDH/OTE/SL score=12"
+    },
+    {
+      "day": "2026-06-01",
+      "pnl": -487.35065256494636,
+      "trades": 1,
+      "signal": "EQH/OTE/SL score=9"
+    },
+    {
+      "day": "2026-06-16",
+      "pnl": 1520.1569552515775,
+      "trades": 1,
+      "signal": "asia_h/OTE/TP score=9"
+    }
+  ]
+}

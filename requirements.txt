@@ -1,0 +1,26 @@
+# ============================================================
+#  requirements.txt  —  the list of extra Python tools the bot needs.
+#  You don't install these one by one. You run ONE command:
+#      pip install -r requirements.txt
+#  ...and pip reads this file and installs all of them for you.
+# ============================================================
+
+telethon>=1.36      # connects to Telegram and receives messages instantly
+openai>=1.40        # talks to your AI API (also works for OpenRouter, Groq, local models, etc.)
+aiohttp>=3.9        # makes internet requests (Binance prices, the "raw" AI option)
+feedparser>=6.0     # reads RSS news feeds (optional; only used if you turn RSS on)
+websockets>=12.0    # live price stream from Binance
+ccxt>=4.4           # unified API for the multi-exchange order book + trade tape (also reads your Lighter balance/positions)
+lighter-sdk>=1.1    # Lighter's OWN SDK — places real Lighter orders with a matched signer (ccxt's signer kept mismatching)
+
+yfinance>=1.4       # listed-stock screen, repaired OHLCV, filings/news and earnings events
+pandas>=3.0         # causal feature engineering and edge audit
+lxml>=6.0           # parses the historical earnings table used by the event audit
+
+# anthropic>=0.40   # ONLY install this if you set AI_PROVIDER = "anthropic" in config.py
+                    # (to install it later, run:  pip install anthropic )
+
+# --- developer-only (not needed to run the bot normally) ---
+# watchfiles>=1.2   # AUTO-RESTART used by dev.bat / dev_reload.py: restarts the bot
+                    # whenever you save a .py file. Install with: pip install watchfiles
+                    # Then launch with dev.bat instead of run.bat.

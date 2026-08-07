@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crypto Trading Bot · Research Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot" id="statusDot"></span>
+      <b>Crypto Trading Bot</b>
+      <span class="muted" id="statusText">connecting…</span>
+    </div>
+    <div class="controls">
+      <select id="stratSelect" title="strategy: V2 (15m) · V3 (Goodman daily) · V4 (Momentum Sweep VWAP Breakout, 20x intraday)">
+        <option value="v2">Strategy V2 (15m)</option>
+        <option value="v3">Strategy V3 (Goodman daily)</option>
+        <option value="v4">Momentum Sweep VWAP Breakout (20x)</option>
+      </select>
+      <select id="modeSelect" title="trading mode">
+        <option value="paper">Paper</option>
+        <option value="live">Live (real money)</option>
+      </select>
+      <button class="btn green" id="startBtn">Start</button>
+      <button class="btn" id="stopBtn">Stop</button>
+      <button class="btn red" id="emergencyBtn" title="flatten everything and stop">Emergency Stop</button>
+    </div>
+  </header>
+
+  <!-- live-mode arming bar (hidden unless mode=live) -->
+  <div id="liveBar" class="livebar hidden">
+    <span>⚠️ LIVE MODE — real orders.</span>
+    <span id="armState" class="muted"></span>
+    <button class="btn red" id="armBtn">Arm live trading</button>
+    <button class="btn" id="disarmBtn">Disarm</button>
+  </div>
+
+  <main>
+    <!-- stats -->
+    <section class="stats">
+      <div class="stat"><div class="k">Mode</div><div class="v" id="sMode">—</div></div>
+      <div class="stat"><div class="k">Equity</div><div class="v" id="sEquity">—</div></div>
+      <div class="stat"><div class="k">Total P&L</div><div class="v" id="sTotalPnl">—</div></div>
+      <div class="stat"><div class="k">Day P&L</div><div class="v" id="sDayPnl">—</div></div>
+      <div class="stat"><div class="k">Balance</div><div class="v" id="sBalance">—</div></div>
+      <div class="stat"><div class="k">Open</div><div class="v" id="sOpen">—</div></div>
+    </section>
+
+    <div class="grid">
+      <!-- left column -->
+      <div class="col">
+        <div class="card">
+          <h3>Latest signal</h3>
+          <div id="latestSignal" class="signal">No signal yet.</div>
+        </div>
+
+        <div class="card">
+          <h3>Open positions</h3>
+          <div id="positions"><div class="muted">none</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Backtest</h3>
+          <div class="row">
+            <input id="btSymbols" type="text" placeholder="BTC/USDT,ETH/USDT,SOL/USDT" />
+            <input id="btDays" type="number" placeholder="days" value="120" style="max-width:90px" />
+            <button class="btn green" id="btRun">Run backtest</button>
+          </div>
+          <div class="muted small">Runs over historical data (fees + slippage included). May take a minute.</div>
+          <div id="btResults"></div>
+        </div>
+      </div>
+
+      <!-- right column -->
+      <div class="col">
+        <div class="card">
+          <h3>Strategy &amp; risk settings</h3>
+          <div id="settingsForm" class="settings"></div>
+          <div class="row">
+            <button class="btn green" id="saveSettings">Save settings</button>
+            <span id="settingsMsg" class="muted small"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Trade history</h3>
+          <div id="trades"><div class="muted">no trades yet</div></div>
+        </div>
+
+        <div class="card">
+          <h3>Activity log</h3>
+          <div id="logs" class="logs"><div class="muted">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="warn">
+      ⚠️ Research tool only. Rule-based, not predictive. Backtest results do not guarantee future
+      performance. Test thoroughly in paper mode before risking real money.
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

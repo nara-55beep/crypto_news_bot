@@ -1,0 +1,421 @@
+{
+  "BTC/USDT": {
+    "V1": {
+      "trades": 211,
+      "return_pct": -36.65,
+      "win_rate": 31.3,
+      "profit_factor": 0.539,
+      "max_dd_pct": -37.24,
+      "sharpe": -6.04,
+      "avg_R": -0.427
+    },
+    "V2": {
+      "trades": 181,
+      "return_pct": -19.46,
+      "win_rate": 47.5,
+      "profit_factor": 0.584,
+      "max_dd_pct": -21.49,
+      "sharpe": -4.27,
+      "avg_R": -0.237
+    },
+    "V1_long": {
+      "trades": 90,
+      "pnl": -1932.0,
+      "win_rate": 28.9,
+      "profit_factor": 0.466
+    },
+    "V1_short": {
+      "trades": 121,
+      "pnl": -1733.0,
+      "win_rate": 33.1,
+      "profit_factor": 0.6
+    },
+    "V2_long": {
+      "trades": 85,
+      "pnl": -1524.0,
+      "win_rate": 42.4,
+      "profit_factor": 0.399
+    },
+    "V2_short": {
+      "trades": 96,
+      "pnl": -422.0,
+      "win_rate": 52.1,
+      "profit_factor": 0.803
+    },
+    "V1_monthly": {
+      "2025-12": -6.23,
+      "2026-01": -3.96,
+      "2026-02": -3.0,
+      "2026-03": -7.0,
+      "2026-04": -9.9,
+      "2026-05": -4.84,
+      "2026-06": -1.72
+    },
+    "V2_monthly": {
+      "2025-12": -1.02,
+      "2026-01": -11.16,
+      "2026-02": 1.06,
+      "2026-03": -1.8,
+      "2026-04": -1.33,
+      "2026-05": -6.66,
+      "2026-06": 1.44
+    },
+    "filter_attribution": {
+      "adx": {
+        "bad_removed": 779,
+        "good_removed": 582,
+        "net": 197
+      },
+      "not_overextended": {
+        "bad_removed": 343,
+        "good_removed": 253,
+        "net": 90
+      },
+      "atr_regime": {
+        "bad_removed": 589,
+        "good_removed": 398,
+        "net": 191
+      },
+      "not_giant": {
+        "bad_removed": 9,
+        "good_removed": 11,
+        "net": -2
+      }
+    },
+    "V2_grid": {
+      "adx20_stop1.5": {
+        "trades": 288,
+        "return_pct": -43.32,
+        "win_rate": 45.5,
+        "profit_factor": 0.405,
+        "max_dd_pct": -45.58,
+        "sharpe": -7.75,
+        "avg_R": -0.391
+      },
+      "adx20_stop2.0": {
+        "trades": 233,
+        "return_pct": -30.31,
+        "win_rate": 44.2,
+        "profit_factor": 0.498,
+        "max_dd_pct": -31.25,
+        "sharpe": -6.13,
+        "avg_R": -0.307
+      },
+      "adx20_stop2.5": {
+        "trades": 215,
+        "return_pct": -25.13,
+        "win_rate": 40.9,
+        "profit_factor": 0.525,
+        "max_dd_pct": -26.58,
+        "sharpe": -5.69,
+        "avg_R": -0.267
+      },
+      "adx25_stop1.5": {
+        "trades": 221,
+        "return_pct": -31.02,
+        "win_rate": 48.0,
+        "profit_factor": 0.466,
+        "max_dd_pct": -34.11,
+        "sharpe": -5.85,
+        "avg_R": -0.333
+      },
+      "adx25_stop2.0": {
+        "trades": 181,
+        "return_pct": -19.46,
+        "win_rate": 47.5,
+        "profit_factor": 0.584,
+        "max_dd_pct": -21.49,
+        "sharpe": -4.27,
+        "avg_R": -0.237
+      },
+      "adx25_stop2.5": {
+        "trades": 169,
+        "return_pct": -15.17,
+        "win_rate": 45.0,
+        "profit_factor": 0.627,
+        "max_dd_pct": -17.29,
+        "sharpe": -3.73,
+        "avg_R": -0.192
+      }
+    }
+  },
+  "ETH/USDT": {
+    "V1": {
+      "trades": 213,
+      "return_pct": -23.21,
+      "win_rate": 34.3,
+      "profit_factor": 0.704,
+      "max_dd_pct": -24.68,
+      "sharpe": -3.46,
+      "avg_R": -0.243
+    },
+    "V2": {
+      "trades": 187,
+      "return_pct": -17.19,
+      "win_rate": 44.9,
+      "profit_factor": 0.634,
+      "max_dd_pct": -18.53,
+      "sharpe": -3.76,
+      "avg_R": -0.199
+    },
+    "V1_long": {
+      "trades": 72,
+      "pnl": -871.0,
+      "win_rate": 33.3,
+      "profit_factor": 0.679
+    },
+    "V1_short": {
+      "trades": 141,
+      "pnl": -1450.0,
+      "win_rate": 34.8,
+      "profit_factor": 0.718
+    },
+    "V2_long": {
+      "trades": 82,
+      "pnl": -1378.0,
+      "win_rate": 37.8,
+      "profit_factor": 0.417
+    },
+    "V2_short": {
+      "trades": 105,
+      "pnl": -341.0,
+      "win_rate": 50.5,
+      "profit_factor": 0.853
+    },
+    "V1_monthly": {
+      "2025-12": -2.52,
+      "2026-01": -1.54,
+      "2026-02": -3.2,
+      "2026-03": -5.65,
+      "2026-04": -4.65,
+      "2026-05": -6.14,
+      "2026-06": 0.49
+    },
+    "V2_monthly": {
+      "2025-12": -1.61,
+      "2026-01": -7.2,
+      "2026-02": -1.1,
+      "2026-03": -0.32,
+      "2026-04": -5.41,
+      "2026-05": -1.82,
+      "2026-06": 0.27
+    },
+    "filter_attribution": {
+      "adx": {
+        "bad_removed": 870,
+        "good_removed": 685,
+        "net": 185
+      },
+      "not_overextended": {
+        "bad_removed": 270,
+        "good_removed": 231,
+        "net": 39
+      },
+      "atr_regime": {
+        "bad_removed": 598,
+        "good_removed": 506,
+        "net": 92
+      },
+      "not_giant": {
+        "bad_removed": 10,
+        "good_removed": 3,
+        "net": 7
+      }
+    },
+    "V2_grid": {
+      "adx20_stop1.5": {
+        "trades": 286,
+        "return_pct": -30.17,
+        "win_rate": 46.5,
+        "profit_factor": 0.59,
+        "max_dd_pct": -30.31,
+        "sharpe": -5.17,
+        "avg_R": -0.248
+      },
+      "adx20_stop2.0": {
+        "trades": 250,
+        "return_pct": -17.66,
+        "win_rate": 47.2,
+        "profit_factor": 0.712,
+        "max_dd_pct": -18.31,
+        "sharpe": -3.34,
+        "avg_R": -0.153
+      },
+      "adx20_stop2.5": {
+        "trades": 218,
+        "return_pct": -11.03,
+        "win_rate": 45.9,
+        "profit_factor": 0.779,
+        "max_dd_pct": -11.66,
+        "sharpe": -2.15,
+        "avg_R": -0.105
+      },
+      "adx25_stop1.5": {
+        "trades": 209,
+        "return_pct": -22.89,
+        "win_rate": 46.9,
+        "profit_factor": 0.59,
+        "max_dd_pct": -23.05,
+        "sharpe": -4.43,
+        "avg_R": -0.246
+      },
+      "adx25_stop2.0": {
+        "trades": 187,
+        "return_pct": -17.19,
+        "win_rate": 44.9,
+        "profit_factor": 0.634,
+        "max_dd_pct": -18.53,
+        "sharpe": -3.76,
+        "avg_R": -0.199
+      },
+      "adx25_stop2.5": {
+        "trades": 163,
+        "return_pct": -13.39,
+        "win_rate": 41.7,
+        "profit_factor": 0.658,
+        "max_dd_pct": -14.24,
+        "sharpe": -3.13,
+        "avg_R": -0.174
+      }
+    }
+  },
+  "SOL/USDT": {
+    "V1": {
+      "trades": 230,
+      "return_pct": -27.2,
+      "win_rate": 32.2,
+      "profit_factor": 0.675,
+      "max_dd_pct": -28.88,
+      "sharpe": -3.87,
+      "avg_R": -0.271
+    },
+    "V2": {
+      "trades": 179,
+      "return_pct": -6.05,
+      "win_rate": 47.5,
+      "profit_factor": 0.86,
+      "max_dd_pct": -8.81,
+      "sharpe": -1.11,
+      "avg_R": -0.067
+    },
+    "V1_long": {
+      "trades": 96,
+      "pnl": -923.0,
+      "win_rate": 34.4,
+      "profit_factor": 0.735
+    },
+    "V1_short": {
+      "trades": 134,
+      "pnl": -1797.0,
+      "win_rate": 30.6,
+      "profit_factor": 0.632
+    },
+    "V2_long": {
+      "trades": 50,
+      "pnl": -182.0,
+      "win_rate": 46.0,
+      "profit_factor": 0.844
+    },
+    "V2_short": {
+      "trades": 129,
+      "pnl": -423.0,
+      "win_rate": 48.1,
+      "profit_factor": 0.866
+    },
+    "V1_monthly": {
+      "2025-12": -3.37,
+      "2026-01": -8.68,
+      "2026-02": 2.44,
+      "2026-03": -3.43,
+      "2026-04": -6.88,
+      "2026-05": -8.59,
+      "2026-06": 1.31
+    },
+    "V2_monthly": {
+      "2026-01": -3.31,
+      "2026-02": 1.53,
+      "2026-03": 0.68,
+      "2026-04": -2.8,
+      "2026-05": -4.16,
+      "2026-06": 2.0
+    },
+    "filter_attribution": {
+      "adx": {
+        "bad_removed": 723,
+        "good_removed": 576,
+        "net": 147
+      },
+      "not_overextended": {
+        "bad_removed": 287,
+        "good_removed": 263,
+        "net": 24
+      },
+      "atr_regime": {
+        "bad_removed": 522,
+        "good_removed": 422,
+        "net": 100
+      },
+      "not_giant": {
+        "bad_removed": 7,
+        "good_removed": 5,
+        "net": 2
+      }
+    },
+    "V2_grid": {
+      "adx20_stop1.5": {
+        "trades": 292,
+        "return_pct": -23.96,
+        "win_rate": 47.9,
+        "profit_factor": 0.693,
+        "max_dd_pct": -23.96,
+        "sharpe": -3.7,
+        "avg_R": -0.185
+      },
+      "adx20_stop2.0": {
+        "trades": 248,
+        "return_pct": -9.69,
+        "win_rate": 48.8,
+        "profit_factor": 0.838,
+        "max_dd_pct": -11.71,
+        "sharpe": -1.6,
+        "avg_R": -0.08
+      },
+      "adx20_stop2.5": {
+        "trades": 216,
+        "return_pct": -11.53,
+        "win_rate": 44.9,
+        "profit_factor": 0.769,
+        "max_dd_pct": -11.86,
+        "sharpe": -2.3,
+        "avg_R": -0.111
+      },
+      "adx25_stop1.5": {
+        "trades": 218,
+        "return_pct": -17.81,
+        "win_rate": 48.2,
+        "profit_factor": 0.697,
+        "max_dd_pct": -18.96,
+        "sharpe": -2.96,
+        "avg_R": -0.177
+      },
+      "adx25_stop2.0": {
+        "trades": 179,
+        "return_pct": -6.05,
+        "win_rate": 47.5,
+        "profit_factor": 0.86,
+        "max_dd_pct": -8.81,
+        "sharpe": -1.11,
+        "avg_R": -0.067
+      },
+      "adx25_stop2.5": {
+        "trades": 160,
+        "return_pct": -8.77,
+        "win_rate": 42.5,
+        "profit_factor": 0.764,
+        "max_dd_pct": -9.95,
+        "sharpe": -1.98,
+        "avg_R": -0.113
+      }
+    }
+  }
+}

@@ -1,0 +1,3058 @@
+{
+  "symbol": "ETH/USDT",
+  "params": {
+    "entry_mode": "pullback",
+    "htf": "1h",
+    "entry_tf": "15m",
+    "risk_per_trade": 0.005,
+    "atr_stop_mult": 1.5,
+    "rr": 2.0,
+    "fee_rate": 0.0004,
+    "slippage": 0.0005,
+    "days": 120
+  },
+  "metrics": {
+    "num_trades": 151,
+    "total_return_pct": -16.44,
+    "final_equity": 8356.01,
+    "win_rate_pct": 34.44,
+    "profit_factor": 0.799,
+    "max_drawdown_pct": -18.78,
+    "sharpe": -3.5,
+    "sortino": -6.63,
+    "avg_trade": -7.16,
+    "best_trade": 95.26,
+    "worst_trade": -66.31,
+    "max_consecutive_losses": 10,
+    "gross_profit": 4302.07,
+    "gross_loss": 5383.66
+  },
+  "trades": [
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-16T11:00:00+00:00",
+      "entry_price": 1964.0675,
+      "qty": 3.86224,
+      "stop": 1977.0133,
+      "take": 1938.1758,
+      "exit_time": "2026-02-16T11:45:00+00:00",
+      "exit_price": 1978.0018,
+      "pnl": -56.87,
+      "pnl_pct": -0.75,
+      "fees": 6.0901,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-16T13:30:00+00:00",
+      "entry_price": 1972.923,
+      "qty": 2.347848,
+      "stop": 1994.0916,
+      "take": 1930.586,
+      "exit_time": "2026-02-16T20:45:00+00:00",
+      "exit_price": 1995.0886,
+      "pnl": -53.92,
+      "pnl_pct": -1.164,
+      "fees": 3.7265,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-17T01:45:00+00:00",
+      "entry_price": 1989.6947,
+      "qty": 3.631035,
+      "stop": 2003.3055,
+      "take": 1962.4729,
+      "exit_time": "2026-02-17T02:00:00+00:00",
+      "exit_price": 2004.3072,
+      "pnl": -55.97,
+      "pnl_pct": -0.775,
+      "fees": 5.8009,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-17T03:00:00+00:00",
+      "entry_price": 1990.1944,
+      "qty": 3.341277,
+      "stop": 2004.8976,
+      "take": 1960.7881,
+      "exit_time": "2026-02-17T10:45:00+00:00",
+      "exit_price": 1961.7685,
+      "pnl": 92.36,
+      "pnl_pct": 1.389,
+      "fees": 5.2818,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-18T10:30:00+00:00",
+      "entry_price": 1998.1504,
+      "qty": 4.235093,
+      "stop": 2009.8564,
+      "take": 1974.7385,
+      "exit_time": "2026-02-18T12:30:00+00:00",
+      "exit_price": 1975.7259,
+      "pnl": 91.62,
+      "pnl_pct": 1.083,
+      "fees": 6.7319,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-19T08:15:00+00:00",
+      "entry_price": 1970.944,
+      "qty": 4.647652,
+      "stop": 1981.7058,
+      "take": 1949.4205,
+      "exit_time": "2026-02-19T11:45:00+00:00",
+      "exit_price": 1950.3952,
+      "pnl": 91.88,
+      "pnl_pct": 1.003,
+      "fees": 7.29,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-20T02:15:00+00:00",
+      "entry_price": 1946.7961,
+      "qty": 4.657879,
+      "stop": 1957.629,
+      "take": 1925.1304,
+      "exit_time": "2026-02-20T03:15:00+00:00",
+      "exit_price": 1958.6078,
+      "pnl": -58.67,
+      "pnl_pct": -0.647,
+      "fees": 7.2764,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-20T04:00:00+00:00",
+      "entry_price": 1945.9665,
+      "qty": 4.760846,
+      "stop": 1956.4997,
+      "take": 1924.9003,
+      "exit_time": "2026-02-20T05:30:00+00:00",
+      "exit_price": 1957.4779,
+      "pnl": -58.53,
+      "pnl_pct": -0.632,
+      "fees": 7.4335,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-20T10:45:00+00:00",
+      "entry_price": 1955.5218,
+      "qty": 4.601357,
+      "stop": 1966.3523,
+      "take": 1933.8606,
+      "exit_time": "2026-02-20T13:30:00+00:00",
+      "exit_price": 1934.8275,
+      "pnl": 91.66,
+      "pnl_pct": 1.019,
+      "fees": 7.1604,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-20T23:30:00+00:00",
+      "entry_price": 1964.2374,
+      "qty": 4.144096,
+      "stop": 1976.3693,
+      "take": 1939.9736,
+      "exit_time": "2026-02-21T09:15:00+00:00",
+      "exit_price": 1977.3575,
+      "pnl": -57.65,
+      "pnl_pct": -0.708,
+      "fees": 6.5337,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-21T12:15:00+00:00",
+      "entry_price": 1969.015,
+      "qty": 6.88355,
+      "stop": 1976.2745,
+      "take": 1954.496,
+      "exit_time": "2026-02-21T13:15:00+00:00",
+      "exit_price": 1977.2626,
+      "pnl": -62.22,
+      "pnl_pct": -0.459,
+      "fees": 10.8658,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-21T20:30:00+00:00",
+      "entry_price": 1981.9585,
+      "qty": 6.91483,
+      "stop": 1989.1363,
+      "take": 1967.603,
+      "exit_time": "2026-02-21T21:00:00+00:00",
+      "exit_price": 1968.5868,
+      "pnl": 87.02,
+      "pnl_pct": 0.635,
+      "fees": 10.9269,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-22T00:15:00+00:00",
+      "entry_price": 1968.3753,
+      "qty": 6.615238,
+      "stop": 1975.9398,
+      "take": 1953.2464,
+      "exit_time": "2026-02-22T01:15:00+00:00",
+      "exit_price": 1976.9277,
+      "pnl": -61.81,
+      "pnl_pct": -0.475,
+      "fees": 10.4396,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-22T08:30:00+00:00",
+      "entry_price": 1970.6942,
+      "qty": 8.985689,
+      "stop": 1976.2258,
+      "take": 1959.6309,
+      "exit_time": "2026-02-22T10:00:00+00:00",
+      "exit_price": 1977.2139,
+      "pnl": -65.69,
+      "pnl_pct": -0.371,
+      "fees": 14.1899,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-23T14:30:00+00:00",
+      "entry_price": 1902.8281,
+      "qty": 3.245479,
+      "stop": 1918.0313,
+      "take": 1872.4217,
+      "exit_time": "2026-02-23T17:00:00+00:00",
+      "exit_price": 1873.3579,
+      "pnl": 93.21,
+      "pnl_pct": 1.509,
+      "fees": 4.9022,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-24T01:30:00+00:00",
+      "entry_price": 1845.3369,
+      "qty": 2.658228,
+      "stop": 1864.0694,
+      "take": 1807.8717,
+      "exit_time": "2026-02-24T13:30:00+00:00",
+      "exit_price": 1808.7757,
+      "pnl": 95.26,
+      "pnl_pct": 1.942,
+      "fees": 3.8854,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-25T00:00:00+00:00",
+      "entry_price": 1846.0765,
+      "qty": 4.581083,
+      "stop": 1857.0481,
+      "take": 1824.1332,
+      "exit_time": "2026-02-25T01:00:00+00:00",
+      "exit_price": 1857.9767,
+      "pnl": -57.92,
+      "pnl_pct": -0.685,
+      "fees": 6.7874,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-25T05:30:00+00:00",
+      "entry_price": 1883.1679,
+      "qty": 2.894559,
+      "stop": 1900.4263,
+      "take": 1848.6512,
+      "exit_time": "2026-02-25T08:30:00+00:00",
+      "exit_price": 1901.3766,
+      "pnl": -54.91,
+      "pnl_pct": -1.007,
+      "fees": 4.3818,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-02-26T05:15:00+00:00",
+      "entry_price": 2064.0315,
+      "qty": 2.504889,
+      "stop": 2044.2023,
+      "take": 2103.69,
+      "exit_time": "2026-02-26T08:15:00+00:00",
+      "exit_price": 2043.1802,
+      "pnl": -54.28,
+      "pnl_pct": -1.05,
+      "fees": 4.1152,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-02-26T14:00:00+00:00",
+      "entry_price": 2066.4227,
+      "qty": 3.527991,
+      "stop": 2052.4237,
+      "take": 2094.4207,
+      "exit_time": "2026-02-26T14:30:00+00:00",
+      "exit_price": 2051.3975,
+      "pnl": -55.9,
+      "pnl_pct": -0.767,
+      "fees": 5.8111,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-02-27T02:15:00+00:00",
+      "entry_price": 2026.2626,
+      "qty": 3.089944,
+      "stop": 2010.3743,
+      "take": 2058.0394,
+      "exit_time": "2026-02-27T04:00:00+00:00",
+      "exit_price": 2057.0103,
+      "pnl": 92.47,
+      "pnl_pct": 1.477,
+      "fees": 5.0468,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-02-28T17:30:00+00:00",
+      "entry_price": 1888.7651,
+      "qty": 2.414838,
+      "stop": 1909.2816,
+      "take": 1847.7322,
+      "exit_time": "2026-02-28T17:45:00+00:00",
+      "exit_price": 1910.2363,
+      "pnl": -53.69,
+      "pnl_pct": -1.177,
+      "fees": 3.6696,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-01T13:45:00+00:00",
+      "entry_price": 2006.8629,
+      "qty": 2.672251,
+      "stop": 1988.4266,
+      "take": 2043.7355,
+      "exit_time": "2026-03-01T16:00:00+00:00",
+      "exit_price": 1987.4324,
+      "pnl": -54.05,
+      "pnl_pct": -1.008,
+      "fees": 4.2695,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T16:45:00+00:00",
+      "entry_price": 1984.0715,
+      "qty": 1.573535,
+      "stop": 1952.9407,
+      "take": 2046.3332,
+      "exit_time": "2026-03-04T03:30:00+00:00",
+      "exit_price": 1951.9642,
+      "pnl": -51.75,
+      "pnl_pct": -1.658,
+      "fees": 2.4774,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-04T05:30:00+00:00",
+      "entry_price": 1972.4057,
+      "qty": 2.631904,
+      "stop": 1953.8942,
+      "take": 2009.4287,
+      "exit_time": "2026-03-04T07:45:00+00:00",
+      "exit_price": 2008.4239,
+      "pnl": 92.68,
+      "pnl_pct": 1.785,
+      "fees": 4.1909,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-05T09:00:00+00:00",
+      "entry_price": 2127.6433,
+      "qty": 2.5531,
+      "stop": 2108.383,
+      "take": 2166.1639,
+      "exit_time": "2026-03-05T13:30:00+00:00",
+      "exit_price": 2107.3288,
+      "pnl": -54.02,
+      "pnl_pct": -0.994,
+      "fees": 4.3249,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-06T01:30:00+00:00",
+      "entry_price": 2085.7724,
+      "qty": 2.968194,
+      "stop": 2069.3002,
+      "take": 2118.7167,
+      "exit_time": "2026-03-06T04:30:00+00:00",
+      "exit_price": 2068.2656,
+      "pnl": -54.42,
+      "pnl_pct": -0.879,
+      "fees": 4.932,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-06T07:15:00+00:00",
+      "entry_price": 2084.1315,
+      "qty": 3.233191,
+      "stop": 2069.0975,
+      "take": 2114.1997,
+      "exit_time": "2026-03-06T09:00:00+00:00",
+      "exit_price": 2068.0629,
+      "pnl": -54.63,
+      "pnl_pct": -0.811,
+      "fees": 5.3699,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-09T11:15:00+00:00",
+      "entry_price": 1982.1684,
+      "qty": 2.753397,
+      "stop": 1999.7182,
+      "take": 1947.0689,
+      "exit_time": "2026-03-09T12:15:00+00:00",
+      "exit_price": 2000.718,
+      "pnl": -53.28,
+      "pnl_pct": -0.976,
+      "fees": 4.3866,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-11T04:15:00+00:00",
+      "entry_price": 2034.6268,
+      "qty": 3.822575,
+      "stop": 2022.0583,
+      "take": 2059.7639,
+      "exit_time": "2026-03-11T05:30:00+00:00",
+      "exit_price": 2021.0473,
+      "pnl": -55.0,
+      "pnl_pct": -0.707,
+      "fees": 6.2012,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-11T10:30:00+00:00",
+      "entry_price": 2029.2941,
+      "qty": 4.042774,
+      "stop": 2017.4821,
+      "take": 2052.9183,
+      "exit_time": "2026-03-11T11:45:00+00:00",
+      "exit_price": 2016.4733,
+      "pnl": -55.09,
+      "pnl_pct": -0.672,
+      "fees": 6.5425,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-11T12:15:00+00:00",
+      "entry_price": 2026.4427,
+      "qty": 3.8761,
+      "stop": 2014.198,
+      "take": 2050.9321,
+      "exit_time": "2026-03-11T13:30:00+00:00",
+      "exit_price": 2049.9067,
+      "pnl": 87.77,
+      "pnl_pct": 1.117,
+      "fees": 6.3201,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-12T07:30:00+00:00",
+      "entry_price": 2036.8279,
+      "qty": 4.732041,
+      "stop": 2026.7086,
+      "take": 2057.0665,
+      "exit_time": "2026-03-12T09:30:00+00:00",
+      "exit_price": 2056.0379,
+      "pnl": 87.01,
+      "pnl_pct": 0.903,
+      "fees": 7.747,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-13T09:45:00+00:00",
+      "entry_price": 2113.6563,
+      "qty": 3.2881,
+      "stop": 2098.9668,
+      "take": 2143.0353,
+      "exit_time": "2026-03-13T12:45:00+00:00",
+      "exit_price": 2141.9638,
+      "pnl": 90.26,
+      "pnl_pct": 1.299,
+      "fees": 5.5972,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-14T03:15:00+00:00",
+      "entry_price": 2098.6088,
+      "qty": 4.590201,
+      "stop": 2087.9909,
+      "take": 2119.8445,
+      "exit_time": "2026-03-14T04:45:00+00:00",
+      "exit_price": 2086.9469,
+      "pnl": -57.36,
+      "pnl_pct": -0.595,
+      "fees": 7.685,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-14T20:15:00+00:00",
+      "entry_price": 2079.2291,
+      "qty": 9.853138,
+      "stop": 2074.3137,
+      "take": 2089.0599,
+      "exit_time": "2026-03-14T23:00:00+00:00",
+      "exit_price": 2088.0153,
+      "pnl": 78.34,
+      "pnl_pct": 0.382,
+      "fees": 16.4242,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T07:15:00+00:00",
+      "entry_price": 2335.4171,
+      "qty": 2.190186,
+      "stop": 2313.1438,
+      "take": 2379.9637,
+      "exit_time": "2026-03-17T09:00:00+00:00",
+      "exit_price": 2311.9872,
+      "pnl": -53.34,
+      "pnl_pct": -1.043,
+      "fees": 4.0715,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T11:15:00+00:00",
+      "entry_price": 2328.4036,
+      "qty": 2.507811,
+      "stop": 2309.0618,
+      "take": 2367.0874,
+      "exit_time": "2026-03-17T15:30:00+00:00",
+      "exit_price": 2307.9072,
+      "pnl": -53.72,
+      "pnl_pct": -0.92,
+      "fees": 4.6508,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-18T01:30:00+00:00",
+      "entry_price": 2330.3746,
+      "qty": 3.509752,
+      "stop": 2316.6342,
+      "take": 2357.8555,
+      "exit_time": "2026-03-18T05:45:00+00:00",
+      "exit_price": 2315.4759,
+      "pnl": -55.54,
+      "pnl_pct": -0.679,
+      "fees": 6.5223,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-19T02:00:00+00:00",
+      "entry_price": 2200.0295,
+      "qty": 2.982735,
+      "stop": 2183.9598,
+      "take": 2232.1687,
+      "exit_time": "2026-03-19T03:15:00+00:00",
+      "exit_price": 2231.0526,
+      "pnl": 89.87,
+      "pnl_pct": 1.37,
+      "fees": 5.2867,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-19T09:15:00+00:00",
+      "entry_price": 2179.6193,
+      "qty": 2.615189,
+      "stop": 2161.1244,
+      "take": 2216.6091,
+      "exit_time": "2026-03-19T12:00:00+00:00",
+      "exit_price": 2160.0438,
+      "pnl": -53.45,
+      "pnl_pct": -0.938,
+      "fees": 4.5396,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-21T04:30:00+00:00",
+      "entry_price": 2150.0944,
+      "qty": 5.773077,
+      "stop": 2158.4243,
+      "take": 2133.4347,
+      "exit_time": "2026-03-21T07:15:00+00:00",
+      "exit_price": 2159.5035,
+      "pnl": -59.31,
+      "pnl_pct": -0.478,
+      "fees": 9.9519,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-21T07:45:00+00:00",
+      "entry_price": 2153.3228,
+      "qty": 7.887698,
+      "stop": 2159.3788,
+      "take": 2141.2109,
+      "exit_time": "2026-03-21T12:15:00+00:00",
+      "exit_price": 2160.4585,
+      "pnl": -63.1,
+      "pnl_pct": -0.372,
+      "fees": 13.6103,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-21T15:15:00+00:00",
+      "entry_price": 2150.7041,
+      "qty": 6.74497,
+      "stop": 2157.7343,
+      "take": 2136.6438,
+      "exit_time": "2026-03-21T23:45:00+00:00",
+      "exit_price": 2137.7121,
+      "pnl": 81.86,
+      "pnl_pct": 0.564,
+      "fees": 11.5701,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-22T07:30:00+00:00",
+      "entry_price": 2096.7811,
+      "qty": 4.020374,
+      "stop": 2108.6701,
+      "take": 2073.003,
+      "exit_time": "2026-03-22T08:15:00+00:00",
+      "exit_price": 2074.0395,
+      "pnl": 88.09,
+      "pnl_pct": 1.045,
+      "fees": 6.7073,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-23T15:45:00+00:00",
+      "entry_price": 2126.4862,
+      "qty": 1.576939,
+      "stop": 2157.0658,
+      "take": 2065.3271,
+      "exit_time": "2026-03-23T17:30:00+00:00",
+      "exit_price": 2158.1443,
+      "pnl": -51.28,
+      "pnl_pct": -1.529,
+      "fees": 2.7026,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-24T01:00:00+00:00",
+      "entry_price": 2138.4702,
+      "qty": 3.111359,
+      "stop": 2153.8844,
+      "take": 2107.6419,
+      "exit_time": "2026-03-24T07:00:00+00:00",
+      "exit_price": 2154.9613,
+      "pnl": -53.99,
+      "pnl_pct": -0.811,
+      "fees": 5.3434,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-24T13:00:00+00:00",
+      "entry_price": 2154.832,
+      "qty": 3.438296,
+      "stop": 2168.6981,
+      "take": 2127.0999,
+      "exit_time": "2026-03-24T14:00:00+00:00",
+      "exit_price": 2128.1634,
+      "pnl": 88.77,
+      "pnl_pct": 1.198,
+      "fees": 5.8905,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-03-25T22:30:00+00:00",
+      "entry_price": 2175.4472,
+      "qty": 3.782825,
+      "stop": 2162.7306,
+      "take": 2200.8804,
+      "exit_time": "2026-03-26T00:45:00+00:00",
+      "exit_price": 2161.6492,
+      "pnl": -55.47,
+      "pnl_pct": -0.674,
+      "fees": 6.5626,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-27T05:15:00+00:00",
+      "entry_price": 2056.931,
+      "qty": 4.104354,
+      "stop": 2068.5798,
+      "take": 2033.6334,
+      "exit_time": "2026-03-27T07:15:00+00:00",
+      "exit_price": 2069.6141,
+      "pnl": -55.45,
+      "pnl_pct": -0.657,
+      "fees": 6.7747,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-28T09:00:00+00:00",
+      "entry_price": 1994.7621,
+      "qty": 7.828116,
+      "stop": 2000.8321,
+      "take": 1982.6221,
+      "exit_time": "2026-03-28T10:00:00+00:00",
+      "exit_price": 2001.8325,
+      "pnl": -61.62,
+      "pnl_pct": -0.395,
+      "fees": 12.5143,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-28T12:30:00+00:00",
+      "entry_price": 1994.0125,
+      "qty": 7.112589,
+      "stop": 2000.6454,
+      "take": 1980.7466,
+      "exit_time": "2026-03-28T12:45:00+00:00",
+      "exit_price": 2001.6458,
+      "pnl": -59.99,
+      "pnl_pct": -0.423,
+      "fees": 11.3678,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-28T21:45:00+00:00",
+      "entry_price": 2007.6257,
+      "qty": 5.890552,
+      "stop": 2015.579,
+      "take": 1991.7191,
+      "exit_time": "2026-03-28T23:00:00+00:00",
+      "exit_price": 1992.715,
+      "pnl": 83.14,
+      "pnl_pct": 0.703,
+      "fees": 9.4257,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-29T23:45:00+00:00",
+      "entry_price": 1982.4483,
+      "qty": 2.754851,
+      "stop": 1999.5966,
+      "take": 1948.1516,
+      "exit_time": "2026-03-30T00:15:00+00:00",
+      "exit_price": 2000.5964,
+      "pnl": -52.2,
+      "pnl_pct": -0.956,
+      "fees": 4.3891,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-30T17:15:00+00:00",
+      "entry_price": 2039.2399,
+      "qty": 2.565589,
+      "stop": 2057.5473,
+      "take": 2002.6251,
+      "exit_time": "2026-03-31T01:15:00+00:00",
+      "exit_price": 2058.576,
+      "pnl": -51.72,
+      "pnl_pct": -0.989,
+      "fees": 4.2053,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-03-31T07:00:00+00:00",
+      "entry_price": 2049.3548,
+      "qty": 3.59027,
+      "stop": 2062.3622,
+      "take": 2023.3399,
+      "exit_time": "2026-03-31T09:15:00+00:00",
+      "exit_price": 2024.3516,
+      "pnl": 86.86,
+      "pnl_pct": 1.181,
+      "fees": 5.8503,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T02:00:00+00:00",
+      "entry_price": 2047.4857,
+      "qty": 4.227631,
+      "stop": 2058.6314,
+      "take": 2025.1944,
+      "exit_time": "2026-04-03T02:15:00+00:00",
+      "exit_price": 2059.6607,
+      "pnl": -54.95,
+      "pnl_pct": -0.635,
+      "fees": 6.9454,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T09:15:00+00:00",
+      "entry_price": 2057.1509,
+      "qty": 4.990129,
+      "stop": 2066.535,
+      "take": 2038.3828,
+      "exit_time": "2026-04-03T12:15:00+00:00",
+      "exit_price": 2067.5682,
+      "pnl": -56.11,
+      "pnl_pct": -0.547,
+      "fees": 8.2332,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-04T02:00:00+00:00",
+      "entry_price": 2047.9355,
+      "qty": 9.5201,
+      "stop": 2052.8227,
+      "take": 2038.1611,
+      "exit_time": "2026-04-04T05:30:00+00:00",
+      "exit_price": 2053.8491,
+      "pnl": -64.12,
+      "pnl_pct": -0.329,
+      "fees": 15.6198,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-05T00:45:00+00:00",
+      "entry_price": 2060.2394,
+      "qty": 8.347031,
+      "stop": 2065.7703,
+      "take": 2049.1775,
+      "exit_time": "2026-04-05T05:45:00+00:00",
+      "exit_price": 2050.2021,
+      "pnl": 76.94,
+      "pnl_pct": 0.447,
+      "fees": 13.724,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-07T08:00:00+00:00",
+      "entry_price": 2108.2036,
+      "qty": 4.790441,
+      "stop": 2098.4931,
+      "take": 2127.6245,
+      "exit_time": "2026-04-07T09:00:00+00:00",
+      "exit_price": 2126.5607,
+      "pnl": 83.86,
+      "pnl_pct": 0.83,
+      "fees": 8.1146,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-07T17:30:00+00:00",
+      "entry_price": 2097.1681,
+      "qty": 2.858738,
+      "stop": 2080.7565,
+      "take": 2129.9912,
+      "exit_time": "2026-04-07T21:00:00+00:00",
+      "exit_price": 2128.9262,
+      "pnl": 88.35,
+      "pnl_pct": 1.474,
+      "fees": 4.8325,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-08T17:30:00+00:00",
+      "entry_price": 2233.9764,
+      "qty": 2.633772,
+      "stop": 2215.9999,
+      "take": 2269.9296,
+      "exit_time": "2026-04-08T18:15:00+00:00",
+      "exit_price": 2214.8919,
+      "pnl": -52.6,
+      "pnl_pct": -0.894,
+      "fees": 4.6869,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-09T08:15:00+00:00",
+      "entry_price": 2180.1996,
+      "qty": 5.340436,
+      "stop": 2171.3854,
+      "take": 2197.8279,
+      "exit_time": "2026-04-09T13:30:00+00:00",
+      "exit_price": 2170.2997,
+      "pnl": -57.51,
+      "pnl_pct": -0.494,
+      "fees": 9.2934,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-09T15:00:00+00:00",
+      "entry_price": 2185.6223,
+      "qty": 3.287151,
+      "stop": 2171.397,
+      "take": 2214.0728,
+      "exit_time": "2026-04-09T15:30:00+00:00",
+      "exit_price": 2212.9658,
+      "pnl": 86.97,
+      "pnl_pct": 1.211,
+      "fees": 5.7835,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-10T09:15:00+00:00",
+      "entry_price": 2194.0965,
+      "qty": 4.660197,
+      "stop": 2183.9722,
+      "take": 2214.3451,
+      "exit_time": "2026-04-10T11:15:00+00:00",
+      "exit_price": 2213.2379,
+      "pnl": 85.08,
+      "pnl_pct": 0.832,
+      "fees": 8.2156,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-12T17:45:00+00:00",
+      "entry_price": 2203.091,
+      "qty": 4.643313,
+      "stop": 2192.8427,
+      "take": 2223.5876,
+      "exit_time": "2026-04-12T20:00:00+00:00",
+      "exit_price": 2191.7463,
+      "pnl": -56.75,
+      "pnl_pct": -0.555,
+      "fees": 8.1626,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-12T20:30:00+00:00",
+      "entry_price": 2212.6057,
+      "qty": 4.502418,
+      "stop": 2202.1043,
+      "take": 2233.6086,
+      "exit_time": "2026-04-12T22:00:00+00:00",
+      "exit_price": 2201.0033,
+      "pnl": -56.2,
+      "pnl_pct": -0.564,
+      "fees": 7.9488,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-13T06:15:00+00:00",
+      "entry_price": 2196.6578,
+      "qty": 4.844936,
+      "stop": 2186.9609,
+      "take": 2216.0516,
+      "exit_time": "2026-04-13T07:15:00+00:00",
+      "exit_price": 2185.8674,
+      "pnl": -56.51,
+      "pnl_pct": -0.531,
+      "fees": 8.4932,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-13T12:45:00+00:00",
+      "entry_price": 2192.5757,
+      "qty": 4.695595,
+      "stop": 2182.6351,
+      "take": 2212.457,
+      "exit_time": "2026-04-13T13:30:00+00:00",
+      "exit_price": 2181.5438,
+      "pnl": -55.9,
+      "pnl_pct": -0.543,
+      "fees": 8.2156,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T00:00:00+00:00",
+      "entry_price": 2338.1185,
+      "qty": 2.873931,
+      "stop": 2321.9813,
+      "take": 2370.3927,
+      "exit_time": "2026-04-15T02:30:00+00:00",
+      "exit_price": 2320.8204,
+      "pnl": -52.38,
+      "pnl_pct": -0.78,
+      "fees": 5.3558,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T08:30:00+00:00",
+      "entry_price": 2327.3231,
+      "qty": 3.978962,
+      "stop": 2315.7367,
+      "take": 2350.4958,
+      "exit_time": "2026-04-15T10:15:00+00:00",
+      "exit_price": 2314.5789,
+      "pnl": -54.39,
+      "pnl_pct": -0.587,
+      "fees": 7.388,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T11:00:00+00:00",
+      "entry_price": 2326.5427,
+      "qty": 3.504985,
+      "stop": 2313.4724,
+      "take": 2352.6833,
+      "exit_time": "2026-04-15T17:15:00+00:00",
+      "exit_price": 2351.5069,
+      "pnl": 84.2,
+      "pnl_pct": 1.033,
+      "fees": 6.5586,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-16T12:00:00+00:00",
+      "entry_price": 2344.3016,
+      "qty": 4.470691,
+      "stop": 2333.964,
+      "take": 2364.9766,
+      "exit_time": "2026-04-16T13:30:00+00:00",
+      "exit_price": 2332.7971,
+      "pnl": -55.6,
+      "pnl_pct": -0.531,
+      "fees": 8.3639,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-16T15:30:00+00:00",
+      "entry_price": 2338.7988,
+      "qty": 2.203172,
+      "stop": 2317.9576,
+      "take": 2380.4813,
+      "exit_time": "2026-04-16T16:30:00+00:00",
+      "exit_price": 2316.7986,
+      "pnl": -50.51,
+      "pnl_pct": -0.98,
+      "fees": 4.1028,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-17T06:45:00+00:00",
+      "entry_price": 2331.125,
+      "qty": 4.731627,
+      "stop": 2321.4763,
+      "take": 2350.4224,
+      "exit_time": "2026-04-17T08:30:00+00:00",
+      "exit_price": 2349.2471,
+      "pnl": 81.3,
+      "pnl_pct": 0.737,
+      "fees": 8.8583,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-19T11:00:00+00:00",
+      "entry_price": 2327.0129,
+      "qty": 4.106397,
+      "stop": 2315.8015,
+      "take": 2349.4357,
+      "exit_time": "2026-04-19T15:30:00+00:00",
+      "exit_price": 2314.6436,
+      "pnl": -54.6,
+      "pnl_pct": -0.571,
+      "fees": 7.6242,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-21T04:45:00+00:00",
+      "entry_price": 2314.2365,
+      "qty": 4.195394,
+      "stop": 2303.3326,
+      "take": 2336.0444,
+      "exit_time": "2026-04-21T08:45:00+00:00",
+      "exit_price": 2334.8764,
+      "pnl": 82.67,
+      "pnl_pct": 0.852,
+      "fees": 7.8019,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-21T20:00:00+00:00",
+      "entry_price": 2318.8388,
+      "qty": 2.02251,
+      "stop": 2296.0255,
+      "take": 2364.4656,
+      "exit_time": "2026-04-22T02:30:00+00:00",
+      "exit_price": 2363.2834,
+      "pnl": 87.98,
+      "pnl_pct": 1.876,
+      "fees": 3.7879,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T06:15:00+00:00",
+      "entry_price": 2356.4076,
+      "qty": 3.715488,
+      "stop": 2343.8734,
+      "take": 2381.4761,
+      "exit_time": "2026-04-23T07:45:00+00:00",
+      "exit_price": 2342.7014,
+      "pnl": -54.41,
+      "pnl_pct": -0.621,
+      "fees": 6.9838,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T15:15:00+00:00",
+      "entry_price": 2332.0755,
+      "qty": 3.40533,
+      "stop": 2318.4846,
+      "take": 2359.2571,
+      "exit_time": "2026-04-23T17:00:00+00:00",
+      "exit_price": 2317.3254,
+      "pnl": -53.39,
+      "pnl_pct": -0.672,
+      "fees": 6.3331,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T22:15:00+00:00",
+      "entry_price": 2330.6848,
+      "qty": 3.310313,
+      "stop": 2316.7893,
+      "take": 2358.4758,
+      "exit_time": "2026-04-24T02:45:00+00:00",
+      "exit_price": 2315.6309,
+      "pnl": -52.9,
+      "pnl_pct": -0.686,
+      "fees": 6.1523,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-26T00:45:00+00:00",
+      "entry_price": 2312.843,
+      "qty": 9.870239,
+      "stop": 2317.475,
+      "take": 2303.5791,
+      "exit_time": "2026-04-26T02:30:00+00:00",
+      "exit_price": 2318.6337,
+      "pnl": -66.31,
+      "pnl_pct": -0.29,
+      "fees": 18.2855,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-29T00:00:00+00:00",
+      "entry_price": 2286.4962,
+      "qty": 5.957294,
+      "stop": 2294.1072,
+      "take": 2271.2741,
+      "exit_time": "2026-04-29T01:45:00+00:00",
+      "exit_price": 2295.2543,
+      "pnl": -57.64,
+      "pnl_pct": -0.423,
+      "fees": 10.9179,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-29T02:30:00+00:00",
+      "entry_price": 2284.5272,
+      "qty": 5.114395,
+      "stop": 2293.3309,
+      "take": 2266.9197,
+      "exit_time": "2026-04-29T03:15:00+00:00",
+      "exit_price": 2294.4776,
+      "pnl": -55.58,
+      "pnl_pct": -0.476,
+      "fees": 9.3675,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-29T12:00:00+00:00",
+      "entry_price": 2318.0904,
+      "qty": 4.111206,
+      "stop": 2328.9691,
+      "take": 2296.333,
+      "exit_time": "2026-04-29T13:30:00+00:00",
+      "exit_price": 2297.4811,
+      "pnl": 80.95,
+      "pnl_pct": 0.849,
+      "fees": 7.5902,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-30T11:45:00+00:00",
+      "entry_price": 2255.9215,
+      "qty": 4.230385,
+      "stop": 2266.5849,
+      "take": 2234.5947,
+      "exit_time": "2026-04-30T12:15:00+00:00",
+      "exit_price": 2267.7182,
+      "pnl": -53.74,
+      "pnl_pct": -0.563,
+      "fees": 7.6547,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-30T13:45:00+00:00",
+      "entry_price": 2261.3388,
+      "qty": 3.773223,
+      "stop": 2273.2179,
+      "take": 2237.5806,
+      "exit_time": "2026-04-30T15:30:00+00:00",
+      "exit_price": 2274.3545,
+      "pnl": -52.54,
+      "pnl_pct": -0.616,
+      "fees": 6.8457,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-04-30T21:45:00+00:00",
+      "entry_price": 2253.9625,
+      "qty": 5.296962,
+      "stop": 2262.3716,
+      "take": 2237.1443,
+      "exit_time": "2026-05-01T00:00:00+00:00",
+      "exit_price": 2263.5027,
+      "pnl": -55.33,
+      "pnl_pct": -0.463,
+      "fees": 9.5715,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-01T06:45:00+00:00",
+      "entry_price": 2275.0019,
+      "qty": 5.243257,
+      "stop": 2283.4398,
+      "take": 2258.1261,
+      "exit_time": "2026-05-01T08:15:00+00:00",
+      "exit_price": 2284.5816,
+      "pnl": -55.02,
+      "pnl_pct": -0.461,
+      "fees": 9.5628,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-01T20:15:00+00:00",
+      "entry_price": 2297.7506,
+      "qty": 4.49446,
+      "stop": 2307.5277,
+      "take": 2278.1962,
+      "exit_time": "2026-05-01T20:45:00+00:00",
+      "exit_price": 2279.3353,
+      "pnl": 78.67,
+      "pnl_pct": 0.762,
+      "fees": 8.2286,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-05-03T06:45:00+00:00",
+      "entry_price": 2304.5517,
+      "qty": 8.138716,
+      "stop": 2299.1066,
+      "take": 2315.4418,
+      "exit_time": "2026-05-03T09:30:00+00:00",
+      "exit_price": 2314.2841,
+      "pnl": 71.68,
+      "pnl_pct": 0.382,
+      "fees": 15.0366,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-05-04T14:15:00+00:00",
+      "entry_price": 2345.5422,
+      "qty": 2.944472,
+      "stop": 2330.3827,
+      "take": 2375.8612,
+      "exit_time": "2026-05-04T14:45:00+00:00",
+      "exit_price": 2374.6733,
+      "pnl": 82.98,
+      "pnl_pct": 1.201,
+      "fees": 5.5594,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-05-04T16:15:00+00:00",
+      "entry_price": 2357.6582,
+      "qty": 2.021507,
+      "stop": 2335.3789,
+      "take": 2402.2169,
+      "exit_time": "2026-05-06T09:30:00+00:00",
+      "exit_price": 2401.0158,
+      "pnl": 85.71,
+      "pnl_pct": 1.798,
+      "fees": 3.8479,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-05-07T06:30:00+00:00",
+      "entry_price": 2336.1675,
+      "qty": 4.484275,
+      "stop": 2326.0306,
+      "take": 2356.4414,
+      "exit_time": "2026-05-07T09:30:00+00:00",
+      "exit_price": 2324.8675,
+      "pnl": -54.84,
+      "pnl_pct": -0.524,
+      "fees": 8.3605,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-08T12:45:00+00:00",
+      "entry_price": 2282.4782,
+      "qty": 4.715883,
+      "stop": 2292.0547,
+      "take": 2263.3252,
+      "exit_time": "2026-05-08T15:45:00+00:00",
+      "exit_price": 2293.2007,
+      "pnl": -54.89,
+      "pnl_pct": -0.51,
+      "fees": 8.6313,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-09T04:30:00+00:00",
+      "entry_price": 2311.4137,
+      "qty": 6.048634,
+      "stop": 2318.8312,
+      "take": 2296.5787,
+      "exit_time": "2026-05-09T08:30:00+00:00",
+      "exit_price": 2319.9906,
+      "pnl": -57.49,
+      "pnl_pct": -0.411,
+      "fees": 11.2055,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-09T09:15:00+00:00",
+      "entry_price": 2311.0739,
+      "qty": 7.712492,
+      "stop": 2316.8503,
+      "take": 2299.5211,
+      "exit_time": "2026-05-09T12:15:00+00:00",
+      "exit_price": 2318.0087,
+      "pnl": -60.64,
+      "pnl_pct": -0.34,
+      "fees": 14.2807,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-09T13:30:00+00:00",
+      "entry_price": 2310.904,
+      "qty": 9.563778,
+      "stop": 2315.5268,
+      "take": 2301.6584,
+      "exit_time": "2026-05-09T15:00:00+00:00",
+      "exit_price": 2302.8092,
+      "pnl": 68.61,
+      "pnl_pct": 0.31,
+      "fees": 17.6498,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-05-11T10:00:00+00:00",
+      "entry_price": 2337.068,
+      "qty": 4.983518,
+      "stop": 2328.1365,
+      "take": 2354.9309,
+      "exit_time": "2026-05-11T11:00:00+00:00",
+      "exit_price": 2326.9724,
+      "pnl": -54.95,
+      "pnl_pct": -0.472,
+      "fees": 9.2973,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-05-11T12:15:00+00:00",
+      "entry_price": 2337.098,
+      "qty": 5.017889,
+      "stop": 2328.287,
+      "take": 2354.7198,
+      "exit_time": "2026-05-11T12:45:00+00:00",
+      "exit_price": 2327.1229,
+      "pnl": -54.72,
+      "pnl_pct": -0.467,
+      "fees": 9.3618,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "long",
+      "entry_time": "2026-05-11T16:00:00+00:00",
+      "entry_price": 2339.6592,
+      "qty": 3.331406,
+      "stop": 2326.4771,
+      "take": 2366.0236,
+      "exit_time": "2026-05-11T16:30:00+00:00",
+      "exit_price": 2325.3138,
+      "pnl": -50.89,
+      "pnl_pct": -0.653,
+      "fees": 6.2164,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-13T00:45:00+00:00",
+      "entry_price": 2279.3797,
+      "qty": 5.58682,
+      "stop": 2287.1919,
+      "take": 2263.7554,
+      "exit_time": "2026-05-13T01:00:00+00:00",
+      "exit_price": 2288.3355,
+      "pnl": -55.15,
+      "pnl_pct": -0.433,
+      "fees": 10.2076,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-13T05:30:00+00:00",
+      "entry_price": 2294.842,
+      "qty": 5.43589,
+      "stop": 2302.8157,
+      "take": 2278.8947,
+      "exit_time": "2026-05-13T06:15:00+00:00",
+      "exit_price": 2303.9671,
+      "pnl": -54.61,
+      "pnl_pct": -0.438,
+      "fees": 9.9994,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-13T11:00:00+00:00",
+      "entry_price": 2298.5502,
+      "qty": 4.802832,
+      "stop": 2307.5128,
+      "take": 2280.6249,
+      "exit_time": "2026-05-13T12:30:00+00:00",
+      "exit_price": 2281.7652,
+      "pnl": 76.23,
+      "pnl_pct": 0.691,
+      "fees": 8.7994,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-14T09:00:00+00:00",
+      "entry_price": 2262.0084,
+      "qty": 5.196848,
+      "stop": 2270.3606,
+      "take": 2245.3041,
+      "exit_time": "2026-05-14T14:00:00+00:00",
+      "exit_price": 2246.4267,
+      "pnl": 76.31,
+      "pnl_pct": 0.649,
+      "fees": 9.3719,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-14T23:45:00+00:00",
+      "entry_price": 2280.919,
+      "qty": 4.015776,
+      "stop": 2291.8167,
+      "take": 2259.1234,
+      "exit_time": "2026-05-15T00:15:00+00:00",
+      "exit_price": 2292.9626,
+      "pnl": -52.05,
+      "pnl_pct": -0.568,
+      "fees": 7.3471,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-15T01:30:00+00:00",
+      "entry_price": 2283.4177,
+      "qty": 3.712462,
+      "stop": 2295.1308,
+      "take": 2259.9915,
+      "exit_time": "2026-05-15T02:30:00+00:00",
+      "exit_price": 2261.1215,
+      "pnl": 79.42,
+      "pnl_pct": 0.937,
+      "fees": 6.7486,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T14:00:00+00:00",
+      "entry_price": 2185.5267,
+      "qty": 7.141913,
+      "stop": 2191.6685,
+      "take": 2173.243,
+      "exit_time": "2026-05-17T19:30:00+00:00",
+      "exit_price": 2192.7644,
+      "pnl": -57.96,
+      "pnl_pct": -0.371,
+      "fees": 12.5077,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T22:00:00+00:00",
+      "entry_price": 2181.6586,
+      "qty": 6.335786,
+      "stop": 2188.5313,
+      "take": 2167.9133,
+      "exit_time": "2026-05-17T23:15:00+00:00",
+      "exit_price": 2168.9973,
+      "pnl": 74.72,
+      "pnl_pct": 0.541,
+      "fees": 11.0259,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-18T14:00:00+00:00",
+      "entry_price": 2122.5382,
+      "qty": 3.190055,
+      "stop": 2136.2964,
+      "take": 2095.0217,
+      "exit_time": "2026-05-18T15:00:00+00:00",
+      "exit_price": 2096.0692,
+      "pnl": 81.76,
+      "pnl_pct": 1.208,
+      "fees": 5.383,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-19T01:15:00+00:00",
+      "entry_price": 2123.8975,
+      "qty": 3.403112,
+      "stop": 2136.9106,
+      "take": 2097.8715,
+      "exit_time": "2026-05-19T06:30:00+00:00",
+      "exit_price": 2137.979,
+      "pnl": -50.83,
+      "pnl_pct": -0.703,
+      "fees": 5.8015,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-19T08:15:00+00:00",
+      "entry_price": 2132.2933,
+      "qty": 4.66665,
+      "stop": 2141.7254,
+      "take": 2113.4292,
+      "exit_time": "2026-05-19T09:15:00+00:00",
+      "exit_price": 2114.4859,
+      "pnl": 79.15,
+      "pnl_pct": 0.795,
+      "fees": 7.9273,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-19T23:30:00+00:00",
+      "entry_price": 2113.4727,
+      "qty": 5.412433,
+      "stop": 2121.6746,
+      "take": 2097.069,
+      "exit_time": "2026-05-20T05:00:00+00:00",
+      "exit_price": 2122.7354,
+      "pnl": -54.73,
+      "pnl_pct": -0.478,
+      "fees": 9.1713,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T11:30:00+00:00",
+      "entry_price": 2124.6372,
+      "qty": 6.615042,
+      "stop": 2131.3031,
+      "take": 2111.3052,
+      "exit_time": "2026-05-20T12:00:00+00:00",
+      "exit_price": 2132.3688,
+      "pnl": -56.79,
+      "pnl_pct": -0.404,
+      "fees": 11.2641,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T13:15:00+00:00",
+      "entry_price": 2124.8071,
+      "qty": 5.889367,
+      "stop": 2132.2414,
+      "take": 2109.9384,
+      "exit_time": "2026-05-20T14:15:00+00:00",
+      "exit_price": 2133.3075,
+      "pnl": -55.09,
+      "pnl_pct": -0.44,
+      "fees": 10.031,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T20:15:00+00:00",
+      "entry_price": 2134.6521,
+      "qty": 4.137904,
+      "stop": 2145.1606,
+      "take": 2113.6352,
+      "exit_time": "2026-05-21T01:00:00+00:00",
+      "exit_price": 2146.2332,
+      "pnl": -51.47,
+      "pnl_pct": -0.583,
+      "fees": 7.0856,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-21T05:45:00+00:00",
+      "entry_price": 2134.3423,
+      "qty": 5.945345,
+      "stop": 2141.6098,
+      "take": 2119.8072,
+      "exit_time": "2026-05-21T08:00:00+00:00",
+      "exit_price": 2142.6806,
+      "pnl": -54.67,
+      "pnl_pct": -0.431,
+      "fees": 10.1714,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-21T18:45:00+00:00",
+      "entry_price": 2124.8271,
+      "qty": 3.195999,
+      "stop": 2138.253,
+      "take": 2097.9752,
+      "exit_time": "2026-05-21T19:45:00+00:00",
+      "exit_price": 2139.3221,
+      "pnl": -49.06,
+      "pnl_pct": -0.722,
+      "fees": 5.4513,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-22T00:45:00+00:00",
+      "entry_price": 2127.1259,
+      "qty": 5.510065,
+      "stop": 2134.8664,
+      "take": 2111.645,
+      "exit_time": "2026-05-22T01:45:00+00:00",
+      "exit_price": 2135.9338,
+      "pnl": -53.24,
+      "pnl_pct": -0.454,
+      "fees": 9.3959,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-22T05:30:00+00:00",
+      "entry_price": 2129.2648,
+      "qty": 6.262725,
+      "stop": 2136.0288,
+      "take": 2115.7369,
+      "exit_time": "2026-05-22T12:00:00+00:00",
+      "exit_price": 2137.0968,
+      "pnl": -54.4,
+      "pnl_pct": -0.408,
+      "fees": 10.6876,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-24T03:30:00+00:00",
+      "entry_price": 2115.7016,
+      "qty": 4.362925,
+      "stop": 2125.3424,
+      "take": 2096.42,
+      "exit_time": "2026-05-24T06:45:00+00:00",
+      "exit_price": 2126.4051,
+      "pnl": -50.41,
+      "pnl_pct": -0.546,
+      "fees": 7.4032,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-24T07:45:00+00:00",
+      "entry_price": 2119.1899,
+      "qty": 5.903653,
+      "stop": 2126.2688,
+      "take": 2105.032,
+      "exit_time": "2026-05-24T10:15:00+00:00",
+      "exit_price": 2127.3319,
+      "pnl": -53.09,
+      "pnl_pct": -0.424,
+      "fees": 10.028,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-24T12:15:00+00:00",
+      "entry_price": 2116.2014,
+      "qty": 6.073488,
+      "stop": 2123.0345,
+      "take": 2102.5351,
+      "exit_time": "2026-05-24T14:00:00+00:00",
+      "exit_price": 2103.5863,
+      "pnl": 71.51,
+      "pnl_pct": 0.556,
+      "fees": 10.2515,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-25T19:30:00+00:00",
+      "entry_price": 2118.1204,
+      "qty": 5.364504,
+      "stop": 2125.9185,
+      "take": 2102.5242,
+      "exit_time": "2026-05-25T22:30:00+00:00",
+      "exit_price": 2103.5755,
+      "pnl": 73.51,
+      "pnl_pct": 0.647,
+      "fees": 9.0589,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-26T14:30:00+00:00",
+      "entry_price": 2109.5547,
+      "qty": 2.842861,
+      "stop": 2124.3911,
+      "take": 2079.8819,
+      "exit_time": "2026-05-26T15:45:00+00:00",
+      "exit_price": 2080.9219,
+      "pnl": 79.03,
+      "pnl_pct": 1.318,
+      "fees": 4.7652,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-27T12:00:00+00:00",
+      "entry_price": 2074.5622,
+      "qty": 5.249795,
+      "stop": 2082.6694,
+      "take": 2058.3479,
+      "exit_time": "2026-05-27T12:15:00+00:00",
+      "exit_price": 2083.7107,
+      "pnl": -52.4,
+      "pnl_pct": -0.481,
+      "fees": 8.732,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-28T22:30:00+00:00",
+      "entry_price": 2004.1074,
+      "qty": 4.102371,
+      "stop": 2014.413,
+      "take": 1983.4964,
+      "exit_time": "2026-05-29T00:00:00+00:00",
+      "exit_price": 2015.4202,
+      "pnl": -49.72,
+      "pnl_pct": -0.605,
+      "fees": 6.5958,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-29T01:15:00+00:00",
+      "entry_price": 2005.9365,
+      "qty": 4.708373,
+      "stop": 2014.8594,
+      "take": 1988.0908,
+      "exit_time": "2026-05-29T06:15:00+00:00",
+      "exit_price": 2015.8668,
+      "pnl": -50.55,
+      "pnl_pct": -0.535,
+      "fees": 7.5745,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-29T11:30:00+00:00",
+      "entry_price": 2005.2469,
+      "qty": 6.079225,
+      "stop": 2012.113,
+      "take": 1991.5147,
+      "exit_time": "2026-05-29T13:30:00+00:00",
+      "exit_price": 1992.5105,
+      "pnl": 72.58,
+      "pnl_pct": 0.595,
+      "fees": 9.7213,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-29T18:45:00+00:00",
+      "entry_price": 2009.4448,
+      "qty": 2.65164,
+      "stop": 2025.3138,
+      "take": 1977.7067,
+      "exit_time": "2026-05-30T14:00:00+00:00",
+      "exit_price": 2026.3265,
+      "pnl": -46.91,
+      "pnl_pct": -0.88,
+      "fees": 4.2806,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-05-30T22:00:00+00:00",
+      "entry_price": 2022.8781,
+      "qty": 8.546924,
+      "stop": 2027.7727,
+      "take": 2013.0889,
+      "exit_time": "2026-05-31T01:00:00+00:00",
+      "exit_price": 2028.7865,
+      "pnl": -57.44,
+      "pnl_pct": -0.332,
+      "fees": 13.8517,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-01T22:00:00+00:00",
+      "entry_price": 1988.6752,
+      "qty": 3.705796,
+      "stop": 1999.8771,
+      "take": 1966.2713,
+      "exit_time": "2026-06-01T22:15:00+00:00",
+      "exit_price": 2000.877,
+      "pnl": -48.18,
+      "pnl_pct": -0.654,
+      "fees": 5.9138,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-02T02:30:00+00:00",
+      "entry_price": 1984.0075,
+      "qty": 2.900043,
+      "stop": 1998.2336,
+      "take": 1955.5553,
+      "exit_time": "2026-06-02T03:00:00+00:00",
+      "exit_price": 1999.2327,
+      "pnl": -46.47,
+      "pnl_pct": -0.808,
+      "fees": 4.6206,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-03T13:00:00+00:00",
+      "entry_price": 1872.6032,
+      "qty": 3.290243,
+      "stop": 1885.0681,
+      "take": 1847.6735,
+      "exit_time": "2026-06-03T15:00:00+00:00",
+      "exit_price": 1848.5973,
+      "pnl": 76.55,
+      "pnl_pct": 1.242,
+      "fees": 4.8975,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-04T07:15:00+00:00",
+      "entry_price": 1776.1415,
+      "qty": 1.911375,
+      "stop": 1797.7923,
+      "take": 1732.8398,
+      "exit_time": "2026-06-04T10:45:00+00:00",
+      "exit_price": 1733.7062,
+      "pnl": 79.78,
+      "pnl_pct": 2.35,
+      "fees": 2.6835,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-04T18:30:00+00:00",
+      "entry_price": 1773.143,
+      "qty": 2.094708,
+      "stop": 1793.0861,
+      "take": 1733.2567,
+      "exit_time": "2026-06-05T02:30:00+00:00",
+      "exit_price": 1734.1234,
+      "pnl": 80.28,
+      "pnl_pct": 2.161,
+      "fees": 2.9387,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-06T10:00:00+00:00",
+      "entry_price": 1554.8322,
+      "qty": 2.090035,
+      "stop": 1575.0084,
+      "take": 1514.4798,
+      "exit_time": "2026-06-07T01:00:00+00:00",
+      "exit_price": 1575.7959,
+      "pnl": -45.13,
+      "pnl_pct": -1.389,
+      "fees": 2.6172,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-07T12:00:00+00:00",
+      "entry_price": 1611.3639,
+      "qty": 3.15334,
+      "stop": 1624.6631,
+      "take": 1584.7655,
+      "exit_time": "2026-06-07T14:15:00+00:00",
+      "exit_price": 1625.4754,
+      "pnl": -46.55,
+      "pnl_pct": -0.916,
+      "fees": 4.0827,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-07T19:00:00+00:00",
+      "entry_price": 1614.7622,
+      "qty": 3.591745,
+      "stop": 1626.3705,
+      "take": 1591.5457,
+      "exit_time": "2026-06-07T20:15:00+00:00",
+      "exit_price": 1627.1837,
+      "pnl": -46.95,
+      "pnl_pct": -0.81,
+      "fees": 4.6577,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T04:30:00+00:00",
+      "entry_price": 1655.5318,
+      "qty": 2.392049,
+      "stop": 1672.8591,
+      "take": 1620.8774,
+      "exit_time": "2026-06-08T07:15:00+00:00",
+      "exit_price": 1673.6955,
+      "pnl": -45.05,
+      "pnl_pct": -1.138,
+      "fees": 3.1855,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T17:00:00+00:00",
+      "entry_price": 1676.9011,
+      "qty": 2.616562,
+      "stop": 1692.6525,
+      "take": 1645.3984,
+      "exit_time": "2026-06-08T21:00:00+00:00",
+      "exit_price": 1693.4988,
+      "pnl": -45.2,
+      "pnl_pct": -1.03,
+      "fees": 3.5275,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T23:45:00+00:00",
+      "entry_price": 1688.3654,
+      "qty": 2.736175,
+      "stop": 1703.3424,
+      "take": 1658.4114,
+      "exit_time": "2026-06-09T00:45:00+00:00",
+      "exit_price": 1659.2406,
+      "pnl": 77.87,
+      "pnl_pct": 1.686,
+      "fees": 3.6639,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-09T08:00:00+00:00",
+      "entry_price": 1673.9126,
+      "qty": 3.204582,
+      "stop": 1686.8191,
+      "take": 1648.0997,
+      "exit_time": "2026-06-09T14:15:00+00:00",
+      "exit_price": 1648.9238,
+      "pnl": 77.97,
+      "pnl_pct": 1.453,
+      "fees": 4.2593,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-10T01:00:00+00:00",
+      "entry_price": 1641.159,
+      "qty": 3.338433,
+      "stop": 1653.6615,
+      "take": 1616.154,
+      "exit_time": "2026-06-10T05:15:00+00:00",
+      "exit_price": 1616.962,
+      "pnl": 78.62,
+      "pnl_pct": 1.435,
+      "fees": 4.3508,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-10T16:45:00+00:00",
+      "entry_price": 1640.4893,
+      "qty": 2.42274,
+      "stop": 1657.875,
+      "take": 1605.718,
+      "exit_time": "2026-06-10T21:45:00+00:00",
+      "exit_price": 1606.5208,
+      "pnl": 80.74,
+      "pnl_pct": 2.031,
+      "fees": 3.1467,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-11T12:15:00+00:00",
+      "entry_price": 1646.6762,
+      "qty": 4.336051,
+      "stop": 1656.4817,
+      "take": 1627.0654,
+      "exit_time": "2026-06-11T13:45:00+00:00",
+      "exit_price": 1657.3099,
+      "pnl": -48.98,
+      "pnl_pct": -0.686,
+      "fees": 5.7305,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T00:15:00+00:00",
+      "entry_price": 1670.9641,
+      "qty": 3.848946,
+      "stop": 1681.9431,
+      "take": 1649.0061,
+      "exit_time": "2026-06-12T09:30:00+00:00",
+      "exit_price": 1682.7841,
+      "pnl": -48.09,
+      "pnl_pct": -0.748,
+      "fees": 5.1634,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T14:30:00+00:00",
+      "entry_price": 1667.156,
+      "qty": 4.149418,
+      "stop": 1677.2789,
+      "take": 1646.9101,
+      "exit_time": "2026-06-12T14:45:00+00:00",
+      "exit_price": 1678.1176,
+      "pnl": -48.27,
+      "pnl_pct": -0.698,
+      "fees": 5.5524,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-13T16:00:00+00:00",
+      "entry_price": 1673.8227,
+      "qty": 7.443889,
+      "stop": 1679.4312,
+      "take": 1662.6057,
+      "exit_time": "2026-06-13T16:45:00+00:00",
+      "exit_price": 1680.2709,
+      "pnl": -53.0,
+      "pnl_pct": -0.425,
+      "fees": 9.987,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "ETH/USDT",
+      "side": "short",
+      "entry_time": "2026-06-14T03:30:00+00:00",
+      "entry_price": 1678.3404,
+      "qty": 8.623083,
+      "stop": 1683.1483,
+      "take": 1668.7246,
+      "exit_time": "2026-06-14T09:15:00+00:00",
+      "exit_price": 1669.5589,
+      "pnl": 69.96,
+      "pnl_pct": 0.483,
+      "fees": 11.5477,
+      "reason": "take_profit"
+    }
+  ],
+  "equity_curve": [
+    [
+      "2026-02-15T11:15:00+00:00",
+      10000.0
+    ],
+    [
+      "2026-02-16T11:45:00+00:00",
+      9940.092063380678
+    ],
+    [
+      "2026-02-16T20:45:00+00:00",
+      9884.324175014266
+    ],
+    [
+      "2026-02-17T02:00:00+00:00",
+      9825.464574108903
+    ],
+    [
+      "2026-02-17T10:45:00+00:00",
+      9915.16161097421
+    ],
+    [
+      "2026-02-18T12:30:00+00:00",
+      10003.399732446653
+    ],
+    [
+      "2026-02-19T11:45:00+00:00",
+      10091.613606679333
+    ],
+    [
+      "2026-02-20T03:15:00+00:00",
+      10029.319979802933
+    ],
+    [
+      "2026-02-20T05:30:00+00:00",
+      9967.082602881026
+    ],
+    [
+      "2026-02-20T13:30:00+00:00",
+      10055.143884292662
+    ],
+    [
+      "2026-02-21T09:15:00+00:00",
+      9994.239294114812
+    ],
+    [
+      "2026-02-21T13:15:00+00:00",
+      9926.600445498227
+    ],
+    [
+      "2026-02-21T21:00:00+00:00",
+      10008.136691300868
+    ],
+    [
+      "2026-02-22T01:15:00+00:00",
+      9941.120705632475
+    ],
+    [
+      "2026-02-22T10:00:00+00:00",
+      9868.34635681596
+    ],
+    [
+      "2026-02-23T17:00:00+00:00",
+      9959.08915389241
+    ],
+    [
+      "2026-02-24T13:30:00+00:00",
+      10052.39179312401
+    ],
+    [
+      "2026-02-25T01:00:00+00:00",
+      9991.088759552127
+    ],
+    [
+      "2026-02-25T08:30:00+00:00",
+      9934.001032922355
+    ],
+    [
+      "2026-02-26T08:15:00+00:00",
+      9877.655535055756
+    ],
+    [
+      "2026-02-26T14:30:00+00:00",
+      9818.83573856169
+    ],
+    [
+      "2026-02-27T04:00:00+00:00",
+      9908.79764776131
+    ],
+    [
+      "2026-02-28T17:45:00+00:00",
+      9853.278768600156
+    ],
+    [
+      "2026-03-01T16:00:00+00:00",
+      9797.086084210292
+    ],
+    [
+      "2026-03-04T03:30:00+00:00",
+      9744.086748194622
+    ],
+    [
+      "2026-03-04T07:45:00+00:00",
+      9834.692438487415
+    ],
+    [
+      "2026-03-05T13:30:00+00:00",
+      9778.50259713951
+    ],
+    [
+      "2026-03-06T04:30:00+00:00",
+      9721.607046021423
+    ],
+    [
+      "2026-03-06T09:00:00+00:00",
+      9664.28418178666
+    ],
+    [
+      "2026-03-09T12:15:00+00:00",
+      9608.823165562653
+    ],
+    [
+      "2026-03-11T05:30:00+00:00",
+      9550.713068846759
+    ],
+    [
+      "2026-03-11T11:45:00+00:00",
+      9492.338940786794
+    ],
+    [
+      "2026-03-11T13:30:00+00:00",
+      9576.967386684102
+    ],
+    [
+      "2026-03-12T09:30:00+00:00",
+      9660.122955600531
+    ],
+    [
+      "2026-03-13T12:45:00+00:00",
+      9747.60376567431
+    ],
+    [
+      "2026-03-14T04:45:00+00:00",
+      9686.388579895396
+    ],
+    [
+      "2026-03-14T23:00:00+00:00",
+      9756.536394359413
+    ],
+    [
+      "2026-03-17T09:00:00+00:00",
+      9701.14913243903
+    ],
+    [
+      "2026-03-17T15:30:00+00:00",
+      9645.097246277814
+    ],
+    [
+      "2026-03-18T05:45:00+00:00",
+      9586.28404245938
+    ],
+    [
+      "2026-03-19T03:15:00+00:00",
+      9673.53120267319
+    ],
+    [
+      "2026-03-19T12:00:00+00:00",
+      9617.798056561009
+    ],
+    [
+      "2026-03-21T07:15:00+00:00",
+      9553.52683405003
+    ],
+    [
+      "2026-03-21T12:15:00+00:00",
+      9483.63261359314
+    ],
+    [
+      "2026-03-21T23:45:00+00:00",
+      9559.693043682055
+    ],
+    [
+      "2026-03-22T08:15:00+00:00",
+      9644.415546719707
+    ],
+    [
+      "2026-03-23T17:30:00+00:00",
+      9591.790047312983
+    ],
+    [
+      "2026-03-24T07:00:00+00:00",
+      9535.136981068508
+    ],
+    [
+      "2026-03-24T14:00:00+00:00",
+      9620.94106797674
+    ],
+    [
+      "2026-03-26T00:45:00+00:00",
+      9562.183156217934
+    ],
+    [
+      "2026-03-27T07:15:00+00:00",
+      9503.352427554506
+    ],
+    [
+      "2026-03-28T10:00:00+00:00",
+      9435.489969017483
+    ],
+    [
+      "2026-03-28T12:45:00+00:00",
+      9369.829843631122
+    ],
+    [
+      "2026-03-28T23:00:00+00:00",
+      9448.23629455773
+    ],
+    [
+      "2026-03-30T00:15:00+00:00",
+      9393.851741056584
+    ],
+    [
+      "2026-03-31T01:15:00+00:00",
+      9340.03774870846
+    ],
+    [
+      "2026-03-31T09:15:00+00:00",
+      9423.955675236804
+    ],
+    [
+      "2026-04-03T02:15:00+00:00",
+      9365.538928678337
+    ],
+    [
+      "2026-04-03T12:15:00+00:00",
+      9305.32194362319
+    ],
+    [
+      "2026-04-04T05:30:00+00:00",
+      9233.40403625811
+    ],
+    [
+      "2026-04-05T05:45:00+00:00",
+      9303.461809482827
+    ],
+    [
+      "2026-04-07T09:00:00+00:00",
+      9383.285743811033
+    ],
+    [
+      "2026-04-07T21:00:00+00:00",
+      9469.24153807221
+    ],
+    [
+      "2026-04-08T18:15:00+00:00",
+      9414.290189653198
+    ],
+    [
+      "2026-04-09T13:30:00+00:00",
+      9352.1272398512
+    ],
+    [
+      "2026-04-09T15:30:00+00:00",
+      9436.225987970534
+    ],
+    [
+      "2026-04-10T11:15:00+00:00",
+      9517.212988025109
+    ],
+    [
+      "2026-04-12T20:00:00+00:00",
+      9456.373254685182
+    ],
+    [
+      "2026-04-12T22:00:00+00:00",
+      9396.185224903664
+    ],
+    [
+      "2026-04-13T07:15:00+00:00",
+      9335.413233660689
+    ],
+    [
+      "2026-04-13T13:30:00+00:00",
+      9275.396144282413
+    ],
+    [
+      "2026-04-15T02:30:00+00:00",
+      9220.32677010556
+    ],
+    [
+      "2026-04-15T10:15:00+00:00",
+      9162.23004091851
+    ],
+    [
+      "2026-04-15T17:15:00+00:00",
+      9243.170684977656
+    ],
+    [
+      "2026-04-16T13:30:00+00:00",
+      9183.373669896519
+    ],
+    [
+      "2026-04-16T16:30:00+00:00",
+      9130.80054029555
+    ],
+    [
+      "2026-04-17T08:30:00+00:00",
+      9207.689573974647
+    ],
+    [
+      "2026-04-19T15:30:00+00:00",
+      9149.27213352891
+    ],
+    [
+      "2026-04-21T08:45:00+00:00",
+      9228.062596465861
+    ],
+    [
+      "2026-04-22T02:30:00+00:00",
+      9314.164288352667
+    ],
+    [
+      "2026-04-23T07:45:00+00:00",
+      9256.255355877327
+    ],
+    [
+      "2026-04-23T17:00:00+00:00",
+      9199.693378999815
+    ],
+    [
+      "2026-04-24T02:45:00+00:00",
+      9143.707958758647
+    ],
+    [
+      "2026-04-26T02:30:00+00:00",
+      9068.266890573692
+    ],
+    [
+      "2026-04-29T01:45:00+00:00",
+      9005.174285644254
+    ],
+    [
+      "2026-04-29T03:15:00+00:00",
+      8944.916378696764
+    ],
+    [
+      "2026-04-29T13:30:00+00:00",
+      9022.054966965246
+    ],
+    [
+      "2026-04-30T12:15:00+00:00",
+      8964.495734451237
+    ],
+    [
+      "2026-04-30T15:30:00+00:00",
+      8908.53890279687
+    ],
+    [
+      "2026-05-01T00:00:00+00:00",
+      8848.432823703519
+    ],
+    [
+      "2026-05-01T08:15:00+00:00",
+      8788.641500882344
+    ],
+    [
+      "2026-05-01T20:45:00+00:00",
+      8863.179673991348
+    ],
+    [
+      "2026-05-03T09:30:00+00:00",
+      8927.352552579752
+    ],
+    [
+      "2026-05-04T14:45:00+00:00",
+      9007.568833250343
+    ],
+    [
+      "2026-05-06T09:30:00+00:00",
+      9091.368594587148
+    ],
+    [
+      "2026-05-07T09:30:00+00:00",
+      9032.335926574737
+    ],
+    [
+      "2026-05-08T15:45:00+00:00",
+      8973.13837072127
+    ],
+    [
+      "2026-05-09T08:30:00+00:00",
+      8910.05432946009
+    ],
+    [
+      "2026-05-09T12:15:00+00:00",
+      8842.289007641015
+    ],
+    [
+      "2026-05-09T15:00:00+00:00",
+      8902.055812555895
+    ],
+    [
+      "2026-05-11T11:00:00+00:00",
+      8842.447047007901
+    ],
+    [
+      "2026-05-11T12:45:00+00:00",
+      8783.031452812515
+    ],
+    [
+      "2026-05-11T16:30:00+00:00",
+      8729.024706735849
+    ],
+    [
+      "2026-05-13T01:00:00+00:00",
+      8668.782918542945
+    ],
+    [
+      "2026-05-13T06:15:00+00:00",
+      8609.18062852481
+    ],
+    [
+      "2026-05-13T12:30:00+00:00",
+      8680.996311740982
+    ],
+    [
+      "2026-05-14T14:00:00+00:00",
+      8752.600162196666
+    ],
+    [
+      "2026-05-15T00:15:00+00:00",
+      8696.88837718794
+    ],
+    [
+      "2026-05-15T02:30:00+00:00",
+      8772.913624438212
+    ],
+    [
+      "2026-05-17T19:30:00+00:00",
+      8708.714954184616
+    ],
+    [
+      "2026-05-17T23:15:00+00:00",
+      8777.908456759542
+    ],
+    [
+      "2026-05-18T15:00:00+00:00",
+      8856.962887227644
+    ],
+    [
+      "2026-05-19T06:30:00+00:00",
+      8803.24054270029
+    ],
+    [
+      "2026-05-19T09:15:00+00:00",
+      8878.41433699012
+    ],
+    [
+      "2026-05-20T05:00:00+00:00",
+      8819.109276839337
+    ],
+    [
+      "2026-05-20T12:00:00+00:00",
+      8756.70029155407
+    ],
+    [
+      "2026-05-20T14:15:00+00:00",
+      8696.606972984187
+    ],
+    [
+      "2026-05-21T01:00:00+00:00",
+      8641.600148137293
+    ],
+    [
+      "2026-05-21T08:00:00+00:00",
+      8581.854491038373
+    ],
+    [
+      "2026-05-21T19:45:00+00:00",
+      8530.077004628889
+    ],
+    [
+      "2026-05-22T01:45:00+00:00",
+      8472.14909929568
+    ],
+    [
+      "2026-05-22T12:00:00+00:00",
+      8412.412054776552
+    ],
+    [
+      "2026-05-24T06:45:00+00:00",
+      8358.310441144187
+    ],
+    [
+      "2026-05-24T10:15:00+00:00",
+      8300.21451447093
+    ],
+    [
+      "2026-05-24T14:00:00+00:00",
+      8366.58026583364
+    ],
+    [
+      "2026-05-25T22:30:00+00:00",
+      8435.547645575693
+    ],
+    [
+      "2026-05-26T15:45:00+00:00",
+      8512.181538693518
+    ],
+    [
+      "2026-05-27T12:15:00+00:00",
+      8455.421806301894
+    ],
+    [
+      "2026-05-29T00:00:00+00:00",
+      8402.416925154037
+    ],
+    [
+      "2026-05-29T06:15:00+00:00",
+      8348.087025049428
+    ],
+    [
+      "2026-05-29T13:30:00+00:00",
+      8415.79315640719
+    ],
+    [
+      "2026-05-30T14:00:00+00:00",
+      8366.74842460829
+    ],
+    [
+      "2026-05-31T01:00:00+00:00",
+      8302.39736644966
+    ],
+    [
+      "2026-06-01T22:15:00+00:00",
+      8251.266024658928
+    ],
+    [
+      "2026-06-02T03:00:00+00:00",
+      8202.491585639662
+    ],
+    [
+      "2026-06-03T15:00:00+00:00",
+      8276.57939212236
+    ],
+    [
+      "2026-06-04T10:45:00+00:00",
+      8355.005678706048
+    ],
+    [
+      "2026-06-05T02:30:00+00:00",
+      8433.801723484932
+    ],
+    [
+      "2026-06-07T01:00:00+00:00",
+      8387.36955432638
+    ],
+    [
+      "2026-06-07T14:15:00+00:00",
+      8338.788406637956
+    ],
+    [
+      "2026-06-07T20:15:00+00:00",
+      8289.5160142046
+    ],
+    [
+      "2026-06-08T07:15:00+00:00",
+      8242.882184503937
+    ],
+    [
+      "2026-06-08T21:00:00+00:00",
+      8195.92576336287
+    ],
+    [
+      "2026-06-09T00:45:00+00:00",
+      8271.952315483935
+    ],
+    [
+      "2026-06-09T14:15:00+00:00",
+      8347.771781620531
+    ],
+    [
+      "2026-06-10T05:15:00+00:00",
+      8424.200980450858
+    ],
+    [
+      "2026-06-10T21:45:00+00:00",
+      8503.351208169164
+    ],
+    [
+      "2026-06-11T13:45:00+00:00",
+      8451.512657668996
+    ],
+    [
+      "2026-06-12T09:30:00+00:00",
+      8400.85488269616
+    ],
+    [
+      "2026-06-12T14:45:00+00:00",
+      8349.818368279815
+    ],
+    [
+      "2026-06-13T16:45:00+00:00",
+      8291.831526136397
+    ],
+    [
+      "2026-06-14T09:15:00+00:00",
+      8356.007379957522
+    ]
+  ]
+}

@@ -1,0 +1,50 @@
+# trend_sweep_bot configuration. Anything omitted falls back to the defaults in config.py.
+# Secrets should come from the environment (BINANCE_API_KEY / BINANCE_API_SECRET), not this file.
+
+exchange: binanceusdm
+symbol: BTC/USDT
+quote: USDT
+testnet: true            # set to false ONLY after testnet proves out
+
+# timeframes
+tf_trend: "4h"
+tf_entry: "5m"
+tf_daily: "1d"
+
+# 4H trend filter
+swing_width: 2
+trend_ema_len: 50
+trend_lookback: 120
+
+# sweep
+sweep_tol: 0.0005        # 0.05% touch tolerance on PDH/PDL
+
+# consolidation
+cons_min: 3
+atr_len: 14
+body_atr_mult: 0.6
+range_atr_mult: 1.5
+setup_valid_bars: 24     # a sweep stays valid for 24 x 5m bars (2h)
+
+# entry / exit
+breakout_use_close: true
+stop_buf_atr: 0.10
+tp2_R: 2.0
+tp1_size: 0.5
+require_vwap_tp: true
+min_rr: 1.0
+move_stop_be_after_tp1: true
+max_hold_bars: 96        # 8h hard time stop
+
+# risk
+risk_pct: 0.01           # 1% of equity per trade
+leverage: 5
+max_trades_per_day: 3
+max_consecutive_losses: 3
+one_position_per_symbol: true
+
+# backtest
+start_balance: 10000
+slippage_bps: 2.0        # 0.02% per side
+fee_bps: 4.0             # Binance futures taker ~0.04% per side
+backtest_days: 120

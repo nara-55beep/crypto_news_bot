@@ -1,0 +1,1137 @@
+[
+  {
+    "market": "cl",
+    "family": "gap",
+    "config": {
+      "market": "cl",
+      "family": "opening_gap",
+      "entry_minute": 30,
+      "threshold": 0.002,
+      "direction": "reverse",
+      "confirmation": "turn",
+      "stop_mode": "atr",
+      "target_mode": "rr",
+      "rr": 1.0,
+      "stop_mult": 1.0,
+      "gap_relation": "any"
+    },
+    "label": "cl_opening_gap_m30_th0.002_reverse_turn_atr_rr1_s1_any",
+    "risk": 500.0,
+    "development_score": 0.9199306146850486,
+    "train_trade_stats": {
+      "n": 552,
+      "net": 499.6872544617281,
+      "pf": 1.0065719257104622,
+      "win": 0.48731884057971014,
+      "maxdd": -7364.578027239139,
+      "avg": 0.9052305334451596
+    },
+    "valid_trade_stats": {
+      "n": 222,
+      "net": 599.1252811726245,
+      "pf": 1.0216186331419828,
+      "win": 0.4954954954954955,
+      "maxdd": -3797.921821538639,
+      "avg": 2.6987625278046146
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 319,
+        "fails": 0,
+        "undecided": 837,
+        "pass_rate": 0.2759515570934256,
+        "fail_rate": 0.0,
+        "median_days": 9,
+        "mean_pass_days": 9.887147335423197,
+        "restricted_mean_days": 17.209342560553633
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 369,
+        "fails": 0,
+        "undecided": 777,
+        "pass_rate": 0.3219895287958115,
+        "fail_rate": 0.0,
+        "median_days": 10,
+        "mean_pass_days": 11.89159891598916,
+        "restricted_mean_days": 24.169284467713787
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 137,
+        "fails": 0,
+        "undecided": 322,
+        "pass_rate": 0.2984749455337691,
+        "fail_rate": 0.0,
+        "median_days": 11,
+        "mean_pass_days": 10.86861313868613,
+        "restricted_mean_days": 17.274509803921568
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 151,
+        "fails": 0,
+        "undecided": 298,
+        "pass_rate": 0.3363028953229399,
+        "fail_rate": 0.0,
+        "median_days": 12,
+        "mean_pass_days": 12.887417218543046,
+        "restricted_mean_days": 24.244988864142538
+      }
+    },
+    "test_trade_stats": {
+      "n": 263,
+      "net": -1955.5270015055248,
+      "pf": 0.9462584630367725,
+      "win": 0.4714828897338403,
+      "maxdd": -6299.266167936794,
+      "avg": -7.435463884051425
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 141,
+      "fails": 0,
+      "undecided": 478,
+      "pass_rate": 0.22778675282714056,
+      "fail_rate": 0.0,
+      "median_days": 9,
+      "mean_pass_days": 9.709219858156029,
+      "restricted_mean_days": 17.65589660743134
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 154,
+      "fails": 0,
+      "undecided": 455,
+      "pass_rate": 0.25287356321839083,
+      "fail_rate": 0.0,
+      "median_days": 10.0,
+      "mean_pass_days": 10.87012987012987,
+      "restricted_mean_days": 25.16256157635468
+    }
+  },
+  {
+    "market": "cl",
+    "family": "gap",
+    "config": {
+      "market": "cl",
+      "family": "opening_gap",
+      "entry_minute": 30,
+      "threshold": 0.002,
+      "direction": "reverse",
+      "confirmation": "turn",
+      "stop_mode": "atr",
+      "target_mode": "rr",
+      "rr": 1.0,
+      "stop_mult": 1.0,
+      "gap_relation": "any"
+    },
+    "label": "cl_opening_gap_m30_th0.002_reverse_turn_atr_rr1_s1_any",
+    "risk": 600.0,
+    "development_score": 0.8781046907530632,
+    "train_trade_stats": {
+      "n": 552,
+      "net": 499.6872544617281,
+      "pf": 1.0065719257104622,
+      "win": 0.48731884057971014,
+      "maxdd": -7364.578027239139,
+      "avg": 0.9052305334451596
+    },
+    "valid_trade_stats": {
+      "n": 222,
+      "net": 599.1252811726245,
+      "pf": 1.0216186331419828,
+      "win": 0.4954954954954955,
+      "maxdd": -3797.921821538639,
+      "avg": 2.6987625278046146
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 330,
+        "fails": 1,
+        "undecided": 825,
+        "pass_rate": 0.28546712802768165,
+        "fail_rate": 0.0008650519031141869,
+        "median_days": 8.0,
+        "mean_pass_days": 8.915151515151516,
+        "restricted_mean_days": 16.835640138408305
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 353,
+        "fails": 6,
+        "undecided": 787,
+        "pass_rate": 0.3080279232111693,
+        "fail_rate": 0.005235602094240838,
+        "median_days": 9,
+        "mean_pass_days": 9.937677053824363,
+        "restricted_mean_days": 23.820244328097733
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 131,
+        "fails": 0,
+        "undecided": 328,
+        "pass_rate": 0.28540305010893247,
+        "fail_rate": 0.0,
+        "median_days": 9,
+        "mean_pass_days": 9.305343511450381,
+        "restricted_mean_days": 16.947712418300654
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 136,
+        "fails": 0,
+        "undecided": 313,
+        "pass_rate": 0.3028953229398664,
+        "fail_rate": 0.0,
+        "median_days": 9.0,
+        "mean_pass_days": 10.463235294117647,
+        "restricted_mean_days": 24.08240534521158
+      }
+    },
+    "test_trade_stats": {
+      "n": 263,
+      "net": -1955.5270015055248,
+      "pf": 0.9462584630367725,
+      "win": 0.4714828897338403,
+      "maxdd": -6299.266167936794,
+      "avg": -7.435463884051425
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 165,
+      "fails": 0,
+      "undecided": 454,
+      "pass_rate": 0.2665589660743134,
+      "fail_rate": 0.0,
+      "median_days": 9,
+      "mean_pass_days": 9.206060606060607,
+      "restricted_mean_days": 17.122778675282714
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 171,
+      "fails": 0,
+      "undecided": 438,
+      "pass_rate": 0.28078817733990147,
+      "fail_rate": 0.0,
+      "median_days": 9,
+      "mean_pass_days": 9.75438596491228,
+      "restricted_mean_days": 24.31527093596059
+    }
+  },
+  {
+    "market": "cl",
+    "family": "morning",
+    "config": {
+      "family": "morning_regime",
+      "market": "cl",
+      "tf": 1,
+      "entry_minute": 30,
+      "threshold": 0.0,
+      "stop_mult": 1.0,
+      "target_rr": 0.75,
+      "or_min": 15,
+      "cutoff": 120,
+      "volume_ratio": 0.0,
+      "stop_mode": "range",
+      "k": 0.25,
+      "confirm": "sign",
+      "reverse": false,
+      "mode": "drive",
+      "location": 0.6
+    },
+    "label": "cl_morning_drive_m30_th0_loc0.6_range_r0.75",
+    "risk": 600.0,
+    "development_score": 0.8401143184321489,
+    "train_trade_stats": {
+      "n": 880,
+      "net": -4177.099999999587,
+      "pf": 0.9616745710398117,
+      "win": 0.5431818181818182,
+      "maxdd": -8827.64999999948,
+      "avg": -4.746704545454077
+    },
+    "valid_trade_stats": {
+      "n": 345,
+      "net": -1216.6500000016808,
+      "pf": 0.9686085753945913,
+      "win": 0.5449275362318841,
+      "maxdd": -5212.7500000002765,
+      "avg": -3.526521739135307
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 330,
+        "fails": 0,
+        "undecided": 826,
+        "pass_rate": 0.28546712802768165,
+        "fail_rate": 0.0,
+        "median_days": 7.0,
+        "mean_pass_days": 7.381818181818182,
+        "restricted_mean_days": 16.397923875432525
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 335,
+        "fails": 0,
+        "undecided": 811,
+        "pass_rate": 0.29232111692844676,
+        "fail_rate": 0.0,
+        "median_days": 7,
+        "mean_pass_days": 7.982089552238806,
+        "restricted_mean_days": 23.56369982547993
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 128,
+        "fails": 0,
+        "undecided": 331,
+        "pass_rate": 0.2788671023965142,
+        "fail_rate": 0.0,
+        "median_days": 7.0,
+        "mean_pass_days": 7.8046875,
+        "restricted_mean_days": 16.59912854030501
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 126,
+        "fails": 0,
+        "undecided": 323,
+        "pass_rate": 0.2806236080178174,
+        "fail_rate": 0.0,
+        "median_days": 7.0,
+        "mean_pass_days": 7.880952380952381,
+        "restricted_mean_days": 23.792873051224944
+      }
+    },
+    "test_trade_stats": {
+      "n": 459,
+      "net": -3291.4500000020357,
+      "pf": 0.9400552923885186,
+      "win": 0.5381263616557734,
+      "maxdd": -6089.850000001731,
+      "avg": -7.1709150326841735
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 113,
+      "fails": 0,
+      "undecided": 506,
+      "pass_rate": 0.1825525040387722,
+      "fail_rate": 0.0,
+      "median_days": 6,
+      "mean_pass_days": 6.84070796460177,
+      "restricted_mean_days": 17.59773828756058
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 118,
+      "fails": 0,
+      "undecided": 491,
+      "pass_rate": 0.19376026272577998,
+      "fail_rate": 0.0,
+      "median_days": 6.0,
+      "mean_pass_days": 7.47457627118644,
+      "restricted_mean_days": 25.635467980295566
+    }
+  },
+  {
+    "market": "cl",
+    "family": "gap",
+    "config": {
+      "market": "cl",
+      "family": "opening_gap",
+      "entry_minute": 30,
+      "threshold": 0.001,
+      "direction": "reverse",
+      "confirmation": "turn",
+      "stop_mode": "atr",
+      "target_mode": "rr",
+      "rr": 1.0,
+      "stop_mult": 1.0,
+      "gap_relation": "any"
+    },
+    "label": "cl_opening_gap_m30_th0.001_reverse_turn_atr_rr1_s1_any",
+    "risk": 500.0,
+    "development_score": 0.8380327137041405,
+    "train_trade_stats": {
+      "n": 584,
+      "net": -997.3459030011159,
+      "pf": 0.9876979386281772,
+      "win": 0.4828767123287671,
+      "maxdd": -7558.510610408113,
+      "avg": -1.7077840804813629
+    },
+    "valid_trade_stats": {
+      "n": 241,
+      "net": -430.44839059310675,
+      "pf": 0.9859755670911168,
+      "win": 0.4854771784232365,
+      "maxdd": -3646.5661856758097,
+      "avg": -1.7860929070253393
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 316,
+        "fails": 0,
+        "undecided": 840,
+        "pass_rate": 0.27335640138408307,
+        "fail_rate": 0.0,
+        "median_days": 9.0,
+        "mean_pass_days": 9.417721518987342,
+        "restricted_mean_days": 17.10726643598616
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 347,
+        "fails": 0,
+        "undecided": 799,
+        "pass_rate": 0.30279232111692844,
+        "fail_rate": 0.0,
+        "median_days": 9,
+        "mean_pass_days": 10.755043227665706,
+        "restricted_mean_days": 24.172774869109947
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 125,
+        "fails": 0,
+        "undecided": 334,
+        "pass_rate": 0.27233115468409586,
+        "fail_rate": 0.0,
+        "median_days": 10,
+        "mean_pass_days": 10.232,
+        "restricted_mean_days": 17.33986928104575
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 127,
+        "fails": 0,
+        "undecided": 322,
+        "pass_rate": 0.2828507795100223,
+        "fail_rate": 0.0,
+        "median_days": 10,
+        "mean_pass_days": 11.291338582677165,
+        "restricted_mean_days": 24.70824053452116
+      }
+    },
+    "test_trade_stats": {
+      "n": 286,
+      "net": -1092.6109545979866,
+      "pf": 0.9721116989059482,
+      "win": 0.479020979020979,
+      "maxdd": -4791.469885992548,
+      "avg": -3.820318023069883
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 147,
+      "fails": 0,
+      "undecided": 472,
+      "pass_rate": 0.23747980613893377,
+      "fail_rate": 0.0,
+      "median_days": 8,
+      "mean_pass_days": 9.36734693877551,
+      "restricted_mean_days": 17.474959612277868
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 149,
+      "fails": 0,
+      "undecided": 460,
+      "pass_rate": 0.24466338259441708,
+      "fail_rate": 0.0,
+      "median_days": 9,
+      "mean_pass_days": 9.543624161073826,
+      "restricted_mean_days": 24.995073891625616
+    }
+  },
+  {
+    "market": "cl",
+    "family": "gap",
+    "config": {
+      "market": "cl",
+      "family": "opening_gap",
+      "entry_minute": 30,
+      "threshold": 0.002,
+      "direction": "reverse",
+      "confirmation": "turn",
+      "stop_mode": "atr",
+      "target_mode": "rr",
+      "rr": 0.75,
+      "stop_mult": 1.0,
+      "gap_relation": "any"
+    },
+    "label": "cl_opening_gap_m30_th0.002_reverse_turn_atr_rr0.75_s1_any",
+    "risk": 600.0,
+    "development_score": 0.8362666594201585,
+    "train_trade_stats": {
+      "n": 552,
+      "net": -2359.2948085322278,
+      "pf": 0.9657057035437618,
+      "win": 0.5380434782608695,
+      "maxdd": -7858.257103217606,
+      "avg": -4.27408479806563
+    },
+    "valid_trade_stats": {
+      "n": 222,
+      "net": 3551.4723741293365,
+      "pf": 1.1537452056426813,
+      "win": 0.5900900900900901,
+      "maxdd": -3279.4467139483854,
+      "avg": 15.997623306888903
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 305,
+        "fails": 0,
+        "undecided": 851,
+        "pass_rate": 0.263840830449827,
+        "fail_rate": 0.0,
+        "median_days": 10,
+        "mean_pass_days": 10.065573770491802,
+        "restricted_mean_days": 17.378892733564015
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 328,
+        "fails": 0,
+        "undecided": 818,
+        "pass_rate": 0.2862129144851658,
+        "fail_rate": 0.0,
+        "median_days": 10.0,
+        "mean_pass_days": 11.076219512195122,
+        "restricted_mean_days": 24.583769633507853
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 144,
+        "fails": 0,
+        "undecided": 315,
+        "pass_rate": 0.3137254901960784,
+        "fail_rate": 0.0,
+        "median_days": 11.0,
+        "mean_pass_days": 11.04861111111111,
+        "restricted_mean_days": 17.191721132897605
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 148,
+        "fails": 0,
+        "undecided": 301,
+        "pass_rate": 0.32962138084632514,
+        "fail_rate": 0.0,
+        "median_days": 11.0,
+        "mean_pass_days": 11.905405405405405,
+        "restricted_mean_days": 24.035634743875278
+      }
+    },
+    "test_trade_stats": {
+      "n": 263,
+      "net": -1002.6029162188152,
+      "pf": 0.9684733442568345,
+      "win": 0.5437262357414449,
+      "maxdd": -4666.4482715151225,
+      "avg": -3.8121783886646963
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 151,
+      "fails": 2,
+      "undecided": 466,
+      "pass_rate": 0.24394184168012925,
+      "fail_rate": 0.0032310177705977385,
+      "median_days": 9,
+      "mean_pass_days": 10.059602649006623,
+      "restricted_mean_days": 17.575121163166397
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 159,
+      "fails": 2,
+      "undecided": 448,
+      "pass_rate": 0.26108374384236455,
+      "fail_rate": 0.003284072249589491,
+      "median_days": 10,
+      "mean_pass_days": 10.767295597484276,
+      "restricted_mean_days": 24.978653530377667
+    }
+  },
+  {
+    "market": "cl",
+    "family": "morning",
+    "config": {
+      "family": "morning_regime",
+      "market": "cl",
+      "tf": 1,
+      "entry_minute": 30,
+      "threshold": 0.0,
+      "stop_mult": 1.0,
+      "target_rr": 0.5,
+      "or_min": 15,
+      "cutoff": 120,
+      "volume_ratio": 0.0,
+      "stop_mode": "range",
+      "k": 0.25,
+      "confirm": "sign",
+      "reverse": false,
+      "mode": "drive",
+      "location": 0.6
+    },
+    "label": "cl_morning_drive_m30_th0_loc0.6_range_r0.5",
+    "risk": 600.0,
+    "development_score": 0.8014381299178126,
+    "train_trade_stats": {
+      "n": 880,
+      "net": -2821.949999999484,
+      "pf": 0.9680719807432902,
+      "win": 0.6352272727272728,
+      "maxdd": -8055.99999999986,
+      "avg": -3.2067613636357772
+    },
+    "valid_trade_stats": {
+      "n": 345,
+      "net": -695.0500000016347,
+      "pf": 0.9781914309470633,
+      "win": 0.6318840579710145,
+      "maxdd": -4440.25000000084,
+      "avg": -2.0146376811641584
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 295,
+        "fails": 0,
+        "undecided": 861,
+        "pass_rate": 0.25519031141868515,
+        "fail_rate": 0.0,
+        "median_days": 9,
+        "mean_pass_days": 10.122033898305085,
+        "restricted_mean_days": 17.47923875432526
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 313,
+        "fails": 0,
+        "undecided": 833,
+        "pass_rate": 0.2731239092495637,
+        "fail_rate": 0.0,
+        "median_days": 10,
+        "mean_pass_days": 11.20447284345048,
+        "restricted_mean_days": 24.86649214659686
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 130,
+        "fails": 0,
+        "undecided": 329,
+        "pass_rate": 0.28322440087145967,
+        "fail_rate": 0.0,
+        "median_days": 9.5,
+        "mean_pass_days": 10.092307692307692,
+        "restricted_mean_days": 17.193899782135077
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 132,
+        "fails": 0,
+        "undecided": 317,
+        "pass_rate": 0.29398663697104677,
+        "fail_rate": 0.0,
+        "median_days": 10.0,
+        "mean_pass_days": 10.333333333333334,
+        "restricted_mean_days": 24.21826280623608
+      }
+    },
+    "test_trade_stats": {
+      "n": 459,
+      "net": -4778.600000002019,
+      "pf": 0.8965423548272492,
+      "win": 0.6143790849673203,
+      "maxdd": -6670.800000001615,
+      "avg": -10.410893246191764
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 109,
+      "fails": 0,
+      "undecided": 510,
+      "pass_rate": 0.17609046849757673,
+      "fail_rate": 0.0,
+      "median_days": 8,
+      "mean_pass_days": 8.972477064220184,
+      "restricted_mean_days": 18.05815831987076
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 117,
+      "fails": 0,
+      "undecided": 492,
+      "pass_rate": 0.1921182266009852,
+      "fail_rate": 0.0,
+      "median_days": 8,
+      "mean_pass_days": 10.11111111111111,
+      "restricted_mean_days": 26.17898193760263
+    }
+  },
+  {
+    "market": "cl",
+    "family": "morning",
+    "config": {
+      "family": "morning_regime",
+      "market": "cl",
+      "tf": 1,
+      "entry_minute": 30,
+      "threshold": 0.0,
+      "stop_mult": 1.0,
+      "target_rr": 0.75,
+      "or_min": 15,
+      "cutoff": 120,
+      "volume_ratio": 0.0,
+      "stop_mode": "range",
+      "k": 0.25,
+      "confirm": "sign",
+      "reverse": false,
+      "mode": "drive",
+      "location": 0.6
+    },
+    "label": "cl_morning_drive_m30_th0_loc0.6_range_r0.75",
+    "risk": 500.0,
+    "development_score": 0.7752299256629045,
+    "train_trade_stats": {
+      "n": 880,
+      "net": -4177.099999999587,
+      "pf": 0.9616745710398117,
+      "win": 0.5431818181818182,
+      "maxdd": -8827.64999999948,
+      "avg": -4.746704545454077
+    },
+    "valid_trade_stats": {
+      "n": 345,
+      "net": -1216.6500000016808,
+      "pf": 0.9686085753945913,
+      "win": 0.5449275362318841,
+      "maxdd": -5212.7500000002765,
+      "avg": -3.526521739135307
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 299,
+        "fails": 0,
+        "undecided": 857,
+        "pass_rate": 0.2586505190311419,
+        "fail_rate": 0.0,
+        "median_days": 8,
+        "mean_pass_days": 8.511705685618729,
+        "restricted_mean_days": 17.02854671280277
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 296,
+        "fails": 0,
+        "undecided": 850,
+        "pass_rate": 0.2582897033158813,
+        "fail_rate": 0.0,
+        "median_days": 8.0,
+        "mean_pass_days": 8.70608108108108,
+        "restricted_mean_days": 24.5
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 128,
+        "fails": 0,
+        "undecided": 331,
+        "pass_rate": 0.2788671023965142,
+        "fail_rate": 0.0,
+        "median_days": 10.0,
+        "mean_pass_days": 10.6875,
+        "restricted_mean_days": 17.40305010893246
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 140,
+        "fails": 0,
+        "undecided": 309,
+        "pass_rate": 0.311804008908686,
+        "fail_rate": 0.0,
+        "median_days": 11.0,
+        "mean_pass_days": 11.964285714285714,
+        "restricted_mean_days": 24.37639198218263
+      }
+    },
+    "test_trade_stats": {
+      "n": 459,
+      "net": -3291.4500000020357,
+      "pf": 0.9400552923885186,
+      "win": 0.5381263616557734,
+      "maxdd": -6089.850000001731,
+      "avg": -7.1709150326841735
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 99,
+      "fails": 0,
+      "undecided": 520,
+      "pass_rate": 0.15993537964458804,
+      "fail_rate": 0.0,
+      "median_days": 8,
+      "mean_pass_days": 9.181818181818182,
+      "restricted_mean_days": 18.269789983844912
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 109,
+      "fails": 0,
+      "undecided": 500,
+      "pass_rate": 0.17898193760262726,
+      "fail_rate": 0.0,
+      "median_days": 9,
+      "mean_pass_days": 10.486238532110091,
+      "restricted_mean_days": 26.507389162561577
+    }
+  },
+  {
+    "market": "cl",
+    "family": "gap",
+    "config": {
+      "market": "cl",
+      "family": "opening_gap",
+      "entry_minute": 30,
+      "threshold": 0.001,
+      "direction": "reverse",
+      "confirmation": "turn",
+      "stop_mode": "atr",
+      "target_mode": "rr",
+      "rr": 1.0,
+      "stop_mult": 1.0,
+      "gap_relation": "any"
+    },
+    "label": "cl_opening_gap_m30_th0.001_reverse_turn_atr_rr1_s1_any",
+    "risk": 600.0,
+    "development_score": 0.771699939850187,
+    "train_trade_stats": {
+      "n": 584,
+      "net": -997.3459030011159,
+      "pf": 0.9876979386281772,
+      "win": 0.4828767123287671,
+      "maxdd": -7558.510610408113,
+      "avg": -1.7077840804813629
+    },
+    "valid_trade_stats": {
+      "n": 241,
+      "net": -430.44839059310675,
+      "pf": 0.9859755670911168,
+      "win": 0.4854771784232365,
+      "maxdd": -3646.5661856758097,
+      "avg": -1.7860929070253393
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 319,
+        "fails": 1,
+        "undecided": 836,
+        "pass_rate": 0.2759515570934256,
+        "fail_rate": 0.0008650519031141869,
+        "median_days": 8,
+        "mean_pass_days": 8.266457680250785,
+        "restricted_mean_days": 16.7621107266436
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 330,
+        "fails": 1,
+        "undecided": 815,
+        "pass_rate": 0.2879581151832461,
+        "fail_rate": 0.0008726003490401396,
+        "median_days": 8.0,
+        "mean_pass_days": 8.796969696969697,
+        "restricted_mean_days": 23.894415357766142
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 116,
+        "fails": 0,
+        "undecided": 343,
+        "pass_rate": 0.25272331154684097,
+        "fail_rate": 0.0,
+        "median_days": 8.0,
+        "mean_pass_days": 8.767241379310345,
+        "restricted_mean_days": 17.161220043572985
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 117,
+        "fails": 0,
+        "undecided": 332,
+        "pass_rate": 0.26057906458797325,
+        "fail_rate": 0.0,
+        "median_days": 8,
+        "mean_pass_days": 9.658119658119658,
+        "restricted_mean_days": 24.699331848552337
+      }
+    },
+    "test_trade_stats": {
+      "n": 286,
+      "net": -1092.6109545979866,
+      "pf": 0.9721116989059482,
+      "win": 0.479020979020979,
+      "maxdd": -4791.469885992548,
+      "avg": -3.820318023069883
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 159,
+      "fails": 0,
+      "undecided": 460,
+      "pass_rate": 0.2568659127625202,
+      "fail_rate": 0.0,
+      "median_days": 8,
+      "mean_pass_days": 8.679245283018869,
+      "restricted_mean_days": 17.092084006462034
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 162,
+      "fails": 0,
+      "undecided": 447,
+      "pass_rate": 0.2660098522167488,
+      "fail_rate": 0.0,
+      "median_days": 8.0,
+      "mean_pass_days": 8.925925925925926,
+      "restricted_mean_days": 24.39408866995074
+    }
+  },
+  {
+    "market": "cl",
+    "family": "gap",
+    "config": {
+      "market": "cl",
+      "family": "opening_gap",
+      "entry_minute": 30,
+      "threshold": 0.001,
+      "direction": "reverse",
+      "confirmation": "turn",
+      "stop_mode": "atr",
+      "target_mode": "rr",
+      "rr": 0.75,
+      "stop_mult": 1.0,
+      "gap_relation": "any"
+    },
+    "label": "cl_opening_gap_m30_th0.001_reverse_turn_atr_rr0.75_s1_any",
+    "risk": 600.0,
+    "development_score": 0.7581456735131569,
+    "train_trade_stats": {
+      "n": 584,
+      "net": -3030.716962848399,
+      "pf": 0.9584616877942506,
+      "win": 0.5376712328767124,
+      "maxdd": -8412.487059419534,
+      "avg": -5.1895838404938335
+    },
+    "valid_trade_stats": {
+      "n": 241,
+      "net": 1973.598702363619,
+      "pf": 1.0756774046712463,
+      "win": 0.5726141078838174,
+      "maxdd": -3419.078338505051,
+      "avg": 8.189206233873938
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 308,
+        "fails": 0,
+        "undecided": 848,
+        "pass_rate": 0.2664359861591695,
+        "fail_rate": 0.0,
+        "median_days": 9.0,
+        "mean_pass_days": 9.39935064935065,
+        "restricted_mean_days": 17.17560553633218
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 325,
+        "fails": 0,
+        "undecided": 821,
+        "pass_rate": 0.2835951134380454,
+        "fail_rate": 0.0,
+        "median_days": 9,
+        "mean_pass_days": 10.092307692307692,
+        "restricted_mean_days": 24.354275741710296
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 119,
+        "fails": 0,
+        "undecided": 340,
+        "pass_rate": 0.25925925925925924,
+        "fail_rate": 0.0,
+        "median_days": 9,
+        "mean_pass_days": 9.949579831932773,
+        "restricted_mean_days": 17.39433551198257
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 112,
+        "fails": 0,
+        "undecided": 337,
+        "pass_rate": 0.24944320712694878,
+        "fail_rate": 0.0,
+        "median_days": 8.0,
+        "mean_pass_days": 9.75,
+        "restricted_mean_days": 24.948775055679288
+      }
+    },
+    "test_trade_stats": {
+      "n": 286,
+      "net": 57.67739214510266,
+      "pf": 1.0016936057827286,
+      "win": 0.5524475524475524,
+      "maxdd": -3255.1297400941617,
+      "avg": 0.20166920330455476
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 176,
+      "fails": 12,
+      "undecided": 431,
+      "pass_rate": 0.284329563812601,
+      "fail_rate": 0.01938610662358643,
+      "median_days": 9.0,
+      "mean_pass_days": 9.926136363636363,
+      "restricted_mean_days": 17.135702746365105
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 189,
+      "fails": 13,
+      "undecided": 407,
+      "pass_rate": 0.3103448275862069,
+      "fail_rate": 0.021346469622331693,
+      "median_days": 10,
+      "mean_pass_days": 10.925925925925926,
+      "restricted_mean_days": 24.080459770114942
+    }
+  },
+  {
+    "market": "cl",
+    "family": "gap",
+    "config": {
+      "market": "cl",
+      "family": "opening_gap",
+      "entry_minute": 30,
+      "threshold": 0.002,
+      "direction": "reverse",
+      "confirmation": "turn",
+      "stop_mode": "atr",
+      "target_mode": "rr",
+      "rr": 0.75,
+      "stop_mult": 1.0,
+      "gap_relation": "any"
+    },
+    "label": "cl_opening_gap_m30_th0.002_reverse_turn_atr_rr0.75_s1_any",
+    "risk": 500.0,
+    "development_score": 0.7236725302994619,
+    "train_trade_stats": {
+      "n": 552,
+      "net": -2359.2948085322278,
+      "pf": 0.9657057035437618,
+      "win": 0.5380434782608695,
+      "maxdd": -7858.257103217606,
+      "avg": -4.27408479806563
+    },
+    "valid_trade_stats": {
+      "n": 222,
+      "net": 3551.4723741293365,
+      "pf": 1.1537452056426813,
+      "win": 0.5900900900900901,
+      "maxdd": -3279.4467139483854,
+      "avg": 15.997623306888903
+    },
+    "development": {
+      "train_20": {
+        "starts": 1156,
+        "passes": 251,
+        "fails": 0,
+        "undecided": 905,
+        "pass_rate": 0.2171280276816609,
+        "fail_rate": 0.0,
+        "median_days": 12,
+        "mean_pass_days": 11.390438247011952,
+        "restricted_mean_days": 18.130622837370243
+      },
+      "train_30": {
+        "starts": 1146,
+        "passes": 299,
+        "fails": 7,
+        "undecided": 840,
+        "pass_rate": 0.26090750436300175,
+        "fail_rate": 0.006108202443280977,
+        "median_days": 13,
+        "mean_pass_days": 13.441471571906355,
+        "restricted_mean_days": 25.679755671902267
+      },
+      "valid_20": {
+        "starts": 459,
+        "passes": 131,
+        "fails": 0,
+        "undecided": 328,
+        "pass_rate": 0.28540305010893247,
+        "fail_rate": 0.0,
+        "median_days": 13,
+        "mean_pass_days": 12.86259541984733,
+        "restricted_mean_days": 17.962962962962962
+      },
+      "valid_30": {
+        "starts": 449,
+        "passes": 141,
+        "fails": 0,
+        "undecided": 308,
+        "pass_rate": 0.31403118040089084,
+        "fail_rate": 0.0,
+        "median_days": 14,
+        "mean_pass_days": 14.21985815602837,
+        "restricted_mean_days": 25.044543429844097
+      }
+    },
+    "test_trade_stats": {
+      "n": 263,
+      "net": -1002.6029162188152,
+      "pf": 0.9684733442568345,
+      "win": 0.5437262357414449,
+      "maxdd": -4666.4482715151225,
+      "avg": -3.8121783886646963
+    },
+    "test_20": {
+      "starts": 619,
+      "passes": 119,
+      "fails": 0,
+      "undecided": 500,
+      "pass_rate": 0.19224555735056542,
+      "fail_rate": 0.0,
+      "median_days": 12,
+      "mean_pass_days": 11.478991596638656,
+      "restricted_mean_days": 18.361873990306947
+    },
+    "test_30": {
+      "starts": 609,
+      "passes": 142,
+      "fails": 0,
+      "undecided": 467,
+      "pass_rate": 0.23316912972085385,
+      "fail_rate": 0.0,
+      "median_days": 13.0,
+      "mean_pass_days": 13.647887323943662,
+      "restricted_mean_days": 26.1871921182266
+    }
+  }
+]

@@ -1,0 +1,354 @@
+{
+  "symbol": "BTC/USDT",
+  "strategy": "V3",
+  "params": {
+    "timeframe": "1d",
+    "donchian": 55,
+    "regime_ma": 200,
+    "atr_stop": 2.5,
+    "trail_atr": 3.0,
+    "risk_per_trade": 0.005,
+    "fee_rate": 0.0004,
+    "slippage": 0.0005,
+    "days": 1300
+  },
+  "metrics": {
+    "num_trades": 15,
+    "total_return_pct": -0.63,
+    "final_equity": 9936.55,
+    "win_rate_pct": 40.0,
+    "profit_factor": 0.744,
+    "max_drawdown_pct": -1.46,
+    "sharpe": -0.26,
+    "sortino": -0.06,
+    "avg_trade": -4.23,
+    "best_trade": 97.12,
+    "worst_trade": -50.49,
+    "max_consecutive_losses": 3,
+    "gross_profit": 183.89,
+    "gross_loss": 247.33
+  },
+  "trades": [
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2023-01-20T00:00:00+00:00",
+      "entry_price": 22672.4305,
+      "qty": 0.028059,
+      "stop": 20890.487,
+      "take": null,
+      "exit_time": "2023-02-09T00:00:00+00:00",
+      "exit_price": 22057.6131,
+      "pnl": -17.75,
+      "pnl_pct": -2.791,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.355
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2023-02-15T00:00:00+00:00",
+      "entry_price": 24344.7663,
+      "qty": 0.02407,
+      "stop": 22271.1608,
+      "take": null,
+      "exit_time": "2023-03-03T00:00:00+00:00",
+      "exit_price": 22672.3029,
+      "pnl": -40.71,
+      "pnl_pct": -6.947,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.816
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2023-03-17T00:00:00+00:00",
+      "entry_price": 27397.692,
+      "qty": 0.015258,
+      "stop": 24139.8673,
+      "take": null,
+      "exit_time": "2023-04-20T00:00:00+00:00",
+      "exit_price": 28199.1881,
+      "pnl": 11.89,
+      "pnl_pct": 2.844,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 0.239
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2023-06-21T00:00:00+00:00",
+      "entry_price": 30003.4942,
+      "qty": 0.01858,
+      "stop": 27324.9032,
+      "take": null,
+      "exit_time": "2023-07-24T00:00:00+00:00",
+      "exit_price": 29515.0437,
+      "pnl": -9.52,
+      "pnl_pct": -1.707,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.191
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2023-10-23T00:00:00+00:00",
+      "entry_price": 33090.537,
+      "qty": 0.015868,
+      "stop": 29957.2309,
+      "take": null,
+      "exit_time": "2023-11-14T00:00:00+00:00",
+      "exit_price": 34916.0789,
+      "pnl": 28.54,
+      "pnl_pct": 5.435,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 0.574
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2023-12-04T00:00:00+00:00",
+      "entry_price": 42014.0965,
+      "qty": 0.015322,
+      "stop": 38759.8785,
+      "take": null,
+      "exit_time": "2023-12-11T00:00:00+00:00",
+      "exit_price": 40828.6683,
+      "pnl": -18.67,
+      "pnl_pct": -2.9,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.374
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2024-01-02T00:00:00+00:00",
+      "entry_price": 45002.2899,
+      "qty": 0.01302,
+      "stop": 41179.7787,
+      "take": null,
+      "exit_time": "2024-01-03T00:00:00+00:00",
+      "exit_price": 41159.1889,
+      "pnl": -50.49,
+      "pnl_pct": -8.616,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -1.014
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2024-01-08T00:00:00+00:00",
+      "entry_price": 46996.1863,
+      "qty": 0.010471,
+      "stop": 42267.2779,
+      "take": null,
+      "exit_time": "2024-01-12T00:00:00+00:00",
+      "exit_price": 42369.824,
+      "pnl": -48.82,
+      "pnl_pct": -9.92,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.986
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2024-02-12T00:00:00+00:00",
+      "entry_price": 49968.5718,
+      "qty": 0.012598,
+      "stop": 46057.3203,
+      "take": null,
+      "exit_time": "2024-02-28T00:00:00+00:00",
+      "exit_price": 57720.7079,
+      "pnl": 97.12,
+      "pnl_pct": 15.428,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 1.971
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2024-03-04T00:00:00+00:00",
+      "entry_price": 68330.5482,
+      "qty": 0.008104,
+      "stop": 62190.7394,
+      "take": null,
+      "exit_time": "2024-03-05T00:00:00+00:00",
+      "exit_price": 62159.644,
+      "pnl": -50.43,
+      "pnl_pct": -9.107,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -1.014
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2024-10-15T00:00:00+00:00",
+      "entry_price": 67077.622,
+      "qty": 0.008969,
+      "stop": 61557.9558,
+      "take": null,
+      "exit_time": "2024-11-04T00:00:00+00:00",
+      "exit_price": 67292.6909,
+      "pnl": 1.45,
+      "pnl_pct": 0.24,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 0.029
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2024-11-06T00:00:00+00:00",
+      "entry_price": 75617.6899,
+      "qty": 0.007697,
+      "stop": 69184.5458,
+      "take": null,
+      "exit_time": "2024-11-11T00:00:00+00:00",
+      "exit_price": 80457.3708,
+      "pnl": 36.77,
+      "pnl_pct": 6.318,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 0.743
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2024-11-13T00:00:00+00:00",
+      "entry_price": 90458.5066,
+      "qty": 0.005653,
+      "stop": 81667.1534,
+      "take": null,
+      "exit_time": "2024-12-05T00:00:00+00:00",
+      "exit_price": 91968.3016,
+      "pnl": 8.12,
+      "pnl_pct": 1.588,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": 0.163
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2025-05-08T00:00:00+00:00",
+      "entry_price": 103279.714,
+      "qty": 0.00667,
+      "stop": 95823.1546,
+      "take": null,
+      "exit_time": "2025-05-31T00:00:00+00:00",
+      "exit_price": 103048.6056,
+      "pnl": -2.09,
+      "pnl_pct": -0.304,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.042
+    },
+    {
+      "mode": "backtest",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2025-07-10T00:00:00+00:00",
+      "entry_price": 116037.1896,
+      "qty": 0.006954,
+      "stop": 108886.4635,
+      "take": null,
+      "exit_time": "2025-08-01T00:00:00+00:00",
+      "exit_price": 114857.204,
+      "pnl": -8.85,
+      "pnl_pct": -1.096,
+      "fees": null,
+      "reason": "trail_stop",
+      "r": -0.178
+    }
+  ],
+  "equity_curve": [
+    [
+      "2023-01-18T00:00:00+00:00",
+      10000.0
+    ],
+    [
+      "2023-02-09T00:00:00+00:00",
+      9982.24664516032
+    ],
+    [
+      "2023-03-03T00:00:00+00:00",
+      9941.538139085442
+    ],
+    [
+      "2023-04-20T00:00:00+00:00",
+      9953.428000474792
+    ],
+    [
+      "2023-07-24T00:00:00+00:00",
+      9943.910454878727
+    ],
+    [
+      "2023-11-14T00:00:00+00:00",
+      9972.446646540346
+    ],
+    [
+      "2023-12-11T00:00:00+00:00",
+      9953.775374881221
+    ],
+    [
+      "2024-01-03T00:00:00+00:00",
+      9903.289691811542
+    ],
+    [
+      "2024-01-12T00:00:00+00:00",
+      9854.472702984012
+    ],
+    [
+      "2024-02-28T00:00:00+00:00",
+      9951.58832621431
+    ],
+    [
+      "2024-03-05T00:00:00+00:00",
+      9901.155378070307
+    ],
+    [
+      "2024-11-04T00:00:00+00:00",
+      9902.602260885118
+    ],
+    [
+      "2024-11-11T00:00:00+00:00",
+      9939.370607552974
+    ],
+    [
+      "2024-12-05T00:00:00+00:00",
+      9947.492865936112
+    ],
+    [
+      "2025-05-31T00:00:00+00:00",
+      9945.400795803256
+    ],
+    [
+      "2025-08-01T00:00:00+00:00",
+      9936.552768406671
+    ]
+  ]
+}

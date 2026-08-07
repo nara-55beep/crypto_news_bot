@@ -1,0 +1,271 @@
+{
+  "symbol": "BTCUSDT",
+  "interval": "15m",
+  "params": {
+    "score": 6,
+    "entry_model": "close",
+    "target_model": "fixed2",
+    "rr_min": 1.2,
+    "use_premium": true,
+    "time_filter": "broad"
+  },
+  "apex": {
+    "windows": 336,
+    "passes": 4,
+    "fails": 267,
+    "rate": 0.011904761904761904,
+    "median": -1952.6377519445596,
+    "worst": -2359.567855337933,
+    "best": 3262.58493689623,
+    "worst_dd": -2359.567855337933
+  },
+  "year": {
+    "pnl": -26897.612508435173,
+    "trades": 304,
+    "trades_week": 5.814207650273224,
+    "max_dd": -27240.05740933792,
+    "win_rate": 0.35526315789473684
+  },
+  "recent_signals": [
+    {
+      "day": "2026-04-14",
+      "pnl": -29.156455995713177,
+      "trades": 1,
+      "signal": "PDH/MSS/time"
+    },
+    {
+      "day": "2026-04-15",
+      "pnl": -301.0628868849534,
+      "trades": 1,
+      "signal": "PWH/MSS/SL"
+    },
+    {
+      "day": "2026-04-16",
+      "pnl": 422.36148359666083,
+      "trades": 1,
+      "signal": "old high/MSS/TP"
+    },
+    {
+      "day": "2026-04-18",
+      "pnl": -120.35380143347024,
+      "trades": 1,
+      "signal": "PMH/MSS/time"
+    },
+    {
+      "day": "2026-04-19",
+      "pnl": -468.61477687152063,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-04-21",
+      "pnl": -281.7201617981531,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-04-23",
+      "pnl": 419.8240213724669,
+      "trades": 1,
+      "signal": "EQH/MSS/TP"
+    },
+    {
+      "day": "2026-04-24",
+      "pnl": -332.92718696908855,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-04-25",
+      "pnl": -170.6457256784491,
+      "trades": 1,
+      "signal": "old high/MSS/time"
+    },
+    {
+      "day": "2026-04-26",
+      "pnl": -127.72674054851481,
+      "trades": 1,
+      "signal": "asia_h/MSS/time"
+    },
+    {
+      "day": "2026-04-27",
+      "pnl": 112.884422804595,
+      "trades": 1,
+      "signal": "EQH/MSS/time"
+    },
+    {
+      "day": "2026-04-28",
+      "pnl": 131.77902808859267,
+      "trades": 1,
+      "signal": "EQH/MSS/time"
+    },
+    {
+      "day": "2026-04-29",
+      "pnl": -325.9506741806707,
+      "trades": 1,
+      "signal": "PDH/MSS/SL"
+    },
+    {
+      "day": "2026-04-30",
+      "pnl": -346.69364483219766,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-05-02",
+      "pnl": -351.0740460975177,
+      "trades": 1,
+      "signal": "asia_h/MSS/SL"
+    },
+    {
+      "day": "2026-05-03",
+      "pnl": -369.26741718603773,
+      "trades": 1,
+      "signal": "old high/MSS/SL"
+    },
+    {
+      "day": "2026-05-05",
+      "pnl": -307.69416963506706,
+      "trades": 1,
+      "signal": "old high/MSS/SL"
+    },
+    {
+      "day": "2026-05-06",
+      "pnl": -107.65180497026152,
+      "trades": 1,
+      "signal": "PDH/MSS/time"
+    },
+    {
+      "day": "2026-05-07",
+      "pnl": 189.22420653292912,
+      "trades": 1,
+      "signal": "EQH/MSS/time"
+    },
+    {
+      "day": "2026-05-08",
+      "pnl": -350.17434361299985,
+      "trades": 1,
+      "signal": "PMH/MSS/SL"
+    },
+    {
+      "day": "2026-05-09",
+      "pnl": -390.2859613560997,
+      "trades": 1,
+      "signal": "old high/MSS/SL"
+    },
+    {
+      "day": "2026-05-11",
+      "pnl": -318.2804199077416,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-05-12",
+      "pnl": 417.20232086145785,
+      "trades": 1,
+      "signal": "EQH/MSS/TP"
+    },
+    {
+      "day": "2026-05-13",
+      "pnl": -366.7828798480899,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-05-14",
+      "pnl": -319.7519519525623,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-05-15",
+      "pnl": -114.61308656492828,
+      "trades": 1,
+      "signal": "EQH/MSS/time"
+    },
+    {
+      "day": "2026-05-17",
+      "pnl": 59.75246586934061,
+      "trades": 1,
+      "signal": "EQH/MSS/time"
+    },
+    {
+      "day": "2026-05-18",
+      "pnl": -17.98784412843635,
+      "trades": 1,
+      "signal": "old high/MSS/time"
+    },
+    {
+      "day": "2026-05-19",
+      "pnl": 106.0204003033813,
+      "trades": 1,
+      "signal": "EQH/MSS/time"
+    },
+    {
+      "day": "2026-05-20",
+      "pnl": -287.15858147538756,
+      "trades": 1,
+      "signal": "london_h/MSS/SL"
+    },
+    {
+      "day": "2026-05-21",
+      "pnl": -332.12436733143494,
+      "trades": 1,
+      "signal": "old high/MSS/SL"
+    },
+    {
+      "day": "2026-05-22",
+      "pnl": -397.41966039155807,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-05-24",
+      "pnl": -78.26564066559114,
+      "trades": 1,
+      "signal": "london_h/MSS/time"
+    },
+    {
+      "day": "2026-05-25",
+      "pnl": -302.00576042738925,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-05-26",
+      "pnl": -292.4681826480884,
+      "trades": 1,
+      "signal": "asia_h/MSS/SL"
+    },
+    {
+      "day": "2026-05-27",
+      "pnl": -313.0348940970745,
+      "trades": 1,
+      "signal": "old high/MSS/SL"
+    },
+    {
+      "day": "2026-05-28",
+      "pnl": -290.3370173980125,
+      "trades": 1,
+      "signal": "london_h/MSS/SL"
+    },
+    {
+      "day": "2026-05-29",
+      "pnl": -286.49010802691555,
+      "trades": 1,
+      "signal": "EQH/MSS/SL"
+    },
+    {
+      "day": "2026-05-30",
+      "pnl": -324.31514598716444,
+      "trades": 1,
+      "signal": "nyam_h/MSS/SL"
+    },
+    {
+      "day": "2026-05-31",
+      "pnl": 342.44490090273905,
+      "trades": 1,
+      "signal": "EQH/MSS/TP"
+    }
+  ]
+}

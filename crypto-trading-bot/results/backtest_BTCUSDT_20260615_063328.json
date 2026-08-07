@@ -1,0 +1,2998 @@
+{
+  "symbol": "BTC/USDT",
+  "params": {
+    "entry_mode": "pullback",
+    "htf": "1h",
+    "entry_tf": "15m",
+    "risk_per_trade": 0.005,
+    "atr_stop_mult": 1.5,
+    "rr": 2.0,
+    "fee_rate": 0.0004,
+    "slippage": 0.0005,
+    "days": 120
+  },
+  "metrics": {
+    "num_trades": 148,
+    "total_return_pct": -27.98,
+    "final_equity": 7202.43,
+    "win_rate_pct": 30.41,
+    "profit_factor": 0.62,
+    "max_drawdown_pct": -29.9,
+    "sharpe": -6.48,
+    "sortino": -10.43,
+    "avg_trade": -14.23,
+    "best_trade": 95.54,
+    "worst_trade": -68.51,
+    "max_consecutive_losses": 7,
+    "gross_profit": 3442.99,
+    "gross_loss": 5549.24
+  },
+  "trades": [
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-17T01:45:00+00:00",
+      "entry_price": 68548.3087,
+      "qty": 0.147228,
+      "stop": 68887.9187,
+      "take": 67869.0887,
+      "exit_time": "2026-02-17T02:00:00+00:00",
+      "exit_price": 68922.3627,
+      "pnl": -59.13,
+      "pnl_pct": -0.586,
+      "fees": 8.0958,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-17T03:00:00+00:00",
+      "entry_price": 68663.0513,
+      "qty": 0.129724,
+      "stop": 69046.0513,
+      "take": 67897.0514,
+      "exit_time": "2026-02-17T05:15:00+00:00",
+      "exit_price": 67930.9999,
+      "pnl": 91.44,
+      "pnl_pct": 1.027,
+      "fees": 7.0878,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-18T10:30:00+00:00",
+      "entry_price": 67725.7202,
+      "qty": 0.180504,
+      "stop": 68003.4065,
+      "take": 67170.3475,
+      "exit_time": "2026-02-18T11:00:00+00:00",
+      "exit_price": 67203.9327,
+      "pnl": 89.33,
+      "pnl_pct": 0.731,
+      "fees": 9.7421,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-19T08:15:00+00:00",
+      "entry_price": 66856.4551,
+      "qty": 0.191646,
+      "stop": 67120.2011,
+      "take": 66328.963,
+      "exit_time": "2026-02-19T09:15:00+00:00",
+      "exit_price": 67153.7612,
+      "pnl": -62.13,
+      "pnl_pct": -0.485,
+      "fees": 10.273,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-19T09:45:00+00:00",
+      "entry_price": 66778.3941,
+      "qty": 0.183655,
+      "stop": 67051.7852,
+      "take": 66231.6119,
+      "exit_time": "2026-02-19T13:00:00+00:00",
+      "exit_price": 66264.7277,
+      "pnl": 89.47,
+      "pnl_pct": 0.73,
+      "fees": 9.7736,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-20T04:15:00+00:00",
+      "entry_price": 67163.2016,
+      "qty": 0.193257,
+      "stop": 67425.1969,
+      "take": 66639.211,
+      "exit_time": "2026-02-20T05:30:00+00:00",
+      "exit_price": 67458.9095,
+      "pnl": -62.36,
+      "pnl_pct": -0.48,
+      "fees": 10.4066,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-21T03:00:00+00:00",
+      "entry_price": 67693.5363,
+      "qty": 0.195835,
+      "stop": 67950.3577,
+      "take": 67179.8934,
+      "exit_time": "2026-02-21T08:15:00+00:00",
+      "exit_price": 67984.3329,
+      "pnl": -62.27,
+      "pnl_pct": -0.47,
+      "fees": 10.6282,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-21T12:00:00+00:00",
+      "entry_price": 67923.6212,
+      "qty": 0.302671,
+      "stop": 68088.6738,
+      "take": 67593.5161,
+      "exit_time": "2026-02-21T12:45:00+00:00",
+      "exit_price": 68122.7181,
+      "pnl": -68.51,
+      "pnl_pct": -0.333,
+      "fees": 16.4709,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-21T20:30:00+00:00",
+      "entry_price": 68321.822,
+      "qty": 0.232009,
+      "stop": 68535.4903,
+      "take": 67894.4855,
+      "exit_time": "2026-02-21T22:45:00+00:00",
+      "exit_price": 67928.4327,
+      "pnl": 84.97,
+      "pnl_pct": 0.536,
+      "fees": 12.6445,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-23T15:45:00+00:00",
+      "entry_price": 65600.2835,
+      "qty": 0.108482,
+      "stop": 66060.8761,
+      "take": 64679.0981,
+      "exit_time": "2026-02-23T17:15:00+00:00",
+      "exit_price": 64711.4376,
+      "pnl": 93.62,
+      "pnl_pct": 1.315,
+      "fees": 5.6546,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-24T01:30:00+00:00",
+      "entry_price": 64277.6451,
+      "qty": 0.093099,
+      "stop": 64819.2201,
+      "take": 63194.4952,
+      "exit_time": "2026-02-24T04:00:00+00:00",
+      "exit_price": 63226.0924,
+      "pnl": 95.54,
+      "pnl_pct": 1.597,
+      "fees": 4.7482,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-24T21:15:00+00:00",
+      "entry_price": 63855.5563,
+      "qty": 0.119573,
+      "stop": 64281.1173,
+      "take": 63004.4341,
+      "exit_time": "2026-02-25T00:45:00+00:00",
+      "exit_price": 64313.2579,
+      "pnl": -57.8,
+      "pnl_pct": -0.757,
+      "fees": 6.1302,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-02-25T05:30:00+00:00",
+      "entry_price": 64777.4951,
+      "qty": 0.108155,
+      "stop": 65245.1714,
+      "take": 63842.1423,
+      "exit_time": "2026-02-25T08:30:00+00:00",
+      "exit_price": 65277.794,
+      "pnl": -56.93,
+      "pnl_pct": -0.813,
+      "fees": 5.6264,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-02-26T19:00:00+00:00",
+      "entry_price": 67499.8331,
+      "qty": 0.087133,
+      "stop": 66922.7516,
+      "take": 68653.9959,
+      "exit_time": "2026-02-27T01:00:00+00:00",
+      "exit_price": 66889.2903,
+      "pnl": -55.53,
+      "pnl_pct": -0.944,
+      "fees": 4.6839,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-02-27T02:15:00+00:00",
+      "entry_price": 67406.1862,
+      "qty": 0.133003,
+      "stop": 67030.3044,
+      "take": 68157.9499,
+      "exit_time": "2026-02-27T04:15:00+00:00",
+      "exit_price": 68123.8709,
+      "pnl": 91.83,
+      "pnl_pct": 1.024,
+      "fees": 7.2104,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-02T06:15:00+00:00",
+      "entry_price": 66210.878,
+      "qty": 0.096306,
+      "stop": 66734.5694,
+      "take": 65163.4953,
+      "exit_time": "2026-03-02T14:45:00+00:00",
+      "exit_price": 66767.9367,
+      "pnl": -56.22,
+      "pnl_pct": -0.882,
+      "fees": 5.1227,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T07:15:00+00:00",
+      "entry_price": 68242.8043,
+      "qty": 0.127285,
+      "stop": 67848.8795,
+      "take": 69030.6541,
+      "exit_time": "2026-03-03T08:15:00+00:00",
+      "exit_price": 67814.955,
+      "pnl": -57.91,
+      "pnl_pct": -0.667,
+      "fees": 6.9272,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T12:00:00+00:00",
+      "entry_price": 67742.4543,
+      "qty": 0.095854,
+      "stop": 67222.5603,
+      "take": 68782.2423,
+      "exit_time": "2026-03-03T13:00:00+00:00",
+      "exit_price": 67188.949,
+      "pnl": -55.63,
+      "pnl_pct": -0.857,
+      "fees": 5.1735,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-03T15:30:00+00:00",
+      "entry_price": 67531.8491,
+      "qty": 0.069081,
+      "stop": 66814.6773,
+      "take": 68966.1925,
+      "exit_time": "2026-03-03T16:15:00+00:00",
+      "exit_price": 68931.7094,
+      "pnl": 94.8,
+      "pnl_pct": 2.032,
+      "fees": 3.7708,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-04T05:30:00+00:00",
+      "entry_price": 68206.9864,
+      "qty": 0.093709,
+      "stop": 67673.3444,
+      "take": 69274.2706,
+      "exit_time": "2026-03-04T07:45:00+00:00",
+      "exit_price": 69239.6335,
+      "pnl": 94.17,
+      "pnl_pct": 1.473,
+      "fees": 5.152,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-05T09:00:00+00:00",
+      "entry_price": 72612.8883,
+      "qty": 0.099944,
+      "stop": 72107.9506,
+      "take": 73622.7637,
+      "exit_time": "2026-03-05T14:30:00+00:00",
+      "exit_price": 72071.8966,
+      "pnl": -56.95,
+      "pnl_pct": -0.785,
+      "fees": 5.7841,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-06T01:45:00+00:00",
+      "entry_price": 71252.6085,
+      "qty": 0.11024,
+      "stop": 70797.5477,
+      "take": 72162.7302,
+      "exit_time": "2026-03-06T04:30:00+00:00",
+      "exit_price": 70762.1489,
+      "pnl": -57.19,
+      "pnl_pct": -0.728,
+      "fees": 6.2623,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-06T07:30:00+00:00",
+      "entry_price": 71069.1168,
+      "qty": 0.116065,
+      "stop": 70639.4931,
+      "take": 71928.3642,
+      "exit_time": "2026-03-06T09:00:00+00:00",
+      "exit_price": 70604.1733,
+      "pnl": -57.24,
+      "pnl_pct": -0.694,
+      "fees": 6.5773,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-08T11:30:00+00:00",
+      "entry_price": 67430.168,
+      "qty": 0.151915,
+      "stop": 67756.4137,
+      "take": 66777.6767,
+      "exit_time": "2026-03-08T13:15:00+00:00",
+      "exit_price": 66811.0655,
+      "pnl": 89.99,
+      "pnl_pct": 0.879,
+      "fees": 8.1573,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-09T11:15:00+00:00",
+      "entry_price": 67405.5804,
+      "qty": 0.10982,
+      "stop": 67860.7914,
+      "take": 66495.1582,
+      "exit_time": "2026-03-09T12:00:00+00:00",
+      "exit_price": 67894.7218,
+      "pnl": -56.7,
+      "pnl_pct": -0.766,
+      "fees": 5.9435,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-11T00:00:00+00:00",
+      "entry_price": 70035.8004,
+      "qty": 0.110912,
+      "stop": 69587.7606,
+      "take": 70931.88,
+      "exit_time": "2026-03-11T02:30:00+00:00",
+      "exit_price": 69552.9667,
+      "pnl": -56.64,
+      "pnl_pct": -0.729,
+      "fees": 6.1928,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-11T04:15:00+00:00",
+      "entry_price": 69977.3712,
+      "qty": 0.134956,
+      "stop": 69611.3676,
+      "take": 70709.3785,
+      "exit_time": "2026-03-11T05:30:00+00:00",
+      "exit_price": 69576.5619,
+      "pnl": -57.85,
+      "pnl_pct": -0.613,
+      "fees": 7.5334,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-11T10:30:00+00:00",
+      "entry_price": 69682.6239,
+      "qty": 0.147083,
+      "stop": 69348.8941,
+      "take": 70350.0835,
+      "exit_time": "2026-03-11T11:45:00+00:00",
+      "exit_price": 69314.2196,
+      "pnl": -58.26,
+      "pnl_pct": -0.568,
+      "fees": 8.1776,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-12T07:15:00+00:00",
+      "entry_price": 69601.5834,
+      "qty": 0.171016,
+      "stop": 69316.3811,
+      "take": 70171.988,
+      "exit_time": "2026-03-12T09:30:00+00:00",
+      "exit_price": 70136.902,
+      "pnl": 86.75,
+      "pnl_pct": 0.729,
+      "fees": 9.559,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-12T10:00:00+00:00",
+      "entry_price": 69968.1666,
+      "qty": 0.128495,
+      "stop": 69585.3958,
+      "take": 70733.7083,
+      "exit_time": "2026-03-12T11:45:00+00:00",
+      "exit_price": 70698.3414,
+      "pnl": 90.19,
+      "pnl_pct": 1.003,
+      "fees": 7.23,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-14T03:15:00+00:00",
+      "entry_price": 71035.9002,
+      "qty": 0.165517,
+      "stop": 70736.1295,
+      "take": 71635.4416,
+      "exit_time": "2026-03-14T06:15:00+00:00",
+      "exit_price": 70700.7614,
+      "pnl": -60.15,
+      "pnl_pct": -0.512,
+      "fees": 9.3839,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-14T12:00:00+00:00",
+      "entry_price": 70749.357,
+      "qty": 0.228926,
+      "stop": 70534.0342,
+      "take": 71180.0026,
+      "exit_time": "2026-03-14T14:45:00+00:00",
+      "exit_price": 70498.7672,
+      "pnl": -63.82,
+      "pnl_pct": -0.394,
+      "fees": 12.9341,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-16T12:00:00+00:00",
+      "entry_price": 73596.8801,
+      "qty": 0.11939,
+      "stop": 73186.9521,
+      "take": 74416.7359,
+      "exit_time": "2026-03-16T13:30:00+00:00",
+      "exit_price": 74379.5275,
+      "pnl": 89.89,
+      "pnl_pct": 1.023,
+      "fees": 7.0668,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T09:15:00+00:00",
+      "entry_price": 74302.0324,
+      "qty": 0.108047,
+      "stop": 73845.072,
+      "take": 75215.9534,
+      "exit_time": "2026-03-17T09:45:00+00:00",
+      "exit_price": 73808.1494,
+      "pnl": -56.55,
+      "pnl_pct": -0.704,
+      "fees": 6.4012,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T11:30:00+00:00",
+      "entry_price": 74120.2416,
+      "qty": 0.117662,
+      "stop": 73703.1634,
+      "take": 74954.398,
+      "exit_time": "2026-03-17T12:30:00+00:00",
+      "exit_price": 73666.3118,
+      "pnl": -56.88,
+      "pnl_pct": -0.652,
+      "fees": 6.9556,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T14:30:00+00:00",
+      "entry_price": 74235.9994,
+      "qty": 0.103353,
+      "stop": 73764.0951,
+      "take": 75179.8081,
+      "exit_time": "2026-03-17T15:30:00+00:00",
+      "exit_price": 73727.2131,
+      "pnl": -55.63,
+      "pnl_pct": -0.725,
+      "fees": 6.117,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-03-17T17:15:00+00:00",
+      "entry_price": 74281.222,
+      "qty": 0.09612,
+      "stop": 73776.8602,
+      "take": 75289.9457,
+      "exit_time": "2026-03-18T00:00:00+00:00",
+      "exit_price": 73739.9718,
+      "pnl": -54.86,
+      "pnl_pct": -0.768,
+      "fees": 5.6911,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-19T22:30:00+00:00",
+      "entry_price": 70001.8815,
+      "qty": 0.112206,
+      "stop": 70431.3639,
+      "take": 69142.9168,
+      "exit_time": "2026-03-20T01:30:00+00:00",
+      "exit_price": 70466.5796,
+      "pnl": -55.3,
+      "pnl_pct": -0.704,
+      "fees": 6.3046,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-20T07:00:00+00:00",
+      "entry_price": 70208.878,
+      "qty": 0.148498,
+      "stop": 70531.43,
+      "take": 69563.7739,
+      "exit_time": "2026-03-20T07:30:00+00:00",
+      "exit_price": 70566.6958,
+      "pnl": -57.33,
+      "pnl_pct": -0.55,
+      "fees": 8.362,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-20T09:15:00+00:00",
+      "entry_price": 70435.8645,
+      "qty": 0.128421,
+      "stop": 70806.4498,
+      "take": 69694.6938,
+      "exit_time": "2026-03-20T14:00:00+00:00",
+      "exit_price": 69729.5412,
+      "pnl": 87.12,
+      "pnl_pct": 0.963,
+      "fees": 7.2001,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-21T04:30:00+00:00",
+      "entry_price": 70567.1988,
+      "qty": 0.209563,
+      "stop": 70796.287,
+      "take": 70109.0222,
+      "exit_time": "2026-03-21T05:30:00+00:00",
+      "exit_price": 70831.6852,
+      "pnl": -61.36,
+      "pnl_pct": -0.415,
+      "fees": 11.8528,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-21T07:45:00+00:00",
+      "entry_price": 70651.9564,
+      "qty": 0.272793,
+      "stop": 70826.7111,
+      "take": 70302.4469,
+      "exit_time": "2026-03-21T14:00:00+00:00",
+      "exit_price": 70862.1244,
+      "pnl": -65.06,
+      "pnl_pct": -0.338,
+      "fees": 15.4416,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-21T15:30:00+00:00",
+      "entry_price": 70555.5046,
+      "qty": 0.232723,
+      "stop": 70758.7857,
+      "take": 70148.9425,
+      "exit_time": "2026-03-21T23:00:00+00:00",
+      "exit_price": 70184.0169,
+      "pnl": 79.92,
+      "pnl_pct": 0.487,
+      "fees": 13.1013,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-23T00:30:00+00:00",
+      "entry_price": 67617.0746,
+      "qty": 0.102411,
+      "stop": 68082.5981,
+      "take": 66686.0275,
+      "exit_time": "2026-03-23T01:15:00+00:00",
+      "exit_price": 68116.6394,
+      "pnl": -53.95,
+      "pnl_pct": -0.779,
+      "fees": 5.5603,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-23T09:30:00+00:00",
+      "entry_price": 68075.8451,
+      "qty": 0.104088,
+      "stop": 68531.143,
+      "take": 67165.2492,
+      "exit_time": "2026-03-23T10:00:00+00:00",
+      "exit_price": 68565.4085,
+      "pnl": -53.81,
+      "pnl_pct": -0.759,
+      "fees": 5.6891,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-24T13:00:00+00:00",
+      "entry_price": 70754.9049,
+      "qty": 0.136159,
+      "stop": 71100.8817,
+      "take": 70062.9511,
+      "exit_time": "2026-03-24T13:45:00+00:00",
+      "exit_price": 70097.9825,
+      "pnl": 85.63,
+      "pnl_pct": 0.889,
+      "fees": 7.6714,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-27T00:30:00+00:00",
+      "entry_price": 68645.2602,
+      "qty": 0.130309,
+      "stop": 69009.9083,
+      "take": 67915.964,
+      "exit_time": "2026-03-27T01:45:00+00:00",
+      "exit_price": 69044.4132,
+      "pnl": -55.61,
+      "pnl_pct": -0.622,
+      "fees": 7.1769,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-28T08:45:00+00:00",
+      "entry_price": 66341.7125,
+      "qty": 0.296924,
+      "stop": 66500.7464,
+      "take": 66023.6449,
+      "exit_time": "2026-03-28T13:30:00+00:00",
+      "exit_price": 66533.9968,
+      "pnl": -65.0,
+      "pnl_pct": -0.33,
+      "fees": 15.7816,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-28T21:45:00+00:00",
+      "entry_price": 66611.4776,
+      "qty": 0.240787,
+      "stop": 66806.0749,
+      "take": 66222.2831,
+      "exit_time": "2026-03-29T02:45:00+00:00",
+      "exit_price": 66839.4779,
+      "pnl": -61.34,
+      "pnl_pct": -0.382,
+      "fees": 12.8533,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-29T05:15:00+00:00",
+      "entry_price": 66570.1983,
+      "qty": 0.230688,
+      "stop": 66771.8459,
+      "take": 66166.9029,
+      "exit_time": "2026-03-29T05:45:00+00:00",
+      "exit_price": 66805.2318,
+      "pnl": -60.38,
+      "pnl_pct": -0.393,
+      "fees": 12.3073,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-29T09:00:00+00:00",
+      "entry_price": 66625.0708,
+      "qty": 0.240655,
+      "stop": 66816.9848,
+      "take": 66241.2427,
+      "exit_time": "2026-03-29T11:00:00+00:00",
+      "exit_price": 66850.3933,
+      "pnl": -60.66,
+      "pnl_pct": -0.378,
+      "fees": 12.8486,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-30T13:45:00+00:00",
+      "entry_price": 67457.1545,
+      "qty": 0.138856,
+      "stop": 67787.3516,
+      "take": 66796.7605,
+      "exit_time": "2026-03-30T14:45:00+00:00",
+      "exit_price": 67821.2453,
+      "pnl": -54.32,
+      "pnl_pct": -0.58,
+      "fees": 7.5137,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-03-31T07:00:00+00:00",
+      "entry_price": 67233.5664,
+      "qty": 0.13663,
+      "stop": 67567.0181,
+      "take": 66566.663,
+      "exit_time": "2026-03-31T09:00:00+00:00",
+      "exit_price": 66599.9463,
+      "pnl": 82.93,
+      "pnl_pct": 0.903,
+      "fees": 7.3143,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-01T01:15:00+00:00",
+      "entry_price": 67972.3968,
+      "qty": 0.118903,
+      "stop": 68358.8931,
+      "take": 67199.4042,
+      "exit_time": "2026-04-01T04:45:00+00:00",
+      "exit_price": 68393.0725,
+      "pnl": -53.27,
+      "pnl_pct": -0.659,
+      "fees": 6.4857,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T00:00:00+00:00",
+      "entry_price": 66806.48,
+      "qty": 0.172579,
+      "stop": 67071.1303,
+      "take": 66277.1796,
+      "exit_time": "2026-04-03T02:30:00+00:00",
+      "exit_price": 66310.3182,
+      "pnl": 81.05,
+      "pnl_pct": 0.703,
+      "fees": 9.1893,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T03:15:00+00:00",
+      "entry_price": 66568.799,
+      "qty": 0.158973,
+      "stop": 66858.5047,
+      "take": 65989.3874,
+      "exit_time": "2026-04-03T07:00:00+00:00",
+      "exit_price": 66891.934,
+      "pnl": -55.62,
+      "pnl_pct": -0.526,
+      "fees": 8.4867,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T12:45:00+00:00",
+      "entry_price": 66657.0548,
+      "qty": 0.164576,
+      "stop": 66935.0795,
+      "take": 66101.0054,
+      "exit_time": "2026-04-03T14:15:00+00:00",
+      "exit_price": 66968.5471,
+      "pnl": -55.67,
+      "pnl_pct": -0.507,
+      "fees": 8.7966,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-03T23:15:00+00:00",
+      "entry_price": 66794.686,
+      "qty": 0.348489,
+      "stop": 66925.1228,
+      "take": 66533.8122,
+      "exit_time": "2026-04-03T23:45:00+00:00",
+      "exit_price": 66958.5854,
+      "pnl": -66.45,
+      "pnl_pct": -0.285,
+      "fees": 18.6446,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-04T01:00:00+00:00",
+      "entry_price": 66786.49,
+      "qty": 0.367854,
+      "stop": 66909.0304,
+      "take": 66541.4093,
+      "exit_time": "2026-04-04T06:00:00+00:00",
+      "exit_price": 66942.4849,
+      "pnl": -67.23,
+      "pnl_pct": -0.274,
+      "fees": 19.6771,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-04T10:00:00+00:00",
+      "entry_price": 66847.4595,
+      "qty": 0.401137,
+      "stop": 66940.4324,
+      "take": 66661.5138,
+      "exit_time": "2026-04-04T10:30:00+00:00",
+      "exit_price": 66973.9026,
+      "pnl": -61.47,
+      "pnl_pct": -0.229,
+      "fees": 21.4723,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-04T23:45:00+00:00",
+      "entry_price": 67237.3645,
+      "qty": 0.353751,
+      "stop": 67362.6805,
+      "take": 66986.7325,
+      "exit_time": "2026-04-05T02:00:00+00:00",
+      "exit_price": 67020.2259,
+      "pnl": 67.33,
+      "pnl_pct": 0.283,
+      "fees": 18.9975,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-05T05:15:00+00:00",
+      "entry_price": 67015.7754,
+      "qty": 0.391335,
+      "stop": 67129.7947,
+      "take": 66787.7366,
+      "exit_time": "2026-04-05T06:00:00+00:00",
+      "exit_price": 66821.1305,
+      "pnl": 65.71,
+      "pnl_pct": 0.251,
+      "fees": 20.95,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-05T14:00:00+00:00",
+      "entry_price": 66815.7754,
+      "qty": 0.292582,
+      "stop": 66969.2228,
+      "take": 66508.8806,
+      "exit_time": "2026-04-05T15:15:00+00:00",
+      "exit_price": 67002.7074,
+      "pnl": -62.53,
+      "pnl_pct": -0.32,
+      "fees": 15.6611,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-07T08:00:00+00:00",
+      "entry_price": 68731.4486,
+      "qty": 0.187423,
+      "stop": 68493.7825,
+      "take": 69206.7806,
+      "exit_time": "2026-04-07T09:00:00+00:00",
+      "exit_price": 69172.1772,
+      "pnl": 77.42,
+      "pnl_pct": 0.601,
+      "fees": 10.3385,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-07T19:15:00+00:00",
+      "entry_price": 68582.1739,
+      "qty": 0.121166,
+      "stop": 68211.5635,
+      "take": 69323.3949,
+      "exit_time": "2026-04-07T20:00:00+00:00",
+      "exit_price": 69288.7332,
+      "pnl": 82.25,
+      "pnl_pct": 0.99,
+      "fees": 6.6821,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-09T02:45:00+00:00",
+      "entry_price": 71065.2148,
+      "qty": 0.129574,
+      "stop": 70715.6059,
+      "take": 71764.4328,
+      "exit_time": "2026-04-09T04:45:00+00:00",
+      "exit_price": 70680.2481,
+      "pnl": -53.54,
+      "pnl_pct": -0.581,
+      "fees": 7.3466,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-09T07:00:00+00:00",
+      "entry_price": 71082.6236,
+      "qty": 0.177176,
+      "stop": 70828.5593,
+      "take": 71590.752,
+      "exit_time": "2026-04-09T13:30:00+00:00",
+      "exit_price": 70793.1451,
+      "pnl": -56.31,
+      "pnl_pct": -0.447,
+      "fees": 10.0548,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-10T10:45:00+00:00",
+      "entry_price": 71908.3362,
+      "qty": 0.1839,
+      "stop": 71665.2301,
+      "take": 72394.5484,
+      "exit_time": "2026-04-10T12:30:00+00:00",
+      "exit_price": 72358.3511,
+      "pnl": 77.44,
+      "pnl_pct": 0.586,
+      "fees": 10.6123,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-11T09:15:00+00:00",
+      "entry_price": 72859.1113,
+      "qty": 0.280735,
+      "stop": 72698.5758,
+      "take": 73180.1824,
+      "exit_time": "2026-04-11T13:00:00+00:00",
+      "exit_price": 72662.2265,
+      "pnl": -63.43,
+      "pnl_pct": -0.31,
+      "fees": 16.3412,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-12T20:30:00+00:00",
+      "entry_price": 71319.642,
+      "qty": 0.207991,
+      "stop": 71104.6815,
+      "take": 71749.563,
+      "exit_time": "2026-04-12T22:00:00+00:00",
+      "exit_price": 71069.1292,
+      "pnl": -58.02,
+      "pnl_pct": -0.391,
+      "fees": 11.8462,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-13T06:15:00+00:00",
+      "entry_price": 71026.7957,
+      "qty": 0.182631,
+      "stop": 70783.7363,
+      "take": 71512.9144,
+      "exit_time": "2026-04-13T07:15:00+00:00",
+      "exit_price": 70748.3444,
+      "pnl": -56.02,
+      "pnl_pct": -0.432,
+      "fees": 10.357,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-13T11:00:00+00:00",
+      "entry_price": 70871.3179,
+      "qty": 0.209514,
+      "stop": 70660.9064,
+      "take": 71292.1411,
+      "exit_time": "2026-04-13T13:45:00+00:00",
+      "exit_price": 71256.495,
+      "pnl": 74.73,
+      "pnl_pct": 0.503,
+      "fees": 11.9111,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T00:00:00+00:00",
+      "entry_price": 74536.8498,
+      "qty": 0.105984,
+      "stop": 74117.6527,
+      "take": 75375.244,
+      "exit_time": "2026-04-15T05:15:00+00:00",
+      "exit_price": 74080.5939,
+      "pnl": -51.5,
+      "pnl_pct": -0.652,
+      "fees": 6.3004,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T08:30:00+00:00",
+      "entry_price": 74097.03,
+      "qty": 0.153942,
+      "stop": 73810.2034,
+      "take": 74670.6832,
+      "exit_time": "2026-04-15T10:30:00+00:00",
+      "exit_price": 73773.2983,
+      "pnl": -54.38,
+      "pnl_pct": -0.477,
+      "fees": 9.1054,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T11:45:00+00:00",
+      "entry_price": 74192.1776,
+      "qty": 0.146366,
+      "stop": 73892.5167,
+      "take": 74791.4992,
+      "exit_time": "2026-04-15T13:30:00+00:00",
+      "exit_price": 73855.5705,
+      "pnl": -53.59,
+      "pnl_pct": -0.494,
+      "fees": 8.6676,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-15T14:00:00+00:00",
+      "entry_price": 74149.5562,
+      "qty": 0.121374,
+      "stop": 73790.5809,
+      "take": 74867.5069,
+      "exit_time": "2026-04-15T15:30:00+00:00",
+      "exit_price": 73753.6856,
+      "pnl": -51.63,
+      "pnl_pct": -0.574,
+      "fees": 7.1807,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-16T12:00:00+00:00",
+      "entry_price": 74745.1539,
+      "qty": 0.164338,
+      "stop": 74481.708,
+      "take": 75272.0458,
+      "exit_time": "2026-04-16T13:30:00+00:00",
+      "exit_price": 74444.4671,
+      "pnl": -54.31,
+      "pnl_pct": -0.442,
+      "fees": 9.807,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-16T15:30:00+00:00",
+      "entry_price": 74555.6592,
+      "qty": 0.082636,
+      "stop": 74035.3268,
+      "take": 75596.324,
+      "exit_time": "2026-04-16T16:45:00+00:00",
+      "exit_price": 73998.3091,
+      "pnl": -48.5,
+      "pnl_pct": -0.787,
+      "fees": 4.9104,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-17T06:00:00+00:00",
+      "entry_price": 74761.362,
+      "qty": 0.174969,
+      "stop": 74517.0712,
+      "take": 75249.9435,
+      "exit_time": "2026-04-17T08:30:00+00:00",
+      "exit_price": 75212.3185,
+      "pnl": 73.64,
+      "pnl_pct": 0.563,
+      "fees": 10.4963,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-18T06:00:00+00:00",
+      "entry_price": 77161.5615,
+      "qty": 0.192925,
+      "stop": 76938.2345,
+      "take": 77608.2155,
+      "exit_time": "2026-04-18T07:30:00+00:00",
+      "exit_price": 76899.7654,
+      "pnl": -56.44,
+      "pnl_pct": -0.379,
+      "fees": 11.8889,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-19T01:00:00+00:00",
+      "entry_price": 75673.9181,
+      "qty": 0.208717,
+      "stop": 75468.9839,
+      "take": 76083.7863,
+      "exit_time": "2026-04-19T01:30:00+00:00",
+      "exit_price": 75431.2494,
+      "pnl": -56.95,
+      "pnl_pct": -0.361,
+      "fees": 12.6153,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-19T04:00:00+00:00",
+      "entry_price": 75695.7289,
+      "qty": 0.179987,
+      "stop": 75459.8392,
+      "take": 76167.5084,
+      "exit_time": "2026-04-19T04:30:00+00:00",
+      "exit_price": 75422.1093,
+      "pnl": -54.68,
+      "pnl_pct": -0.401,
+      "fees": 10.8797,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-19T11:00:00+00:00",
+      "entry_price": 75421.2918,
+      "qty": 0.17528,
+      "stop": 75180.7831,
+      "take": 75902.3091,
+      "exit_time": "2026-04-19T13:15:00+00:00",
+      "exit_price": 75864.358,
+      "pnl": 72.34,
+      "pnl_pct": 0.547,
+      "fees": 10.6069,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-20T01:30:00+00:00",
+      "entry_price": 74674.3185,
+      "qty": 0.11023,
+      "stop": 74288.838,
+      "take": 75445.2794,
+      "exit_time": "2026-04-20T02:15:00+00:00",
+      "exit_price": 74251.6936,
+      "pnl": -49.86,
+      "pnl_pct": -0.606,
+      "fees": 6.5665,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-21T05:00:00+00:00",
+      "entry_price": 75894.9285,
+      "qty": 0.15562,
+      "stop": 75623.5892,
+      "take": 76437.6071,
+      "exit_time": "2026-04-21T08:30:00+00:00",
+      "exit_price": 76399.3883,
+      "pnl": 73.75,
+      "pnl_pct": 0.624,
+      "fees": 9.48,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T05:45:00+00:00",
+      "entry_price": 78030.8959,
+      "qty": 0.129305,
+      "stop": 77701.6657,
+      "take": 78689.3564,
+      "exit_time": "2026-04-23T08:30:00+00:00",
+      "exit_price": 77662.8149,
+      "pnl": -51.61,
+      "pnl_pct": -0.512,
+      "fees": 8.0528,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T12:00:00+00:00",
+      "entry_price": 77708.5348,
+      "qty": 0.122775,
+      "stop": 77364.0606,
+      "take": 78397.4833,
+      "exit_time": "2026-04-23T13:45:00+00:00",
+      "exit_price": 77325.3786,
+      "pnl": -50.84,
+      "pnl_pct": -0.533,
+      "fees": 7.6137,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-23T14:15:00+00:00",
+      "entry_price": 77729.3452,
+      "qty": 0.111963,
+      "stop": 77354.046,
+      "take": 78479.9437,
+      "exit_time": "2026-04-23T15:15:00+00:00",
+      "exit_price": 78440.7037,
+      "pnl": 76.13,
+      "pnl_pct": 0.875,
+      "fees": 6.9941,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-24T00:15:00+00:00",
+      "entry_price": 78404.1825,
+      "qty": 0.130087,
+      "stop": 78078.3797,
+      "take": 79055.7881,
+      "exit_time": "2026-04-24T01:00:00+00:00",
+      "exit_price": 78039.3405,
+      "pnl": -51.52,
+      "pnl_pct": -0.505,
+      "fees": 8.1405,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-24T08:15:00+00:00",
+      "entry_price": 77858.8099,
+      "qty": 0.146313,
+      "stop": 77571.0379,
+      "take": 78434.354,
+      "exit_time": "2026-04-24T09:00:00+00:00",
+      "exit_price": 77532.2524,
+      "pnl": -52.32,
+      "pnl_pct": -0.459,
+      "fees": 9.0943,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-24T10:45:00+00:00",
+      "entry_price": 77754.0576,
+      "qty": 0.154407,
+      "stop": 77483.2129,
+      "take": 78295.747,
+      "exit_time": "2026-04-24T11:15:00+00:00",
+      "exit_price": 78256.5991,
+      "pnl": 72.76,
+      "pnl_pct": 0.606,
+      "fees": 9.6357,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-25T21:00:00+00:00",
+      "entry_price": 77501.1312,
+      "qty": 0.297592,
+      "stop": 77359.4604,
+      "take": 77784.4728,
+      "exit_time": "2026-04-26T03:30:00+00:00",
+      "exit_price": 77320.7806,
+      "pnl": -62.87,
+      "pnl_pct": -0.273,
+      "fees": 18.4295,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-27T14:30:00+00:00",
+      "entry_price": 78175.068,
+      "qty": 0.146207,
+      "stop": 77889.1743,
+      "take": 78746.8555,
+      "exit_time": "2026-04-27T14:45:00+00:00",
+      "exit_price": 77850.2297,
+      "pnl": -52.05,
+      "pnl_pct": -0.455,
+      "fees": 9.1248,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-04-27T23:15:00+00:00",
+      "entry_price": 77128.4449,
+      "qty": 0.17262,
+      "stop": 76887.9367,
+      "take": 77609.4614,
+      "exit_time": "2026-04-28T02:30:00+00:00",
+      "exit_price": 76849.4928,
+      "pnl": -53.46,
+      "pnl_pct": -0.402,
+      "fees": 10.6319,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-29T00:00:00+00:00",
+      "entry_price": 76249.5562,
+      "qty": 0.228904,
+      "stop": 76429.6436,
+      "take": 75889.3813,
+      "exit_time": "2026-04-29T00:45:00+00:00",
+      "exit_price": 76467.8584,
+      "pnl": -56.97,
+      "pnl_pct": -0.326,
+      "fees": 13.983,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-30T11:30:00+00:00",
+      "entry_price": 75855.5532,
+      "qty": 0.167379,
+      "stop": 76099.9265,
+      "take": 75366.8067,
+      "exit_time": "2026-04-30T12:00:00+00:00",
+      "exit_price": 76137.9765,
+      "pnl": -52.37,
+      "pnl_pct": -0.412,
+      "fees": 10.1762,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-04-30T21:45:00+00:00",
+      "entry_price": 76164.6986,
+      "qty": 0.176673,
+      "stop": 76394.5899,
+      "take": 75704.916,
+      "exit_time": "2026-04-30T22:15:00+00:00",
+      "exit_price": 76432.7872,
+      "pnl": -52.77,
+      "pnl_pct": -0.392,
+      "fees": 10.784,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-02T01:30:00+00:00",
+      "entry_price": 78368.4646,
+      "qty": 0.184479,
+      "stop": 78149.8765,
+      "take": 78805.6409,
+      "exit_time": "2026-05-02T04:30:00+00:00",
+      "exit_price": 78110.8016,
+      "pnl": -53.3,
+      "pnl_pct": -0.369,
+      "fees": 11.5469,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-03T06:45:00+00:00",
+      "entry_price": 78288.1245,
+      "qty": 0.263943,
+      "stop": 78136.4646,
+      "take": 78591.4442,
+      "exit_time": "2026-05-03T11:30:00+00:00",
+      "exit_price": 78552.1485,
+      "pnl": 61.39,
+      "pnl_pct": 0.297,
+      "fees": 16.5587,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-04T14:15:00+00:00",
+      "entry_price": 79241.2008,
+      "qty": 0.090603,
+      "stop": 78796.4587,
+      "take": 80130.6849,
+      "exit_time": "2026-05-04T14:45:00+00:00",
+      "exit_price": 80090.6196,
+      "pnl": 74.06,
+      "pnl_pct": 1.032,
+      "fees": 5.7744,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-06T20:00:00+00:00",
+      "entry_price": 81627.5934,
+      "qty": 0.117315,
+      "stop": 81281.0805,
+      "take": 82320.6192,
+      "exit_time": "2026-05-06T20:30:00+00:00",
+      "exit_price": 81240.44,
+      "pnl": -49.23,
+      "pnl_pct": -0.514,
+      "fees": 7.6427,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-07T05:00:00+00:00",
+      "entry_price": 81120.6401,
+      "qty": 0.150326,
+      "stop": 80851.985,
+      "take": 81657.9501,
+      "exit_time": "2026-05-07T06:00:00+00:00",
+      "exit_price": 80811.559,
+      "pnl": -51.32,
+      "pnl_pct": -0.421,
+      "fees": 9.737,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-08T07:45:00+00:00",
+      "entry_price": 79674.8175,
+      "qty": 0.160552,
+      "stop": 79425.0247,
+      "take": 80174.4031,
+      "exit_time": "2026-05-08T10:45:00+00:00",
+      "exit_price": 80134.3159,
+      "pnl": 68.63,
+      "pnl_pct": 0.536,
+      "fees": 10.2631,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-10T08:00:00+00:00",
+      "entry_price": 80768.364,
+      "qty": 0.300283,
+      "stop": 80650.5539,
+      "take": 81003.9842,
+      "exit_time": "2026-05-10T10:15:00+00:00",
+      "exit_price": 80610.2286,
+      "pnl": -57.17,
+      "pnl_pct": -0.236,
+      "fees": 19.3837,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-11T10:00:00+00:00",
+      "entry_price": 81027.5936,
+      "qty": 0.162369,
+      "stop": 80780.6997,
+      "take": 81521.3812,
+      "exit_time": "2026-05-11T13:30:00+00:00",
+      "exit_price": 80740.3094,
+      "pnl": -51.89,
+      "pnl_pct": -0.394,
+      "fees": 10.5065,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-15T07:15:00+00:00",
+      "entry_price": 80906.1328,
+      "qty": 0.119471,
+      "stop": 80572.9804,
+      "take": 81572.4378,
+      "exit_time": "2026-05-15T08:15:00+00:00",
+      "exit_price": 80532.6939,
+      "pnl": -48.46,
+      "pnl_pct": -0.501,
+      "fees": 7.7149,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-05-15T10:45:00+00:00",
+      "entry_price": 80710.4351,
+      "qty": 0.137606,
+      "stop": 80423.0892,
+      "take": 81285.1267,
+      "exit_time": "2026-05-15T12:00:00+00:00",
+      "exit_price": 80382.8777,
+      "pnl": -49.5,
+      "pnl_pct": -0.446,
+      "fees": 8.867,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-16T22:00:00+00:00",
+      "entry_price": 78166.5972,
+      "qty": 0.278961,
+      "stop": 78307.3726,
+      "take": 77885.0463,
+      "exit_time": "2026-05-17T00:45:00+00:00",
+      "exit_price": 77923.9889,
+      "pnl": 58.98,
+      "pnl_pct": 0.27,
+      "fees": 17.4173,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T01:15:00+00:00",
+      "entry_price": 77910.9251,
+      "qty": 0.206957,
+      "stop": 78101.8931,
+      "take": 77528.989,
+      "exit_time": "2026-05-17T04:15:00+00:00",
+      "exit_price": 78140.944,
+      "pnl": -54.07,
+      "pnl_pct": -0.335,
+      "fees": 12.9184,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T13:00:00+00:00",
+      "entry_price": 78180.89,
+      "qty": 0.226346,
+      "stop": 78354.1622,
+      "take": 77834.3456,
+      "exit_time": "2026-05-17T14:15:00+00:00",
+      "exit_price": 77873.2628,
+      "pnl": 62.58,
+      "pnl_pct": 0.354,
+      "fees": 14.1289,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-17T22:00:00+00:00",
+      "entry_price": 78048.5562,
+      "qty": 0.183427,
+      "stop": 78263.8841,
+      "take": 77617.9003,
+      "exit_time": "2026-05-17T23:30:00+00:00",
+      "exit_price": 77656.7093,
+      "pnl": 66.18,
+      "pnl_pct": 0.462,
+      "fees": 11.4242,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-19T22:00:00+00:00",
+      "entry_price": 76708.6265,
+      "qty": 0.183858,
+      "stop": 76925.094,
+      "take": 76275.6914,
+      "exit_time": "2026-05-19T23:30:00+00:00",
+      "exit_price": 76963.5566,
+      "pnl": -52.53,
+      "pnl_pct": -0.372,
+      "fees": 11.3016,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T02:30:00+00:00",
+      "entry_price": 76543.9089,
+      "qty": 0.148477,
+      "stop": 76810.0003,
+      "take": 76011.7261,
+      "exit_time": "2026-05-20T04:00:00+00:00",
+      "exit_price": 76848.4053,
+      "pnl": -49.77,
+      "pnl_pct": -0.438,
+      "fees": 9.1101,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T13:15:00+00:00",
+      "entry_price": 77235.363,
+      "qty": 0.189815,
+      "stop": 77442.0742,
+      "take": 76821.9405,
+      "exit_time": "2026-05-20T14:15:00+00:00",
+      "exit_price": 77480.7953,
+      "pnl": -52.47,
+      "pnl_pct": -0.358,
+      "fees": 11.747,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T16:15:00+00:00",
+      "entry_price": 77016.1727,
+      "qty": 0.108148,
+      "stop": 77376.2819,
+      "take": 76295.9541,
+      "exit_time": "2026-05-20T17:00:00+00:00",
+      "exit_price": 77414.9701,
+      "pnl": -46.48,
+      "pnl_pct": -0.558,
+      "fees": 6.6806,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-20T22:00:00+00:00",
+      "entry_price": 77298.9312,
+      "qty": 0.146684,
+      "stop": 77562.7371,
+      "take": 76771.3194,
+      "exit_time": "2026-05-21T00:00:00+00:00",
+      "exit_price": 77601.5185,
+      "pnl": -48.94,
+      "pnl_pct": -0.432,
+      "fees": 9.0886,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-21T05:00:00+00:00",
+      "entry_price": 77840.96,
+      "qty": 0.175271,
+      "stop": 78060.2131,
+      "take": 77402.454,
+      "exit_time": "2026-05-21T08:00:00+00:00",
+      "exit_price": 78099.2432,
+      "pnl": -50.75,
+      "pnl_pct": -0.372,
+      "fees": 10.9327,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-21T23:45:00+00:00",
+      "entry_price": 77547.4069,
+      "qty": 0.163321,
+      "stop": 77780.9828,
+      "take": 77080.2551,
+      "exit_time": "2026-05-22T04:00:00+00:00",
+      "exit_price": 77819.8733,
+      "pnl": -49.58,
+      "pnl_pct": -0.391,
+      "fees": 10.1499,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-22T05:30:00+00:00",
+      "entry_price": 77506.8272,
+      "qty": 0.205875,
+      "stop": 77690.7954,
+      "take": 77138.8907,
+      "exit_time": "2026-05-22T11:15:00+00:00",
+      "exit_price": 77177.4602,
+      "pnl": 61.45,
+      "pnl_pct": 0.385,
+      "fees": 12.7383,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-24T03:30:00+00:00",
+      "entry_price": 76685.9379,
+      "qty": 0.147307,
+      "stop": 76944.919,
+      "take": 76167.9755,
+      "exit_time": "2026-05-24T06:45:00+00:00",
+      "exit_price": 76983.3915,
+      "pnl": -48.35,
+      "pnl_pct": -0.428,
+      "fees": 9.0547,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-24T07:45:00+00:00",
+      "entry_price": 76732.9144,
+      "qty": 0.199818,
+      "stop": 76922.5143,
+      "take": 76353.7145,
+      "exit_time": "2026-05-24T09:15:00+00:00",
+      "exit_price": 76960.9755,
+      "pnl": -51.72,
+      "pnl_pct": -0.337,
+      "fees": 12.2843,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-24T13:45:00+00:00",
+      "entry_price": 76726.6175,
+      "qty": 0.165171,
+      "stop": 76954.2381,
+      "take": 76271.3763,
+      "exit_time": "2026-05-24T14:15:00+00:00",
+      "exit_price": 76309.512,
+      "pnl": 63.85,
+      "pnl_pct": 0.504,
+      "fees": 10.1108,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-26T00:00:00+00:00",
+      "entry_price": 77157.9018,
+      "qty": 0.193712,
+      "stop": 77353.5023,
+      "take": 76766.7006,
+      "exit_time": "2026-05-26T00:45:00+00:00",
+      "exit_price": 76805.0839,
+      "pnl": 62.39,
+      "pnl_pct": 0.417,
+      "fees": 11.9298,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-27T11:30:00+00:00",
+      "entry_price": 75766.8976,
+      "qty": 0.207161,
+      "stop": 75951.1615,
+      "take": 75398.3699,
+      "exit_time": "2026-05-27T12:15:00+00:00",
+      "exit_price": 75989.137,
+      "pnl": -52.34,
+      "pnl_pct": -0.333,
+      "fees": 12.5751,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-29T01:15:00+00:00",
+      "entry_price": 73532.3155,
+      "qty": 0.144865,
+      "stop": 73793.7938,
+      "take": 73009.3587,
+      "exit_time": "2026-05-29T06:15:00+00:00",
+      "exit_price": 73830.6907,
+      "pnl": -47.5,
+      "pnl_pct": -0.446,
+      "fees": 8.5391,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-29T18:45:00+00:00",
+      "entry_price": 73306.3285,
+      "qty": 0.08311,
+      "stop": 73758.9866,
+      "take": 72401.0123,
+      "exit_time": "2026-05-29T21:00:00+00:00",
+      "exit_price": 73795.8661,
+      "pnl": -43.14,
+      "pnl_pct": -0.708,
+      "fees": 4.8903,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-30T22:00:00+00:00",
+      "entry_price": 73834.2644,
+      "qty": 0.279898,
+      "stop": 73967.8574,
+      "take": 73567.0785,
+      "exit_time": "2026-05-30T23:00:00+00:00",
+      "exit_price": 74004.8413,
+      "pnl": -56.03,
+      "pnl_pct": -0.271,
+      "fees": 16.552,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-31T00:00:00+00:00",
+      "entry_price": 73815.3739,
+      "qty": 0.273308,
+      "stop": 73951.0117,
+      "take": 73544.0981,
+      "exit_time": "2026-05-31T00:15:00+00:00",
+      "exit_price": 73987.9872,
+      "pnl": -55.27,
+      "pnl_pct": -0.274,
+      "fees": 16.1584,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-05-31T07:00:00+00:00",
+      "entry_price": 73897.2329,
+      "qty": 0.270647,
+      "stop": 74033.0347,
+      "take": 73625.6294,
+      "exit_time": "2026-05-31T14:00:00+00:00",
+      "exit_price": 73662.4422,
+      "pnl": 55.57,
+      "pnl_pct": 0.278,
+      "fees": 15.9746,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-02T02:30:00+00:00",
+      "entry_price": 70535.9144,
+      "qty": 0.082453,
+      "stop": 70984.5599,
+      "take": 69638.6234,
+      "exit_time": "2026-06-02T03:00:00+00:00",
+      "exit_price": 71020.0522,
+      "pnl": -42.26,
+      "pnl_pct": -0.727,
+      "fees": 4.6687,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-03T09:15:00+00:00",
+      "entry_price": 66767.8994,
+      "qty": 0.084528,
+      "stop": 67202.8926,
+      "take": 65897.9129,
+      "exit_time": "2026-06-03T09:45:00+00:00",
+      "exit_price": 67236.494,
+      "pnl": -41.88,
+      "pnl_pct": -0.742,
+      "fees": 4.5309,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-03T12:30:00+00:00",
+      "entry_price": 66905.6305,
+      "qty": 0.094087,
+      "stop": 67294.0857,
+      "take": 66128.7199,
+      "exit_time": "2026-06-03T15:45:00+00:00",
+      "exit_price": 66161.7843,
+      "pnl": 67.5,
+      "pnl_pct": 1.072,
+      "fees": 5.008,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-04T08:00:00+00:00",
+      "entry_price": 63287.6404,
+      "qty": 0.056477,
+      "stop": 63940.5298,
+      "take": 61981.8614,
+      "exit_time": "2026-06-04T12:45:00+00:00",
+      "exit_price": 63972.5001,
+      "pnl": -40.12,
+      "pnl_pct": -1.123,
+      "fees": 2.8749,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-04T20:00:00+00:00",
+      "entry_price": 63437.5654,
+      "qty": 0.05867,
+      "stop": 64062.5138,
+      "take": 62187.6684,
+      "exit_time": "2026-06-05T06:00:00+00:00",
+      "exit_price": 62218.7623,
+      "pnl": 70.05,
+      "pnl_pct": 1.882,
+      "fees": 2.9489,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-06T10:00:00+00:00",
+      "entry_price": 60564.3027,
+      "qty": 0.072215,
+      "stop": 61076.7746,
+      "take": 59539.3589,
+      "exit_time": "2026-06-06T12:15:00+00:00",
+      "exit_price": 61107.313,
+      "pnl": -40.98,
+      "pnl_pct": -0.937,
+      "fees": 3.5146,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-06T15:00:00+00:00",
+      "entry_price": 60556.7065,
+      "qty": 0.088591,
+      "stop": 60972.0413,
+      "take": 59726.0369,
+      "exit_time": "2026-06-07T01:00:00+00:00",
+      "exit_price": 61002.5273,
+      "pnl": -41.66,
+      "pnl_pct": -0.776,
+      "fees": 4.3076,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-07T12:00:00+00:00",
+      "entry_price": 62027.9705,
+      "qty": 0.098057,
+      "stop": 62400.9749,
+      "take": 61281.9617,
+      "exit_time": "2026-06-07T19:15:00+00:00",
+      "exit_price": 61312.6027,
+      "pnl": 67.74,
+      "pnl_pct": 1.114,
+      "fees": 4.8378,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T05:00:00+00:00",
+      "entry_price": 62519.3247,
+      "qty": 0.076244,
+      "stop": 63003.3292,
+      "take": 61551.3158,
+      "exit_time": "2026-06-08T06:15:00+00:00",
+      "exit_price": 63034.8308,
+      "pnl": -41.23,
+      "pnl_pct": -0.865,
+      "fees": 3.8291,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-08T17:00:00+00:00",
+      "entry_price": 63291.2386,
+      "qty": 0.079136,
+      "stop": 63754.8283,
+      "take": 62364.0591,
+      "exit_time": "2026-06-08T21:00:00+00:00",
+      "exit_price": 63786.7057,
+      "pnl": -41.23,
+      "pnl_pct": -0.823,
+      "fees": 4.0226,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-09T00:00:00+00:00",
+      "entry_price": 62943.2127,
+      "qty": 0.102007,
+      "stop": 63300.7417,
+      "take": 62228.1546,
+      "exit_time": "2026-06-09T04:30:00+00:00",
+      "exit_price": 63332.392,
+      "pnl": -42.28,
+      "pnl_pct": -0.659,
+      "fees": 5.1524,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-09T08:00:00+00:00",
+      "entry_price": 62862.4531,
+      "qty": 0.104853,
+      "stop": 63208.1395,
+      "take": 62171.0801,
+      "exit_time": "2026-06-09T13:30:00+00:00",
+      "exit_price": 62202.1656,
+      "pnl": 66.62,
+      "pnl_pct": 1.011,
+      "fees": 5.2454,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-10T17:30:00+00:00",
+      "entry_price": 61688.5403,
+      "qty": 0.070597,
+      "stop": 62206.4971,
+      "take": 60652.6267,
+      "exit_time": "2026-06-11T01:15:00+00:00",
+      "exit_price": 62237.6003,
+      "pnl": -40.52,
+      "pnl_pct": -0.93,
+      "fees": 3.4995,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-11T12:15:00+00:00",
+      "entry_price": 62628.77,
+      "qty": 0.123302,
+      "stop": 62923.6149,
+      "take": 62039.0801,
+      "exit_time": "2026-06-11T12:45:00+00:00",
+      "exit_price": 62955.0767,
+      "pnl": -43.34,
+      "pnl_pct": -0.561,
+      "fees": 6.1939,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-11T15:00:00+00:00",
+      "entry_price": 62633.1678,
+      "qty": 0.09744,
+      "stop": 63003.8848,
+      "take": 61891.7337,
+      "exit_time": "2026-06-11T17:15:00+00:00",
+      "exit_price": 63035.3867,
+      "pnl": -41.65,
+      "pnl_pct": -0.682,
+      "fees": 4.8981,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T01:15:00+00:00",
+      "entry_price": 63294.7368,
+      "qty": 0.123681,
+      "stop": 63585.0178,
+      "take": 62714.1748,
+      "exit_time": "2026-06-12T02:00:00+00:00",
+      "exit_price": 63616.8103,
+      "pnl": -42.98,
+      "pnl_pct": -0.549,
+      "fees": 6.2786,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T05:00:00+00:00",
+      "entry_price": 63373.3975,
+      "qty": 0.132394,
+      "stop": 63642.8326,
+      "take": 62834.5272,
+      "exit_time": "2026-06-12T06:30:00+00:00",
+      "exit_price": 62865.9445,
+      "pnl": 63.85,
+      "pnl_pct": 0.761,
+      "fees": 6.6854,
+      "reason": "take_profit"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "short",
+      "entry_time": "2026-06-12T12:15:00+00:00",
+      "entry_price": 63403.7823,
+      "qty": 0.137607,
+      "stop": 63665.2101,
+      "take": 62880.9266,
+      "exit_time": "2026-06-12T14:30:00+00:00",
+      "exit_price": 63697.0427,
+      "pnl": -43.86,
+      "pnl_pct": -0.503,
+      "fees": 6.996,
+      "reason": "stop"
+    },
+    {
+      "mode": "paper",
+      "symbol": "BTC/USDT",
+      "side": "long",
+      "entry_time": "2026-06-14T20:30:00+00:00",
+      "entry_price": 64048.008,
+      "qty": 0.197786,
+      "stop": 63867.3202,
+      "take": 64409.3836,
+      "exit_time": "2026-06-14T21:15:00+00:00",
+      "exit_price": 64377.1789,
+      "pnl": 60.01,
+      "pnl_pct": 0.474,
+      "fees": 10.1603,
+      "reason": "take_profit"
+    }
+  ],
+  "equity_curve": [
+    [
+      "2026-02-15T11:30:00+00:00",
+      10000.0
+    ],
+    [
+      "2026-02-17T02:00:00+00:00",
+      9936.833099495176
+    ],
+    [
+      "2026-02-17T05:15:00+00:00",
+      10024.709709567062
+    ],
+    [
+      "2026-02-18T11:00:00+00:00",
+      10109.152394688948
+    ],
+    [
+      "2026-02-19T09:15:00+00:00",
+      10041.901999323223
+    ],
+    [
+      "2026-02-19T13:00:00+00:00",
+      10126.46556307618
+    ],
+    [
+      "2026-02-20T05:30:00+00:00",
+      10058.911407079844
+    ],
+    [
+      "2026-02-21T08:15:00+00:00",
+      9991.335154024948
+    ],
+    [
+      "2026-02-21T12:45:00+00:00",
+      9914.60330249506
+    ],
+    [
+      "2026-02-21T22:45:00+00:00",
+      9993.228732680824
+    ],
+    [
+      "2026-02-23T17:15:00+00:00",
+      10083.998147110737
+    ],
+    [
+      "2026-02-24T04:00:00+00:00",
+      10177.148282888931
+    ],
+    [
+      "2026-02-25T00:45:00+00:00",
+      10116.289161401512
+    ],
+    [
+      "2026-02-25T08:30:00+00:00",
+      10056.552984662032
+    ],
+    [
+      "2026-02-27T01:00:00+00:00",
+      9998.670749116684
+    ],
+    [
+      "2026-02-27T04:15:00+00:00",
+      10086.914501760391
+    ],
+    [
+      "2026-03-02T14:45:00+00:00",
+      10028.143804415695
+    ],
+    [
+      "2026-03-03T08:15:00+00:00",
+      9966.757769989028
+    ],
+    [
+      "2026-03-03T13:00:00+00:00",
+      9908.528741604654
+    ],
+    [
+      "2026-03-03T16:15:00+00:00",
+      10001.461123596928
+    ],
+    [
+      "2026-03-04T07:45:00+00:00",
+      10093.07788894063
+    ],
+    [
+      "2026-03-05T14:30:00+00:00",
+      10033.224990094348
+    ],
+    [
+      "2026-03-06T04:30:00+00:00",
+      9972.894177109005
+    ],
+    [
+      "2026-03-06T09:00:00+00:00",
+      9912.352954046462
+    ],
+    [
+      "2026-03-08T13:15:00+00:00",
+      9998.246874754346
+    ],
+    [
+      "2026-03-09T12:00:00+00:00",
+      9938.585941720781
+    ],
+    [
+      "2026-03-11T02:30:00+00:00",
+      9878.84113728409
+    ],
+    [
+      "2026-03-11T05:30:00+00:00",
+      9817.216284643162
+    ],
+    [
+      "2026-03-11T11:45:00+00:00",
+      9754.852525269585
+    ],
+    [
+      "2026-03-12T09:30:00+00:00",
+      9836.841744091265
+    ],
+    [
+      "2026-03-12T11:45:00+00:00",
+      9923.435703613166
+    ],
+    [
+      "2026-03-14T06:15:00+00:00",
+      9858.580569688735
+    ],
+    [
+      "2026-03-14T14:45:00+00:00",
+      9788.280016222834
+    ],
+    [
+      "2026-03-16T13:30:00+00:00",
+      9874.653723064408
+    ],
+    [
+      "2026-03-17T09:45:00+00:00",
+      9814.889928082004
+    ],
+    [
+      "2026-03-17T12:30:00+00:00",
+      9754.52385863783
+    ],
+    [
+      "2026-03-17T15:30:00+00:00",
+      9695.822414718725
+    ],
+    [
+      "2026-03-18T00:00:00+00:00",
+      9638.1064956515
+    ],
+    [
+      "2026-03-20T01:30:00+00:00",
+      9579.659983145288
+    ],
+    [
+      "2026-03-20T07:30:00+00:00",
+      9518.162847863458
+    ],
+    [
+      "2026-03-20T14:00:00+00:00",
+      9601.669302585524
+    ],
+    [
+      "2026-03-21T05:30:00+00:00",
+      9534.39005685114
+    ],
+    [
+      "2026-03-21T14:00:00+00:00",
+      9461.615925800059
+    ],
+    [
+      "2026-03-21T23:00:00+00:00",
+      9534.968164875068
+    ],
+    [
+      "2026-03-23T01:15:00+00:00",
+      9478.246848930155
+    ],
+    [
+      "2026-03-23T10:00:00+00:00",
+      9421.599857892561
+    ],
+    [
+      "2026-03-24T13:45:00+00:00",
+      9503.37461592799
+    ],
+    [
+      "2026-03-27T01:45:00+00:00",
+      9444.18456880807
+    ],
+    [
+      "2026-03-28T13:30:00+00:00",
+      9371.309238944768
+    ],
+    [
+      "2026-03-29T02:45:00+00:00",
+      9303.556347650965
+    ],
+    [
+      "2026-03-29T05:45:00+00:00",
+      9237.029551719663
+    ],
+    [
+      "2026-03-29T11:00:00+00:00",
+      9169.955834974544
+    ],
+    [
+      "2026-03-30T14:45:00+00:00",
+      9111.886044821154
+    ],
+    [
+      "2026-03-31T09:00:00+00:00",
+      9191.143154109757
+    ],
+    [
+      "2026-04-01T04:45:00+00:00",
+      9134.637660181494
+    ],
+    [
+      "2026-04-03T02:30:00+00:00",
+      9211.075707238904
+    ],
+    [
+      "2026-04-03T07:00:00+00:00",
+      9151.21932460198
+    ],
+    [
+      "2026-04-03T14:15:00+00:00",
+      9091.158678207097
+    ],
+    [
+      "2026-04-03T23:45:00+00:00",
+      9015.396944770016
+    ],
+    [
+      "2026-04-04T06:00:00+00:00",
+      8938.336470490123
+    ],
+    [
+      "2026-04-04T10:30:00+00:00",
+      8866.143131687108
+    ],
+    [
+      "2026-04-05T02:00:00+00:00",
+      8923.958709511577
+    ],
+    [
+      "2026-04-05T06:00:00+00:00",
+      8979.18005744566
+    ],
+    [
+      "2026-04-05T15:15:00+00:00",
+      8908.826040268674
+    ],
+    [
+      "2026-04-07T09:00:00+00:00",
+      8981.090285453996
+    ],
+    [
+      "2026-04-07T20:00:00+00:00",
+      9060.019247319633
+    ],
+    [
+      "2026-04-09T04:45:00+00:00",
+      9002.791125011168
+    ],
+    [
+      "2026-04-09T13:30:00+00:00",
+      8941.447861717103
+    ],
+    [
+      "2026-04-10T12:30:00+00:00",
+      9013.5933929779
+    ],
+    [
+      "2026-04-11T13:00:00+00:00",
+      8941.97971947935
+    ],
+    [
+      "2026-04-12T22:00:00+00:00",
+      8878.028997615676
+    ],
+    [
+      "2026-04-13T07:15:00+00:00",
+      8816.818198204612
+    ],
+    [
+      "2026-04-13T13:45:00+00:00",
+      8885.606957593196
+    ],
+    [
+      "2026-04-15T05:15:00+00:00",
+      8830.95088588073
+    ],
+    [
+      "2026-04-15T10:30:00+00:00",
+      8772.009472614822
+    ],
+    [
+      "2026-04-15T13:30:00+00:00",
+      8714.074120930332
+    ],
+    [
+      "2026-04-15T15:30:00+00:00",
+      8658.84495195406
+    ],
+    [
+      "2026-04-16T13:30:00+00:00",
+      8599.623613087037
+    ],
+    [
+      "2026-04-16T16:45:00+00:00",
+      8548.656154189983
+    ],
+    [
+      "2026-04-17T08:30:00+00:00",
+      8617.063225511258
+    ],
+    [
+      "2026-04-18T07:30:00+00:00",
+      8554.667363100352
+    ],
+    [
+      "2026-04-19T01:30:00+00:00",
+      8491.402860792083
+    ],
+    [
+      "2026-04-19T04:30:00+00:00",
+      8431.275281429756
+    ],
+    [
+      "2026-04-19T13:15:00+00:00",
+      8498.32900950121
+    ],
+    [
+      "2026-04-20T02:15:00+00:00",
+      8445.17645597349
+    ],
+    [
+      "2026-04-21T08:30:00+00:00",
+      8514.200571939044
+    ],
+    [
+      "2026-04-23T08:30:00+00:00",
+      8458.553206072216
+    ],
+    [
+      "2026-04-23T13:45:00+00:00",
+      8403.897555803174
+    ],
+    [
+      "2026-04-23T15:15:00+00:00",
+      8476.54903677743
+    ],
+    [
+      "2026-04-24T01:00:00+00:00",
+      8420.947282279778
+    ],
+    [
+      "2026-04-24T09:00:00+00:00",
+      8364.073444604297
+    ],
+    [
+      "2026-04-24T11:15:00+00:00",
+      8432.033798481438
+    ],
+    [
+      "2026-04-26T03:30:00+00:00",
+      8359.933300008674
+    ],
+    [
+      "2026-04-27T14:45:00+00:00",
+      8303.314865398715
+    ],
+    [
+      "2026-04-28T02:30:00+00:00",
+      8244.530205384297
+    ],
+    [
+      "2026-04-29T00:45:00+00:00",
+      8180.577024302996
+    ],
+    [
+      "2026-04-30T12:00:00+00:00",
+      8123.129192342725
+    ],
+    [
+      "2026-04-30T22:15:00+00:00",
+      8064.981146474888
+    ],
+    [
+      "2026-05-02T04:30:00+00:00",
+      8005.900885113233
+    ],
+    [
+      "2026-05-03T11:30:00+00:00",
+      8059.029343004078
+    ],
+    [
+      "2026-05-04T14:45:00+00:00",
+      8130.215177686569
+    ],
+    [
+      "2026-05-06T20:30:00+00:00",
+      8077.153637509084
+    ],
+    [
+      "2026-05-07T06:00:00+00:00",
+      8020.953769579911
+    ],
+    [
+      "2026-05-08T10:45:00+00:00",
+      8084.46414210368
+    ],
+    [
+      "2026-05-10T10:15:00+00:00",
+      8017.595013259851
+    ],
+    [
+      "2026-05-11T13:30:00+00:00",
+      7960.4424299845405
+    ],
+    [
+      "2026-05-15T08:15:00+00:00",
+      7908.112200023162
+    ],
+    [
+      "2026-05-15T12:00:00+00:00",
+      7854.171307570233
+    ],
+    [
+      "2026-05-17T00:45:00+00:00",
+      7904.432295088092
+    ],
+    [
+      "2026-05-17T04:15:00+00:00",
+      7843.9098585755055
+    ],
+    [
+      "2026-05-17T14:15:00+00:00",
+      7899.4112690792945
+    ],
+    [
+      "2026-05-17T23:30:00+00:00",
+      7959.8625065051465
+    ],
+    [
+      "2026-05-19T23:30:00+00:00",
+      7901.689992185742
+    ],
+    [
+      "2026-05-20T04:00:00+00:00",
+      7847.369193179488
+    ],
+    [
+      "2026-05-20T14:15:00+00:00",
+      7789.035557247032
+    ],
+    [
+      "2026-05-20T17:00:00+00:00",
+      7739.225745025486
+    ],
+    [
+      "2026-05-21T00:00:00+00:00",
+      7685.7524330418355
+    ],
+    [
+      "2026-05-21T08:00:00+00:00",
+      7629.550078337513
+    ],
+    [
+      "2026-05-22T04:00:00+00:00",
+      7574.90084078361
+    ],
+    [
+      "2026-05-22T11:15:00+00:00",
+      7629.971088771151
+    ],
+    [
+      "2026-05-24T06:45:00+00:00",
+      7577.099299838894
+    ],
+    [
+      "2026-05-24T09:15:00+00:00",
+      7519.244220116097
+    ],
+    [
+      "2026-05-24T14:15:00+00:00",
+      7578.026944376774
+    ],
+    [
+      "2026-05-26T00:45:00+00:00",
+      7634.442131571453
+    ],
+    [
+      "2026-05-27T12:15:00+00:00",
+      7575.827728570014
+    ],
+    [
+      "2026-05-29T06:15:00+00:00",
+      7524.064396031488
+    ],
+    [
+      "2026-05-29T21:00:00+00:00",
+      7478.488774021262
+    ],
+    [
+      "2026-05-30T23:00:00+00:00",
+      7414.192624517011
+    ],
+    [
+      "2026-05-31T00:15:00+00:00",
+      7350.857588612036
+    ],
+    [
+      "2026-05-31T14:00:00+00:00",
+      7398.428287845072
+    ],
+    [
+      "2026-06-02T03:00:00+00:00",
+      7353.841021467103
+    ],
+    [
+      "2026-06-03T09:45:00+00:00",
+      7309.700684724885
+    ],
+    [
+      "2026-06-03T15:45:00+00:00",
+      7374.678818649158
+    ],
+    [
+      "2026-06-04T12:45:00+00:00",
+      7333.124911766125
+    ],
+    [
+      "2026-06-05T06:00:00+00:00",
+      7401.682996190857
+    ],
+    [
+      "2026-06-06T12:15:00+00:00",
+      7358.954605877758
+    ],
+    [
+      "2026-06-07T01:00:00+00:00",
+      7315.151453359332
+    ],
+    [
+      "2026-06-07T19:15:00+00:00",
+      7380.460628499541
+    ],
+    [
+      "2026-06-08T06:15:00+00:00",
+      7337.327434487079
+    ],
+    [
+      "2026-06-08T21:00:00+00:00",
+      7294.0955702183655
+    ],
+    [
+      "2026-06-09T04:30:00+00:00",
+      7249.244131425988
+    ],
+    [
+      "2026-06-09T13:30:00+00:00",
+      7313.231810539024
+    ],
+    [
+      "2026-06-11T01:15:00+00:00",
+      7270.970335637224
+    ],
+    [
+      "2026-06-11T12:45:00+00:00",
+      7224.542317075569
+    ],
+    [
+      "2026-06-11T17:15:00+00:00",
+      7180.451989185882
+    ],
+    [
+      "2026-06-12T02:00:00+00:00",
+      7134.33897615994
+    ],
+    [
+      "2026-06-12T06:30:00+00:00",
+      7194.837545574202
+    ],
+    [
+      "2026-06-12T14:30:00+00:00",
+      7147.487018078511
+    ],
+    [
+      "2026-06-14T21:15:00+00:00",
+      7202.432007492628
+    ]
+  ]
+}
