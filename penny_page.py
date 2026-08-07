@@ -176,7 +176,7 @@ details.why summary:hover{color:var(--txt)}
   </div>
 
   <div class="card">
-    <h2>◆ Confirmed setups — fresh quote required for any fill</h2>
+    <h2>◆ Detected setups — persistence and a fresh quote required for any fill</h2>
     <div id="signals"></div>
   </div>
 
@@ -258,10 +258,11 @@ function render(s){
       rc.title = 'The deployed scanner rule has not been backtested.';
     } else {
       // gross expectancy is the number that decides whether this rule can ever work
-      rc.textContent = 'rule: gross ' + (Number(lr.mean_gross_pct)>=0?'+':'')
+      rc.textContent = 'price core: gross ' + (Number(lr.mean_gross_pct)>=0?'+':'')
         + Number(lr.mean_gross_pct).toFixed(2) + '%';
       rc.className = 'chip ' + (lr.gross_is_zero ? 'off' : '');
       rc.title = [
+        'Price/volume component only (not the full catalyst-confirmation strategy)',
         lr.strategy_id + ' over ' + (lr.trades||0).toLocaleString() + ' backtested trades',
         'gross ' + lr.mean_gross_pct + '%  cost ' + lr.mean_cost_pct
           + '%  net ' + lr.test_mean_net_pct + '% (untouched test)',
@@ -271,14 +272,17 @@ function render(s){
     }
   }
   const st = $('c-state');
-  st.textContent = s.enabled ? 'running' : 'paused';
-  st.className = 'chip ' + (s.enabled?'on':'off');
+  st.textContent = 'scanner live';
+  st.className = 'chip on';
+  st.title = s.enabled ? 'Continuous research and new paper entries are enabled.'
+                       : 'Continuous research is live; only new paper entries are paused.';
   const b = $('btn-toggle');
-  b.textContent = s.enabled ? 'Pause' : 'Enable';
+  b.textContent = s.enabled ? 'Pause entries' : 'Enable entries';
   b.className = 'btn ' + (s.enabled?'stop':'go');
 
   const pnl = Number(s.total_pnl)||0;
   const s5 = (s.signal_stats||{})['5']||{};
+  const fv = s.forward_validation||{};
   $('stats').innerHTML =
     stat('Equity', money(s.equity), 'gold') +
     stat('Net P&L', signed(pnl), pnl>=0?'g':'r') +
@@ -286,9 +290,13 @@ function render(s){
     stat('Open', (s.open_count||0)+' / '+(s.max_open||0)) +
     stat('Closed trades', s.trades||0) +
     stat('Win rate', (s.trades? s.win_rate+'%' : '—')) +
-    stat('5d signal hit rate', s5.count ? s5.hit_rate+'% ('+s5.count+')' : 'collecting') +
+    stat('5d net hit rate', s5.count ? s5.net_hit_rate+'% ('+s5.count+')' : 'collecting') +
     stat('Open risk', money(s.open_risk||0)) +
-    stat('Scans', s.scan_count||0);
+    stat('Scans', s.scan_count||0) +
+    stat('Next scan', s.scan_in_progress ? 'running' : (s.next_scan_in_sec||0)+'s') +
+    stat('Hot setups', s.hot_setups||0) +
+    stat('Forward edge', (fv.status||'collecting').toLowerCase(),
+         fv.status==='PROMISING_NOT_VALIDATED'?'g':fv.status==='REJECTED'?'r':'');
 
   // positions
   const P = s.positions||[];
@@ -309,7 +317,7 @@ function render(s){
   $('watchlist').innerHTML = W.length ? table(
     ['#','Ticker','Price','Signal','Levels','Scores','Why'],
     W.map(w=>{
-      const sig = w.signal||{}, ai = w.ai||{};
+      const sig = w.signal||{}, ai = w.ai||{}, cf = w.confirmation||{};
       const a = sig.action||'';
       const cls = a==='STRONG BUY'?'s-strong':a==='BUY'?'s-buy':a==='RESEARCH'?'s-research':a==='WATCH'?'s-watch'
                  :a==='NO TRADE'?'s-no':'s-avoid';
@@ -339,7 +347,10 @@ function render(s){
         + '<td class="mono">$'+w.price+'<div class="'+(chg>=0?'g':'r')+'" style="font-size:11px">'
         + (chg>=0?'+':'')+chg+'%</div><div class="nm">'+w.spread_pct+'% '+(w.spread_unreliable?'cost proxy':'live spread')+'</div></td>'
         + '<td><span class="sig '+cls+'">'+esc(a)+'</span>'+scoreBar(w.composite)
-        + '<div class="nm" style="margin-top:3px">'+esc(sig.why||'')+'</div></td>'
+        + '<div class="nm" style="margin-top:3px">'+esc(sig.why||'')+'</div>'
+        + (['BUY','STRONG BUY'].includes(sig.candidate_action)
+          ?'<div class="nm">confirmation '+(cf.observations||0)+' / '+(cf.required||s.confirmation_required||2)+'</div>':'')
+        + '</td>'
         + '<td>'+levels+'</td><td>'+scores+'</td>'
         + '<td>'+drivers+deep+'</td></tr>';
     }).join('')
@@ -348,14 +359,15 @@ function render(s){
   // ---------- actionable and forward-research signals panel ----------
   const SG = W.filter(w=>['BUY','STRONG BUY','RESEARCH'].includes((w.signal||{}).action));
   $('signals').innerHTML = SG.length ? table(
-    ['#','Ticker','Action','Entry','Stop','Target 1','Target 2','Risk / Reward','Held'],
-    SG.map(w=>{ const g=w.signal;
+    ['#','Ticker','Action','Entry','Stop','Target 1','Target 2','Confirmation','Status'],
+    SG.map(w=>{ const g=w.signal, cf=w.confirmation||{};
       const cls = g.action==='STRONG BUY'?'s-strong':g.action==='BUY'?'s-buy':'s-research';
       return '<tr><td class="mono">'+w.rank+'</td><td class="tick">'+esc(w.ticker)+'</td>'
         + '<td><span class="sig '+cls+'">'+esc(g.action)+'</span></td>'
         + '<td class="mono e">$'+g.entry+'</td><td class="mono r">$'+g.stop+'</td>'
         + '<td class="mono g">$'+g.target1+'</td><td class="mono g">$'+g.target2+'</td>'
-        + '<td class="mono">-'+g.risk_pct+'% / +'+g.reward_pct+'%</td>'
+        + '<td class="mono">'+(cf.observations||0)+' / '+(cf.required||s.confirmation_required||2)
+        + (cf.confirmed?' <span class="v v-buy">CONFIRMED</span>':'')+'</td>'
         + '<td>'+(w.held?'<span class="held">in book</span>'
           :g.action==='RESEARCH'?'<span class="v v-watch">TRACK ONLY</span>'
           :g.needs_open_recheck?'<span class="v v-watch">RECHECK AT OPEN</span>'
@@ -365,11 +377,15 @@ function render(s){
 
   const AS = s.signal_stats||{};
   $('accuracy').innerHTML = table(
-    ['Horizon','Completed signals','Positive close','Average return','Target 1 touched'],
+    ['Horizon','Completed signals','Net positive','Avg after cost','Avg vs IWM','Target 1 touched','Stop touched'],
     ['1','5','10'].map(h=>{const x=AS[h]||{}; return '<tr><td class="mono">'+h+' session'+(h==='1'?'':'s')+'</td>'
-      +td(x.count||0)+td(x.count?(x.hit_rate+'%'):'collecting')+td(x.count?(x.avg_return_pct+'%'):'-')
-      +td(x.count?(x.target1_rate+'%'):'-')+'</tr>';}).join('')
-  );
+      +td(x.count||0)+td(x.count?(x.net_hit_rate+'%'):'collecting')+td(x.count?(x.avg_net_return_pct+'%'):'-')
+      +td(x.count&&x.avg_net_excess_pct!=null?(x.avg_net_excess_pct+'%'):'-')
+      +td(x.count?(x.target1_rate+'%'):'-')+td(x.count?(x.stop_rate+'%'):'-')+'</tr>';}).join('')
+  ) + '<div class="note">Forward verdict: <b>'+esc(fv.status||'COLLECTING')+'</b> — '
+    + esc(fv.reason||'waiting for confirmed observations')+'<br>'
+    + 'Evidence unit: '+esc(fv.grouping||'signal-day baskets')+'; '+(fv.signal_days||0)
+    + ' / '+(fv.minimum_signal_days||60)+' required days. This forward panel never unlocks trading by itself.</div>';
 
   $('rules').innerHTML = esc(s.rules||'') + '<br><br>' + esc(s.note||'')
     + '<br><br><span style="color:#5d6673">A cost proxy is derived from average dollar volume only for ranking. '

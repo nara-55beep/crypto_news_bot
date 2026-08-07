@@ -48,9 +48,10 @@ _EDGE_POLICY_CACHE: tuple[float, dict] = (-1.0, {})
 _LIVE_AUDIT_CACHE: tuple[float, dict] = (-1.0, {})
 
 # Research authorization belongs to an exact implementation, not to the broad idea of
-# "buying penny stocks". The current live composite has no point-in-time validation and
-# therefore must never inherit authorization from a different backtested rule.
-LIVE_STRATEGY_ID = "live_composite_v1"
+# "buying penny stocks".  Version 2 requires a dated catalyst as well as price/volume
+# confirmation; the old price-only composite was decisively negative out of sample.
+# Changing the identifier is intentional: evidence for v1 must never unlock v2.
+LIVE_STRATEGY_ID = "live_catalyst_confirm_v2"
 
 # The shared config.AI_TIMEOUT_SEC is deliberately tight (6s) because the news bots
 # must DROP a stale signal rather than trade it. Company analysis has no such decay -
@@ -125,11 +126,12 @@ _MARKET_CACHE: tuple[float, bool, str] = (0.0, False, "unknown")
 
 
 def live_rule_evidence() -> dict:
-    """Backtest evidence for THIS scanner's own rule, for display only.
+    """Backtest evidence for the scanner's price/volume component, for display only.
 
     ``edge_policy`` already blocks fills, so this never gates anything - it exists so the
-    desk shows what the deployed rule measured rather than only what unrelated candidate
-    strategies did. Absent or unreadable, it reports "unmeasured" and nothing changes.
+    desk shows the negative base-rate evidence instead of hiding it.  Historical bars
+    cannot reconstruct point-in-time headlines or filings, so this is explicitly not a
+    backtest of the full catalyst-confirmation strategy.
     """
     global _LIVE_AUDIT_CACHE
     try:
@@ -144,6 +146,8 @@ def live_rule_evidence() -> dict:
         value = {
             "measured": True,
             "strategy_id": audit.get("strategy_id"),
+            "current_strategy_id": LIVE_STRATEGY_ID,
+            "scope": "price_volume_core_only",
             "trades": audit.get("trades"),
             "test_mean_net_pct": test.get("mean_net_pct"),
             "mean_gross_pct": dec.get("mean_gross_pct"),
@@ -667,7 +671,8 @@ def market_regime(force: bool = False) -> dict:
     if not force and _REGIME_CACHE["data"] and now - _REGIME_CACHE["t"] < _REGIME_TTL:
         return _REGIME_CACHE["data"]
     out = {"score": 50.0, "label": "unknown", "why": ["regime data unavailable"],
-           "iwm_5d": 0.0, "iwm_vs_sma20": 0.0, "known": False}
+           "iwm_5d": 0.0, "iwm_vs_sma20": 0.0, "iwm_price": 0.0,
+           "known": False}
     if yf is None:
         return out
     try:
@@ -695,7 +700,8 @@ def market_regime(force: bool = False) -> dict:
         score = max(0.0, min(100.0, pts))
         label = ("risk-on" if score >= 65 else "neutral" if score >= 42 else "risk-off")
         out = {"score": round(score, 1), "label": label, "why": why,
-               "iwm_5d": round(r5, 2), "iwm_vs_sma20": round(vs_sma, 2), "known": True}
+               "iwm_5d": round(r5, 2), "iwm_vs_sma20": round(vs_sma, 2),
+               "iwm_price": round(last, 4), "known": True}
     except Exception as e:
         out["why"] = [f"regime lookup failed: {type(e).__name__}"]
     _REGIME_CACHE.update({"t": now, "data": out})
@@ -858,6 +864,23 @@ def catalyst_score(d: "Dossier") -> tuple[float, list]:
     return max(0.0, min(100.0, pts)), why
 
 
+def has_dated_catalyst(d: "Dossier") -> bool:
+    """True only for an observable, time-stamped event near the decision.
+
+    A breakout is confirmation, not a cause.  The v1 audit showed that treating price
+    and volume as a substitute for a catalyst had no gross expectancy and lost money
+    after costs.  This gate keeps unexplained promotion/volume spikes in WATCH.
+    """
+    fresh_headline = 0 <= d.latest_news_age_hours <= FRESH_NEWS_HOURS
+    near_earnings = 0 <= d.days_to_earnings <= 7
+    try:
+        filing_age = float(d.recent_filings[0].get("age_days", -1))
+    except (IndexError, TypeError, ValueError, AttributeError):
+        filing_age = -1.0
+    fresh_filing = 0 <= filing_age <= 7
+    return bool(fresh_headline or near_earnings or fresh_filing)
+
+
 def hard_risk_reason(d: "Dossier") -> str:
     """Fail-closed gates that neither a high score nor an LLM may override."""
     if d.error:
@@ -905,6 +928,22 @@ def rank_score(d: "Dossier") -> dict:
             "technical_why": techw, "catalyst_why": catw, "trade_why": tw}
 
 
+def mechanical_setup(d: "Dossier", r: dict) -> str:
+    """Return the candidate tier before AI, regime, persistence, or edge policy."""
+    comp, hype = float(r.get("composite", 0)), float(r.get("hype", 0))
+    qual, tech = float(r.get("quality", 0)), float(r.get("technical", 0))
+    cat = float(r.get("catalyst", 0))
+    breakout = d.high20_distance_pct >= -2 and d.close_location >= 0.70
+    dated_catalyst = has_dated_catalyst(d)
+    if (comp >= 66 and hype >= 50 and tech >= 65 and qual >= 42
+            and cat >= 35 and dated_catalyst and breakout):
+        return "STRONG BUY"
+    if (comp >= 56 and hype >= 35 and tech >= 58 and qual >= 35
+            and cat >= 25 and dated_catalyst):
+        return "BUY"
+    return ""
+
+
 def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
     """Turn evidence into a conservative signal. The LLM can veto, never promote."""
     ai = ai or {}
@@ -921,11 +960,18 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
     elif not d.technical_known:
         action, why = "WATCH", "price history is incomplete; no technical confirmation"
     else:
-        breakout = d.high20_distance_pct >= -2 and d.close_location >= 0.70
-        strong_setup = comp >= 66 and hype >= 50 and tech >= 65 and qual >= 42 and (cat >= 25 or breakout)
-        buy_setup = comp >= 56 and hype >= 35 and tech >= 58 and qual >= 35 and (cat >= 18 or breakout)
+        dated_catalyst = has_dated_catalyst(d)
+        # Momentum confirms a real event; it is no longer allowed to impersonate one.
+        # This is deliberately stricter than v1 because the v1 price-only audit showed
+        # -0.87% gross expectancy in the untouched test before costs.
+        setup = mechanical_setup(d, r)
+        strong_setup, buy_setup = setup == "STRONG BUY", setup == "BUY"
         if not (strong_setup or buy_setup):
-            action, why = ("WATCH", "setup needs stronger confirmation") if comp >= 38 else ("AVOID", "risks dominate")
+            if comp >= 38 and not dated_catalyst:
+                action, why = "WATCH", "price/volume move has no dated catalyst; do not chase it"
+            else:
+                action, why = (("WATCH", "setup needs stronger confirmation")
+                               if comp >= 38 else ("AVOID", "risks dominate"))
         elif not ai:
             action, why = "WATCH", "mechanically eligible, awaiting independent AI review"
         elif verdict == "AVOID":
@@ -982,6 +1028,7 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
             "needs_open_recheck": not d.spread_reliable,
             "strategy_id": LIVE_STRATEGY_ID,
             "regime": reg.get("label", "unknown"), "regime_score": reg.get("score", 50.0),
+            "benchmark_price": reg.get("iwm_price", 0.0),
             "edge_status": policy["status"],
             "auto_trade_allowed": execution_authorized}
 

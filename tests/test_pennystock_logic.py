@@ -254,12 +254,116 @@ class PennyStockLogicTests(unittest.TestCase):
                     "ticker": "TEST", "rank": 1, "price": 2.0,
                     "composite": 70, "hype": 70, "technical": 70,
                     "catalyst": 60, "quality": 60, "tradeability": 90,
+                    "spread_pct": 1.0, "spread_estimated": False,
+                    "confirmation": {"confirmed": True, "observations": 2},
                     "signal": {"action": "BUY", "stop": 1.8,
+                               "candidate_action": "BUY",
                                "target1": 2.3, "target2": 2.5},
                 }]
                 bot._record_signals(board)
                 bot._record_signals(board)
                 self.assertEqual(len(bot.signal_log), 1)
+
+    def test_price_breakout_without_dated_catalyst_stays_watch(self):
+        d = complete_dossier(
+            fresh_news_count=0, latest_news_age_hours=-1,
+            days_to_earnings=-1, recent_filings=[],
+        )
+        rank = {"composite": 85, "hype": 85, "quality": 80,
+                "tradeability": 95, "technical": 90, "catalyst": 0}
+        with mock.patch.object(research, "edge_policy", return_value={
+            "status": "VALIDATED", "auto_trade_allowed": True,
+            "strategy_id": research.LIVE_STRATEGY_ID,
+        }):
+            signal = research.signal_from(d, rank, {
+                "verdict": "SPECULATIVE_BUY", "conviction": "high", "score": 90,
+            })
+        self.assertEqual(signal["action"], "WATCH")
+        self.assertIn("no dated catalyst", signal["why"])
+
+    def test_setup_requires_two_separated_observations_and_resets_a_chase(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            paper, "STATE_PATH", os.path.join(tmp, "state.json")
+        ):
+            bot = paper.PennyStockPaperBot()
+
+        def board(price):
+            return [{
+                "ticker": "TEST", "price": price, "catalyst_key": "news-1",
+                "signal": {"action": "RESEARCH", "candidate_action": "BUY"},
+            }]
+
+        first = board(2.0)
+        bot._update_setup_states(first, now=1_000)
+        self.assertFalse(first[0]["confirmation"]["confirmed"])
+        second = board(2.02)
+        bot._update_setup_states(second, now=1_045)
+        self.assertTrue(second[0]["confirmation"]["confirmed"])
+
+        chased = board(2.20)
+        bot._update_setup_states(chased, now=1_100)
+        self.assertFalse(chased[0]["confirmation"]["confirmed"])
+        self.assertEqual(chased[0]["confirmation"]["observations"], 1)
+        self.assertIn("chased", chased[0]["confirmation"]["reset_reason"])
+
+    def test_research_scan_is_not_blocked_by_paused_entries_or_full_book(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            paper, "STATE_PATH", os.path.join(tmp, "state.json")
+        ):
+            bot = paper.PennyStockPaperBot()
+        bot.enabled = False
+        bot.pos = {str(i): object() for i in range(paper.MAX_OPEN)}
+        bot.last_scan = 700
+        bot.last_full_scan = 900
+        self.assertEqual(bot.scan_plan(True, now=1_000), "pulse")
+
+    def test_forward_stats_use_cost_adjusted_return(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            paper, "STATE_PATH", os.path.join(tmp, "state.json")
+        ):
+            bot = paper.PennyStockPaperBot()
+        bot.signal_log = [{"outcomes": {"5": {
+            "return_pct": 1.0, "net_return_pct": -0.5,
+            "net_excess_return_pct": -1.0, "target1_hit": False,
+            "stop_hit": True,
+        }}}]
+        stats5 = bot.signal_stats()["5"]
+        self.assertEqual(stats5["net_hit_rate"], 0.0)
+        self.assertEqual(stats5["avg_net_return_pct"], -0.5)
+        self.assertEqual(stats5["avg_net_excess_pct"], -1.0)
+        self.assertEqual(stats5["stop_rate"], 100.0)
+
+    def test_forward_validation_counts_signal_days_not_repeated_names(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            paper, "STATE_PATH", os.path.join(tmp, "state.json")
+        ):
+            bot = paper.PennyStockPaperBot()
+        bot.signal_log = []
+        for day in range(10):
+            for name in range(6):
+                bot.signal_log.append({
+                    "ticker": f"T{name}", "signal_day": f"2026-01-{day + 1:02d}",
+                    "outcomes": {"5": {"net_return_pct": 2.0,
+                                         "net_excess_return_pct": 1.0}},
+                })
+        verdict = bot.forward_validation()
+        self.assertEqual(verdict["completed_signals"], 60)
+        self.assertEqual(verdict["signal_days"], 10)
+        self.assertEqual(verdict["status"], "COLLECTING")
+
+    def test_forward_validation_never_unlocks_entries(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            paper, "STATE_PATH", os.path.join(tmp, "state.json")
+        ):
+            bot = paper.PennyStockPaperBot()
+        bot.signal_log = [{
+            "ticker": f"T{day % 35}", "signal_day": f"day-{day:03d}",
+            "outcomes": {"5": {"net_return_pct": 2.0,
+                                 "net_excess_return_pct": 1.0}},
+        } for day in range(70)]
+        verdict = bot.forward_validation()
+        self.assertEqual(verdict["status"], "PROMISING_NOT_VALIDATED")
+        self.assertFalse(verdict["auto_trade_allowed"])
 
 
 if __name__ == "__main__":
@@ -294,6 +398,7 @@ class TestMarketRegime(unittest.TestCase):
         d.technical_known = True
         d.high20_distance_pct = -1.0; d.close_location = 0.85
         d.atr_pct = 8.0
+        d.fresh_news_count = 1; d.latest_news_age_hours = 4.0
         return d
 
     def test_riskoff_blocks_a_buy(self):

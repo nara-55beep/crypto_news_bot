@@ -3877,8 +3877,8 @@ PAPER_HTML = r"""<!doctype html>
   async function loadPenny(){
     let s; try{ s=await(await fetch('/api/penny/state')).json(); }catch(e){ return; }
     const panel=$('penny-panel'); if(!panel) return;
-    const dot = s.enabled ? (s.market_open?'live':'') : 'off';
-    const tgl = s.enabled?'Pause':'Enable'; const tglCls = s.enabled?'on':'off';
+    const dot = s.scanner_always_on ? 'live' : 'off';
+    const tgl = s.enabled?'Pause entries':'Enable entries'; const tglCls = s.enabled?'on':'off';
     const pos = (s.positions||[]).map(p=>
       '<tr><td><b>'+esc(p.ticker)+'</b><div class="sub" style="font-size:10px">'+esc(p.name)+'</div></td>'+
       '<td>'+p.qty+'</td><td>$'+p.entry+'</td><td>$'+p.price+'</td>'+
@@ -3887,15 +3887,20 @@ PAPER_HTML = r"""<!doctype html>
       '<td class="'+(p.pnl>=0?'g':'r')+'">'+fmt(p.pnl)+' ('+p.pnl_pct+'%)</td>'+
       '<td class="sub">'+p.held_days+'d</td></tr>').join('');
     const wl = (s.watchlist||[]).map(w=>{
+      const sig=w.signal||{}, action=sig.action||'--';
       const v = w.rejected ? '<span class="badge" style="background:#7f1d1d">REJECTED</span>'
-             : (w.verdict==='SPECULATIVE_BUY' ? '<span class="badge live">SPEC BUY</span>'
-             : w.verdict==='WATCH' ? '<span class="badge">WATCH</span>'
-             : '<span class="badge" style="background:#374151">'+esc(w.verdict||'-')+'</span>');
-      const why = w.rejected ? esc(w.rejected) : esc(w.thesis||'');
+             : (action==='BUY'||action==='STRONG BUY' ? '<span class="badge live">'+esc(action)+'</span>'
+             : action==='RESEARCH' ? '<span class="badge" style="background:#1d4f73">RESEARCH</span>'
+             : action==='WATCH' ? '<span class="badge">WATCH</span>'
+             : '<span class="badge" style="background:#374151">'+esc(action)+'</span>');
+      const cf=w.confirmation||{};
+      const why = w.rejected ? esc(w.rejected) : esc(sig.why||'');
       const cat = (w.catalysts||[]).length ? '<div class="sub" style="color:#fbbf24;font-size:10px">'+esc(w.catalysts[0])+'</div>':'';
       return '<tr><td><b>'+esc(w.ticker)+'</b></td><td>$'+w.price+'</td>'+
              '<td class="'+(w.spread_pct>4?'r':'')+'">'+w.spread_pct+'%</td>'+
-             '<td>'+v+'</td><td class="sub">'+why+cat+'</td></tr>';}).join('');
+             '<td>'+v+(sig.candidate_action==='BUY'||sig.candidate_action==='STRONG BUY'
+               ?'<div class="sub">confirm '+(cf.observations||0)+'/'+(cf.required||2)+'</div>':'')+
+             '</td><td class="sub">'+why+cat+'</td></tr>';}).join('');
     const hist = (s.history||[]).slice(0,12).map(h=>
       '<tr><td><b>'+esc(h.ticker)+'</b></td><td>'+h.qty+'</td><td>$'+h.entry+'</td><td>$'+h.exit+'</td>'+
       '<td class="'+(h.pnl>=0?'g':'r')+'">'+fmt(h.pnl)+' ('+h.pnl_pct+'%)</td>'+
@@ -3903,6 +3908,8 @@ PAPER_HTML = r"""<!doctype html>
     panel.innerHTML =
       '<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">AI Penny Stock (paper)</span>'+
         '<span class="badge">US penny stocks - '+esc(s.ai_model||'AI')+'</span>'+
+        '<span class="badge live">scanner live</span>'+
+        '<span class="badge">'+(s.enabled?'entries on':'entries paused')+'</span>'+
         '<span class="badge '+(s.market_open?'live':'')+'">'+(s.market_open?'market open':'market closed')+'</span>'+
         '<span class="spacer"></span>'+
         '<button class="btn '+tglCls+'" onclick="togglePenny()">'+tgl+'</button>'+
@@ -3912,7 +3919,11 @@ PAPER_HTML = r"""<!doctype html>
       '<div class="sub" style="padding:7px 14px">'+esc(s.status||'')+'</div>'+
       '<div class="sub" style="padding:0 14px 6px">open '+s.open_count+'/'+s.max_open+
         ' - scans '+s.scan_count+' - today '+fmt(s.day_pnl)+
+        ' - next scan '+(s.scan_in_progress?'running':(s.next_scan_in_sec||0)+'s')+
         ' - <span style="color:#f87171">spread paid '+fmt(-Math.abs(s.spread_paid||0))+'</span></div>'+
+      '<div class="sub" style="padding:0 14px 6px">forward edge: '+
+        esc((s.forward_validation||{}).status||'COLLECTING')+' - '+
+        esc((s.forward_validation||{}).reason||'waiting for evidence')+'</div>'+
       '<div class="sub" style="padding:0 14px 8px;color:#fbbf24">'+esc(s.rules||'')+'</div>'+
       (s.last_error?'<div class="sub" style="padding:0 14px 8px;color:var(--red)">'+esc(s.last_error)+'</div>':'')+
       '<div class="sub" style="padding:0 14px 10px;color:#9ca3af">'+esc(s.note||'')+'</div>'+
@@ -3925,7 +3936,7 @@ PAPER_HTML = r"""<!doctype html>
       '<div class="ph">Activity</div><div class="feed">'+logBlock(s)+'</div>';
   }
   async function togglePenny(){ let s; try{s=await(await fetch('/api/penny/state')).json();}catch(e){return;} await fetch('/api/penny/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadPenny(); }
-  async function resetPenny(){ if(!confirm('Reset the AI penny stock paper account to $10,000?'))return; await fetch('/api/penny/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadPenny(); }
+  async function resetPenny(){ if(!confirm('Reset the AI penny stock paper account to $100?'))return; await fetch('/api/penny/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadPenny(); }
   async function pennyScan(){ await fetch('/api/penny/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadPenny(); }
   async function loadNewsPaper(){
     let s; try{ s=await(await fetch('/api/newspaper/state')).json(); }catch(e){ return; }

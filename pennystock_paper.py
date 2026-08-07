@@ -55,15 +55,37 @@ TRAIL_ARM_PCT = 12.0       # once up this much, trail
 TRAIL_PCT = 8.0            # trail distance from the high-water mark
 MAX_HOLD_DAYS = 10
 
-SCAN_EVERY_SEC = 30 * 60   # rescan for new candidates
-MARK_EVERY_SEC = 60        # re-price open positions
+# The scanner has two gears.  A cheap pulse watches movers repeatedly while a full
+# breadth pass refreshes the whole board.  Research runs even when new paper entries
+# are paused; otherwise the forward sample is selection-biased and opportunities are
+# missed whenever the portfolio is full.
+REGULAR_SCAN_SEC = 2 * 60
+HOT_SCAN_SEC = 60
+EXTENDED_SCAN_SEC = 5 * 60
+CLOSED_SCAN_SEC = 30 * 60
+FULL_SCAN_SEC = 15 * 60
+MARK_EVERY_SEC = 20         # protective exits must not wait for a long market scan
+LOOP_TICK_SEC = 5
 TOP_N = 20                 # leaderboard size
 SCREEN_POOL = 60           # how many raw candidates to score before ranking
+PULSE_SCREEN_POOL = 24
+PULSE_SCORE_LIMIT = 32
+DOSSIER_CONCURRENCY = 4    # bounded: faster than serial without a provider stampede
 AI_DEEP_DIVE = 10          # only the top setups get an AI call (free-tier token budget)
-RETRY_EMPTY_SEC = 5 * 60    # if a scan finds nothing, try again in 5 min not 30
+RETRY_EMPTY_SEC = 5 * 60
+MAX_PROVIDER_BACKOFF_SEC = 30 * 60
+AI_CACHE_SEC = 45 * 60
+AI_ERROR_CACHE_SEC = 5 * 60
+AI_MATERIAL_PRICE_PCT = 4.0
+AI_MATERIAL_SCORE_POINTS = 7.0
+CONFIRM_SCANS = 2
+CONFIRM_MIN_SEC = 45
+CONFIRM_MAX_GAP_SEC = 20 * 60
+CONFIRM_MAX_CHASE_PCT = 5.0
+SETUP_TTL_SEC = 2 * 60 * 60
 OUTCOME_UPDATE_SEC = 60 * 60
 SIGNAL_HORIZONS = (1, 5, 10)
-SIGNAL_ENGINE_VERSION = 3
+SIGNAL_ENGINE_VERSION = 4
 
 
 @dataclass
@@ -103,12 +125,22 @@ class PennyStockPaperBot:
         self.watchlist: list[dict] = []      # latest AI verdicts, incl. the rejects
         self.status = "idle"
         self.last_scan = 0.0
+        self.last_scan_started = 0.0
         self.last_error = ""
         self.day_key = ""
         self.day_pnl = 0.0
         self.scan_count = 0
         self.signal_log: list[dict] = []
         self.last_outcome_update = 0.0
+        self.last_full_scan = 0.0
+        self.last_scan_duration = 0.0
+        self.last_scan_mode = "none"
+        self.scan_failures = 0
+        self.provider_backoff_until = 0.0
+        self.setup_states: dict[str, dict] = {}
+        self._ai_cache: dict[str, dict] = {}
+        self._scan_task: asyncio.Task | None = None
+        self._last_mark = 0.0
         self._was_market_open = False
         self._scan_lock = asyncio.Lock()
         self._load()
@@ -127,6 +159,8 @@ class PennyStockPaperBot:
                     "day_key": self.day_key, "day_pnl": self.day_pnl,
                     "scan_count": self.scan_count,
                     "signal_log": self.signal_log[:400],
+                    "last_full_scan": self.last_full_scan,
+                    "setup_states": self.setup_states,
                 }, f)
             os.replace(tmp, STATE_PATH)
         except Exception:
@@ -147,6 +181,12 @@ class PennyStockPaperBot:
             self.day_key = str(d.get("day_key", ""))
             self.day_pnl = float(d.get("day_pnl", 0.0))
             self.scan_count = int(d.get("scan_count", 0))
+            self.last_full_scan = float(d.get("last_full_scan", 0.0))
+            self.setup_states = {
+                str(k): v for k, v in (d.get("setup_states") or {}).items()
+                if isinstance(v, dict)
+                and int(v.get("engine_version", 0)) == SIGNAL_ENGINE_VERSION
+            }
             # Version 1 observations include signals produced by the old rule that
             # could promote an AI WATCH to BUY. They are invalid training/evaluation
             # data and must not contaminate forward accuracy statistics.
@@ -164,6 +204,172 @@ class PennyStockPaperBot:
     @staticmethod
     def market_open() -> bool:
         return research.us_market_open()
+
+    @staticmethod
+    def session_phase(is_open: bool, now: datetime | None = None) -> str:
+        """Regular/extended/closed clock used only for research cadence.
+
+        The provider's holiday-aware market status remains authoritative for fills.
+        Clock-derived pre/post labels may cause an extra research scan on a holiday,
+        but can never authorize an order.
+        """
+        if is_open:
+            return "regular"
+        n = (now or datetime.now(NY)).astimezone(NY)
+        minute = n.hour * 60 + n.minute
+        if n.weekday() < 5 and 4 * 60 <= minute < 9 * 60 + 30:
+            return "premarket"
+        if n.weekday() < 5 and 16 * 60 <= minute < 20 * 60:
+            return "afterhours"
+        return "closed"
+
+    def hot_setup_count(self, now: float | None = None) -> int:
+        """Unconfirmed candidates get the fastest follow-up scan."""
+        now = time.time() if now is None else now
+        return sum(
+            1 for st in self.setup_states.values()
+            if st.get("candidate") and not st.get("confirmed")
+            and now - float(st.get("last_seen", 0)) <= CONFIRM_MAX_GAP_SEC
+        )
+
+    def scan_interval(self, is_open: bool, now: float | None = None) -> int:
+        phase = self.session_phase(is_open)
+        if phase == "regular":
+            return HOT_SCAN_SEC if self.hot_setup_count(now) else REGULAR_SCAN_SEC
+        if phase in ("premarket", "afterhours"):
+            return EXTENDED_SCAN_SEC
+        return CLOSED_SCAN_SEC
+
+    def scan_plan(self, is_open: bool, now: float | None = None,
+                  force: bool = False) -> str | None:
+        """Return ``full``/``pulse`` when due, independent of entry capacity."""
+        now = time.time() if now is None else now
+        if self._scan_lock.locked() or now < self.provider_backoff_until:
+            return None
+        anchor = self.last_scan_started or self.last_scan
+        if force or anchor <= 0:
+            return "full"
+        if now - anchor < self.scan_interval(is_open, now):
+            return None
+        if self.last_full_scan <= 0 or now - self.last_full_scan >= FULL_SCAN_SEC:
+            return "full"
+        return "pulse"
+
+    @staticmethod
+    def _catalyst_key(d) -> str:
+        news = "|".join(str(x.get("title") or "") for x in (d.news or [])[:3])
+        filings = "|".join(
+            f"{x.get('date','')}:{x.get('type','')}" for x in (d.recent_filings or [])[:3]
+        )
+        return f"{news}::{filings}::{d.earnings_date}::{int(d.recent_offering)}"
+
+    def _cached_ai(self, d, score: float) -> tuple[dict | None, str, bool]:
+        """Reuse an analyst verdict only while its facts and price remain immaterially changed."""
+        item = self._ai_cache.get(d.ticker)
+        if not item:
+            return None, "", False
+        ttl = AI_ERROR_CACHE_SEC if item.get("error") else AI_CACHE_SEC
+        age = time.time() - float(item.get("t", 0))
+        old_price = float(item.get("price", 0))
+        price_move = abs(d.price / old_price - 1) * 100 if old_price > 0 else 999.0
+        score_move = abs(float(score) - float(item.get("score", 0)))
+        if (age > ttl or price_move >= AI_MATERIAL_PRICE_PCT
+                or score_move >= AI_MATERIAL_SCORE_POINTS
+                or item.get("catalyst_key") != self._catalyst_key(d)):
+            return None, "", False
+        return item.get("ai"), str(item.get("error") or ""), True
+
+    def _store_ai(self, d, score: float, ai: dict | None, error: str):
+        self._ai_cache[d.ticker] = {
+            "t": time.time(), "price": d.price, "score": float(score),
+            "catalyst_key": self._catalyst_key(d), "ai": ai,
+            "error": str(error or "")[:160],
+        }
+        # The cache is operational, not evidence. Bound it independently of the board.
+        if len(self._ai_cache) > 100:
+            oldest = sorted(self._ai_cache, key=lambda k: self._ai_cache[k].get("t", 0))
+            for key in oldest[:-100]:
+                self._ai_cache.pop(key, None)
+
+    def _update_setup_states(self, board: list[dict], now: float | None = None):
+        """Require persistence across separated observations before entry/logging.
+
+        One noisy quote can create a pretty score.  Two observations at least 45s
+        apart, with the same catalyst and without chasing >5%, are a stronger event.
+        This is a debounce/risk control, not a claim of statistical edge.
+        """
+        now = time.time() if now is None else now
+        for b in board:
+            ticker = b["ticker"]
+            sig = b.get("signal") or {}
+            candidate = sig.get("candidate_action") in ("BUY", "STRONG BUY")
+            prior = self.setup_states.get(ticker) or {}
+            price = float(b.get("price") or 0)
+            catalyst_key = str(b.get("catalyst_key") or "")
+            hits = 0
+            first_seen = now
+            first_price = price
+            reset_reason = ""
+
+            if candidate:
+                gap = now - float(prior.get("last_seen", 0))
+                same_thesis = catalyst_key == str(prior.get("catalyst_key") or "")
+                old_first = float(prior.get("first_price", 0))
+                chase = ((price / old_first - 1) * 100
+                         if old_first > 0 and price > 0 else 0.0)
+                can_continue = (
+                    prior.get("candidate") and same_thesis
+                    and 0 <= gap <= CONFIRM_MAX_GAP_SEC
+                    and chase <= CONFIRM_MAX_CHASE_PCT
+                )
+                if can_continue:
+                    hits = int(prior.get("hits", 1))
+                    first_seen = float(prior.get("first_seen", now))
+                    first_price = old_first or price
+                    if gap >= CONFIRM_MIN_SEC:
+                        hits += 1
+                else:
+                    hits = 1
+                    if prior.get("candidate") and not same_thesis:
+                        reset_reason = "catalyst changed"
+                    elif prior.get("candidate") and chase > CONFIRM_MAX_CHASE_PCT:
+                        reset_reason = f"price chased {chase:.1f}% since detection"
+
+            confirmed = bool(candidate and hits >= CONFIRM_SCANS)
+            state = {
+                "engine_version": SIGNAL_ENGINE_VERSION,
+                "candidate": candidate, "confirmed": confirmed, "hits": hits,
+                "first_seen": first_seen, "last_seen": now,
+                "first_price": first_price, "last_price": price,
+                "catalyst_key": catalyst_key,
+                "candidate_action": sig.get("candidate_action"),
+                "reset_reason": reset_reason,
+            }
+            self.setup_states[ticker] = state
+            confirmation = {
+                "state": ("confirmed" if confirmed else "detected" if candidate
+                          else "not_eligible"),
+                "confirmed": confirmed, "observations": hits,
+                "required": CONFIRM_SCANS, "first_seen": first_seen,
+                "reset_reason": reset_reason,
+            }
+            b["confirmation"] = confirmation
+            sig["confirmed"] = confirmed
+            sig["confirmation_observations"] = hits
+            if candidate and not confirmed:
+                sig["why"] = (
+                    f"setup detected {hits}/{CONFIRM_SCANS}; waiting for a separated "
+                    "confirmation scan before any entry"
+                )
+                # A future validated policy may otherwise expose a BUY before the
+                # persistence gate. RESEARCH already means track-only and stays so.
+                if sig.get("action") in ("BUY", "STRONG BUY"):
+                    sig["action"] = "WATCH"
+
+        cutoff = now - SETUP_TTL_SEC
+        for ticker in list(self.setup_states):
+            if float(self.setup_states[ticker].get("last_seen", 0)) < cutoff:
+                self.setup_states.pop(ticker, None)
 
     # ---------------- risk gates (run BEFORE the AI) ----------------
     def hard_reject(self, d) -> str:
@@ -327,53 +533,73 @@ class PennyStockPaperBot:
                 self.last_error = f"mark {ticker}: {type(e).__name__}"
             await asyncio.sleep(0.3)
 
-    async def _scan(self):
+    async def _scan(self, mode: str = "full"):
         """Serialize manual, startup, and scheduled scans within this process."""
         if self._scan_lock.locked():
             self._note("scan request ignored: a scan is already in progress", "info")
             return
         async with self._scan_lock:
-            await self._scan_locked()
+            await self._scan_locked(mode)
 
-    async def _scan_locked(self):
+    async def _scan_locked(self, mode: str = "full"):
         """Screen wide -> score everything -> rank -> AI-review the top -> signal -> trade.
 
         Only the top few get an AI call: the free tier has a daily token budget, and
         spending it on the 40th-ranked name is waste. Everything still gets a
         mechanical score, so the leaderboard is complete.
         """
-        self.status = "screening the market..."
+        mode = "pulse" if mode == "pulse" else "full"
+        started = time.time()
+        self.last_scan_started = started
+        self.last_scan_mode = mode
+        self.status = f"{mode} screening the market..."
         try:
-            syms = await asyncio.to_thread(research.screen, SCREEN_POOL)
+            pool = SCREEN_POOL if mode == "full" else PULSE_SCREEN_POOL
+            fresh = await asyncio.to_thread(research.screen, pool)
+            if mode == "pulse":
+                # Keep confirming prior candidates while reserving most of the pulse
+                # for fresh movers returned by the live screener.
+                priority = [
+                    str(w.get("ticker") or "") for w in self.watchlist
+                    if (w.get("signal") or {}).get("candidate_action")
+                    in ("BUY", "STRONG BUY")
+                ]
+                syms = list(dict.fromkeys(priority + fresh))[:PULSE_SCORE_LIMIT]
+            else:
+                syms = fresh
         except Exception as e:
             self.last_error = f"screen: {type(e).__name__}: {str(e)[:90]}"
             self._note(self.last_error, "loss")
-            self.last_scan = time.time() - SCAN_EVERY_SEC + RETRY_EMPTY_SEC
+            self._scan_failed(started)
             return
         if not syms:
             self.last_error = "screener returned no candidates"
             self._note(self.last_error, "info")
-            self.last_scan = time.time() - SCAN_EVERY_SEC + RETRY_EMPTY_SEC
-            self.scan_count += 1
+            self._scan_failed(started, empty=True)
             return
 
         # ---- 1) mechanical scoring pass over the whole pool ----
-        scored = []
-        for i, sym in enumerate(syms):
-            self.status = f"scoring {i+1}/{len(syms)}: {sym}"
+        async def score_one(sym):
             try:
                 d = await asyncio.to_thread(research.build_dossier, sym)
                 if d.error or d.price <= 0:
-                    continue
+                    return None
                 r = research.rank_score(d)
-                scored.append((r["composite"], d, r))
+                return r["composite"], d, r
             except Exception as e:
                 self.last_error = f"score {sym}: {type(e).__name__}"
+                return None
+
+        scored = []
+        for start in range(0, len(syms), DOSSIER_CONCURRENCY):
+            batch = syms[start:start + DOSSIER_CONCURRENCY]
+            self.status = f"scoring {start + 1}-{start + len(batch)}/{len(syms)}"
+            results = await asyncio.gather(*(score_one(sym) for sym in batch))
+            scored.extend(x for x in results if x is not None)
             await asyncio.sleep(0.15)
         if not scored:
             self.last_error = "no candidates could be scored"
-            self.last_scan = time.time() - SCAN_EVERY_SEC + RETRY_EMPTY_SEC
-            self.scan_count += 1
+            self._scan_failed(started, empty=True)
             return
 
         scored.sort(key=lambda x: -x[0])
@@ -385,19 +611,23 @@ class PennyStockPaperBot:
         for rank, (comp, d, r) in enumerate(top, start=1):
             ai, ai_err = None, ""
             rejected = self.hard_reject(d)
-            if reviews < AI_DEEP_DIVE and not rejected and comp >= 38:
+            eligible = research.mechanical_setup(d, r)
+            if reviews < AI_DEEP_DIVE and not rejected and eligible:
                 self.status = f"AI reviewing #{rank} {d.ticker}..."
-                try:
-                    # Review the same snapshot that was ranked. Re-fetching here
-                    # used to let the AI and mechanical engine see different facts.
-                    res = await research.analyse_dossier(d)
-                    ai, ai_err = res.get("ai"), res.get("ai_error", "")
-                    if ai_err:
-                        self.last_error = ai_err[:140]
-                except Exception as e:
-                    ai_err = f"{type(e).__name__}: {str(e)[:80]}"
-                reviews += 1
-                await asyncio.sleep(2.5)
+                ai, ai_err, cached = self._cached_ai(d, comp)
+                if not cached:
+                    try:
+                        # Review the same snapshot that was ranked. Re-fetching here
+                        # used to let the AI and mechanical engine see different facts.
+                        res = await research.analyse_dossier(d)
+                        ai, ai_err = res.get("ai"), res.get("ai_error", "")
+                        if ai_err:
+                            self.last_error = ai_err[:140]
+                    except Exception as e:
+                        ai_err = f"{type(e).__name__}: {str(e)[:80]}"
+                    self._store_ai(d, comp, ai, ai_err)
+                    reviews += 1
+                    await asyncio.sleep(2.5)
             sig = research.signal_from(d, r, ai)
             spread, spread_estimated = research.effective_spread(d)
             board.append({
@@ -417,12 +647,21 @@ class PennyStockPaperBot:
                 "trade_why": r["trade_why"], "data_completeness": d.data_completeness,
                 "signal": sig, "ai": ai, "ai_error": ai_err,
                 "rejected": rejected, "catalysts": d.catalysts[:5], "flags": d.flags[:6],
+                "catalyst_key": self._catalyst_key(d),
+                "quote_reliable": d.spread_reliable,
                 "held": d.ticker in self.pos, "t": time.time(),
             })
 
+        self._update_setup_states(board)
         self.watchlist = board
         self.scan_count += 1
         self.last_scan = time.time()
+        if mode == "full":
+            self.last_full_scan = self.last_scan
+        self.last_scan_duration = round(self.last_scan - started, 2)
+        self.scan_failures = 0
+        self.provider_backoff_until = 0.0
+        self.last_error = ""
         self._record_signals(board)
 
         # ---- 3) trade every actionable name we can ----
@@ -437,6 +676,9 @@ class PennyStockPaperBot:
                     "info",
                 )
             return
+        if not self.enabled:
+            self._note("research updated; new paper entries are paused", "info")
+            return
         if self.day_pnl <= -self.equity() * DAILY_LOSS_LIMIT_PCT / 100.0:
             self._note("daily loss limit hit - no new entries today", "loss")
             return
@@ -447,6 +689,8 @@ class PennyStockPaperBot:
                 continue
             if b["signal"]["action"] not in ("BUY", "STRONG BUY"):
                 continue
+            if not (b.get("confirmation") or {}).get("confirmed"):
+                continue
             try:
                 d = await asyncio.to_thread(research.build_dossier, b["ticker"])
                 if not d.error and d.price > 0:
@@ -454,6 +698,18 @@ class PennyStockPaperBot:
             except Exception as e:
                 self.last_error = f"open {b['ticker']}: {type(e).__name__}"
             await asyncio.sleep(0.3)
+
+    def _scan_failed(self, started: float, empty: bool = False):
+        """Record bounded exponential provider backoff without stopping the loop."""
+        now = time.time()
+        self.last_scan = now
+        self.last_scan_duration = round(now - started, 2)
+        self.scan_count += 1
+        self.scan_failures += 1
+        base = RETRY_EMPTY_SEC if empty else 60
+        delay = min(MAX_PROVIDER_BACKOFF_SEC, base * (2 ** (self.scan_failures - 1)))
+        self.provider_backoff_until = now + delay
+        self.status = f"provider backoff {int(delay // 60)}m"
 
     def _record_signals(self, board):
         """Log every actionable signal with the price at the time, so we can later
@@ -463,8 +719,9 @@ class PennyStockPaperBot:
         for b in board:
             act = b["signal"]["action"]
             candidate_action = b["signal"].get("candidate_action", act)
-            if candidate_action in ("BUY", "STRONG BUY"):
-                # One observation per ticker/session. Repeated 30-minute scans are
+            confirmed = bool((b.get("confirmation") or {}).get("confirmed"))
+            if candidate_action in ("BUY", "STRONG BUY") and confirmed:
+                # One observation per ticker/session. Repeated adaptive scans are
                 # correlated duplicates, not independent evidence of accuracy.
                 if any(x.get("ticker") == b["ticker"] and x.get("signal_day") == signal_day
                        for x in self.signal_log):
@@ -472,10 +729,17 @@ class PennyStockPaperBot:
                 self.signal_log.insert(0, {
                     "id": uuid.uuid4().hex[:10], "t": now, "signal_day": signal_day,
                     "engine_version": SIGNAL_ENGINE_VERSION,
+                    "strategy_id": research.LIVE_STRATEGY_ID,
                     "ticker": b["ticker"], "action": act,
                     "candidate_action": candidate_action,
+                    "confirmed": True,
+                    "confirmation_observations": (b.get("confirmation") or {}).get("observations"),
                     "executed": act in ("BUY", "STRONG BUY"),
                     "rank": b["rank"], "price": b["price"],
+                    "modeled_round_trip_cost_pct": b.get("spread_pct"),
+                    "cost_is_proxy": bool(b.get("spread_estimated")),
+                    "benchmark_ticker": "IWM",
+                    "benchmark_price": b["signal"].get("benchmark_price"),
                     "stop": b["signal"].get("stop"), "target1": b["signal"].get("target1"),
                     "target2": b["signal"].get("target2"),
                     "composite": b["composite"], "hype": b["hype"],
@@ -486,7 +750,7 @@ class PennyStockPaperBot:
         self.signal_log = self.signal_log[:400]
 
     async def _update_signal_outcomes(self):
-        """Attach causal 1/5/10-session returns to prior signals."""
+        """Attach causal, cost-adjusted 1/5/10-session returns to prior signals."""
         pending = [x for x in self.signal_log if not x.get("resolved") and x.get("signal_day")]
         if not pending or research.yf is None:
             self.last_outcome_update = time.time()
@@ -500,6 +764,13 @@ class PennyStockPaperBot:
         by_ticker = {}
         for item in pending:
             by_ticker.setdefault(item["ticker"], []).append(item)
+        benchmark = None
+        try:
+            benchmark = await asyncio.to_thread(fetch_history, "IWM")
+            if benchmark is not None and not benchmark.empty:
+                benchmark = benchmark.dropna(subset=["Close"])
+        except Exception:
+            benchmark = None
         for ticker, items in by_ticker.items():
             try:
                 hist = await asyncio.to_thread(fetch_history, ticker)
@@ -519,8 +790,33 @@ class PennyStockPaperBot:
                             continue
                         rows = hist.iloc[indices[:horizon]]
                         end_close = float(rows.iloc[-1]["Close"])
+                        gross = (end_close / entry - 1) * 100
+                        cost = max(0.0, float(item.get("modeled_round_trip_cost_pct") or 0))
+                        bench_return = None
+                        if benchmark is not None and not benchmark.empty:
+                            bench_dates = [x.date().isoformat() for x in benchmark.index]
+                            bench_idx = [i for i, day in enumerate(bench_dates)
+                                         if day > item["signal_day"]]
+                            if len(bench_idx) >= horizon:
+                                # Use the same signal snapshot convention as the stock:
+                                # signal-day close to the matching future close.
+                                prior_rows = [i for i, day in enumerate(bench_dates)
+                                              if day <= item["signal_day"]]
+                                if prior_rows:
+                                    bench_entry = float(item.get("benchmark_price") or 0)
+                                    if bench_entry <= 0:
+                                        bench_entry = float(benchmark.iloc[prior_rows[-1]]["Close"])
+                                    bench_end = float(benchmark.iloc[bench_idx[horizon - 1]]["Close"])
+                                    if bench_entry > 0:
+                                        bench_return = (bench_end / bench_entry - 1) * 100
                         outcomes[key] = {
-                            "return_pct": round((end_close / entry - 1) * 100, 2),
+                            "return_pct": round(gross, 2),
+                            "gross_return_pct": round(gross, 2),
+                            "net_return_pct": round(gross - cost, 2),
+                            "benchmark_return_pct": (round(bench_return, 2)
+                                                     if bench_return is not None else None),
+                            "net_excess_return_pct": (round(gross - cost - bench_return, 2)
+                                                      if bench_return is not None else None),
                             "max_gain_pct": round((float(rows["High"].max()) / entry - 1) * 100, 2),
                             "max_drawdown_pct": round((float(rows["Low"].min()) / entry - 1) * 100, 2),
                             "target1_hit": bool(item.get("target1") and float(rows["High"].max()) >= float(item["target1"])),
@@ -537,55 +833,157 @@ class PennyStockPaperBot:
         for horizon in SIGNAL_HORIZONS:
             values = [x.get("outcomes", {}).get(str(horizon)) for x in self.signal_log]
             values = [x for x in values if isinstance(x, dict)]
-            returns = [float(x.get("return_pct", 0)) for x in values]
+            returns = [float(x.get("net_return_pct", x.get("return_pct", 0))) for x in values]
+            excess = [float(x["net_excess_return_pct"]) for x in values
+                      if x.get("net_excess_return_pct") is not None]
             stats[str(horizon)] = {
                 "count": len(values),
+                "net_hit_rate": round(100 * sum(r > 0 for r in returns) / len(returns), 1) if returns else 0.0,
                 "hit_rate": round(100 * sum(r > 0 for r in returns) / len(returns), 1) if returns else 0.0,
+                "avg_net_return_pct": round(sum(returns) / len(returns), 2) if returns else 0.0,
                 "avg_return_pct": round(sum(returns) / len(returns), 2) if returns else 0.0,
+                "avg_net_excess_pct": round(sum(excess) / len(excess), 2) if excess else None,
                 "target1_rate": round(100 * sum(bool(x.get("target1_hit")) for x in values) / len(values), 1) if values else 0.0,
+                "stop_rate": round(100 * sum(bool(x.get("stop_hit")) for x in values) / len(values), 1) if values else 0.0,
             }
         return stats
+
+    @staticmethod
+    def _hac_mean_ci(values: list[float], max_lag: int = 5) -> tuple[float, float, float]:
+        """Mean and a Newey-West 95% interval for serially dependent signal days."""
+        n = len(values)
+        if not n:
+            return 0.0, 0.0, 0.0
+        mean = sum(values) / n
+        if n == 1:
+            return mean, mean, mean
+        dev = [x - mean for x in values]
+        gamma0 = sum(x * x for x in dev) / n
+        long_run_var = gamma0
+        lag_cap = min(max_lag, n - 1)
+        for lag in range(1, lag_cap + 1):
+            covariance = sum(dev[i] * dev[i - lag] for i in range(lag, n)) / n
+            weight = 1.0 - lag / (lag_cap + 1.0)
+            long_run_var += 2.0 * weight * covariance
+        se = math.sqrt(max(0.0, long_run_var) / n)
+        return mean, mean - 1.96 * se, mean + 1.96 * se
+
+    def forward_validation(self, horizon: str = "5") -> dict:
+        """Prospective evidence for v2, grouped by signal day to avoid fake sample size.
+
+        This can report PROMISING or REJECTED, never authorize trading.  A live paper
+        sample still lacks a licensed point-in-time universe and real fills, so the
+        reproducible edge-policy audit remains the only execution gate.
+        """
+        completed = []
+        for item in self.signal_log:
+            outcome = (item.get("outcomes") or {}).get(str(horizon))
+            if isinstance(outcome, dict) and outcome.get("net_return_pct") is not None:
+                completed.append((item, outcome))
+
+        by_day: dict[str, list[tuple[dict, dict]]] = {}
+        for item, outcome in completed:
+            by_day.setdefault(str(item.get("signal_day") or "unknown"), []).append((item, outcome))
+
+        daily_net, daily_excess = [], []
+        for day in sorted(by_day):
+            rows = by_day[day]
+            nets = [float(outcome["net_return_pct"]) for _, outcome in rows]
+            excess = [float(outcome["net_excess_return_pct"]) for _, outcome in rows
+                      if outcome.get("net_excess_return_pct") is not None]
+            if nets:
+                daily_net.append(sum(nets) / len(nets))
+            if excess:
+                daily_excess.append(sum(excess) / len(excess))
+
+        mean, lo, hi = self._hac_mean_ci(daily_net)
+        ex_mean, ex_lo, ex_hi = self._hac_mean_ci(daily_excess)
+        required_days = 60
+        enough_excess = len(daily_excess) >= math.ceil(0.8 * required_days)
+        if len(daily_net) < required_days or not enough_excess:
+            status = "COLLECTING"
+            reason = (
+                f"need {required_days} completed signal days with benchmark coverage; "
+                f"have {len(daily_net)} net / {len(daily_excess)} benchmarked"
+            )
+        elif mean <= 0 or ex_mean <= 0 or lo <= 0 or ex_lo <= 0:
+            status = "REJECTED"
+            reason = "forward net edge is non-positive or its dependence-robust 95% interval crosses zero"
+        else:
+            status = "PROMISING_NOT_VALIDATED"
+            reason = "positive after-cost and IWM-relative forward result; formal audit is still required"
+
+        return {
+            "status": status, "auto_trade_allowed": False, "reason": reason,
+            "horizon_sessions": int(horizon), "completed_signals": len(completed),
+            "signal_days": len(daily_net), "benchmarked_days": len(daily_excess),
+            "unique_tickers": len({item.get("ticker") for item, _ in completed}),
+            "mean_net_pct": round(mean, 3),
+            "net_hac_95_pct": [round(lo, 3), round(hi, 3)],
+            "mean_net_excess_pct": round(ex_mean, 3) if daily_excess else None,
+            "excess_hac_95_pct": ([round(ex_lo, 3), round(ex_hi, 3)]
+                                  if daily_excess else None),
+            "cost_proxy_share_pct": (round(100 * sum(bool(item.get("cost_is_proxy"))
+                                                     for item, _ in completed) / len(completed), 1)
+                                      if completed else 0.0),
+            "minimum_signal_days": required_days,
+            "grouping": "equal-weight basket per signal day",
+            "uncertainty": "Newey-West HAC, 5-lag, 95% interval",
+        }
 
     async def manage_loop(self):
         await asyncio.sleep(12)
         while True:
             try:
+                now = time.time()
                 today = datetime.now(NY).strftime("%Y-%m-%d")
                 if today != self.day_key:
                     self.day_key = today
                     self.day_pnl = 0.0
                 is_open = self.market_open()
-                if time.time() - self.last_outcome_update >= OUTCOME_UPDATE_SEC:
+                if now - self.last_outcome_update >= OUTCOME_UPDATE_SEC:
                     await self._update_signal_outcomes()
-                if not self.enabled:
-                    self.status = "paused"
-                else:
-                    # RESEARCH RUNS 24/7 - only order FILLS need the market open,
-                    # because a fill at a stale closing price would be fiction.
-                    if self.pos and is_open:
-                        await self._mark_positions()
-                    # An after-hours setup is never blindly carried into the open.
-                    # Re-screen immediately on the closed->open transition.
-                    just_opened = is_open and not self._was_market_open
-                    if just_opened:
-                        self._note("market opened - revalidating every setup with fresh quotes", "info")
-                    if (just_opened or time.time() - self.last_scan > SCAN_EVERY_SEC) and len(self.pos) < MAX_OPEN:
-                        await self._scan()
+
+                # Pausing controls NEW entries only. Existing risk is always marked and
+                # managed, and research always runs so the forward sample is continuous.
+                if self.pos and is_open and now - self._last_mark >= MARK_EVERY_SEC:
+                    await self._mark_positions()
+                    self._last_mark = time.time()
+
+                if self._scan_task is not None and self._scan_task.done():
+                    try:
+                        self._scan_task.result()
+                    except Exception as e:
+                        self.last_error = f"scan task: {type(e).__name__}: {str(e)[:100]}"
+                        self._note(self.last_error, "loss")
+                        self._scan_failed(time.time())
+                    self._scan_task = None
+
+                # An after-hours setup is never blindly carried into the open.
+                # Force a full re-screen on the closed->open transition.
+                just_opened = is_open and not self._was_market_open
+                if just_opened:
+                    self._note("market opened - revalidating every setup with fresh quotes", "info")
+                    self.provider_backoff_until = 0.0
+                plan = self.scan_plan(is_open, force=just_opened)
+                if plan and self._scan_task is None:
+                    self._scan_task = asyncio.create_task(self._scan(plan))
+
+                if not self._scan_lock.locked():
+                    entry_state = "entries on" if self.enabled else "entries paused"
                     if self.pos:
-                        self.status = f"holding {len(self.pos)}: " + ", ".join(self.pos)
+                        self.status = (f"watching {len(self.pos)} position(s); continuous research, "
+                                       f"{entry_state}")
                     elif is_open:
-                        self.status = "scanning for candidates"
+                        self.status = f"continuous market surveillance; {entry_state}"
                     else:
-                        n = sum(1 for w in self.watchlist
-                                if (w.get("signal") or {}).get("action") in ("BUY", "STRONG BUY"))
-                        self.status = (f"market closed - {n} setup(s) await an opening recheck" if n else
-                                       "market closed - researching (no buy candidates yet)")
+                        self.status = f"continuous {self.session_phase(is_open)} research; {entry_state}"
                 self._was_market_open = is_open
                 self._save()
             except Exception as e:
                 self.last_error = f"{type(e).__name__}: {str(e)[:120]}"
                 self.status = "error"
-            await asyncio.sleep(MARK_EVERY_SEC)
+            await asyncio.sleep(LOOP_TICK_SEC)
 
     # ---------------- api ----------------
     def equity(self) -> float:
@@ -596,7 +994,11 @@ class PennyStockPaperBot:
 
     def set_enabled(self, on: bool):
         self.enabled = bool(on)
-        self._note("bot ENABLED - AI penny stock scanner live" if self.enabled else "bot PAUSED")
+        self._note(
+            "new paper entries ENABLED; continuous scanner remains live"
+            if self.enabled else
+            "new paper entries PAUSED; research and protective exits remain live"
+        )
         self._save()
         return {"ok": True, "enabled": self.enabled}
 
@@ -609,20 +1011,34 @@ class PennyStockPaperBot:
         self.day_pnl = 0.0
         self.scan_count = 0
         self.last_scan = 0.0
+        self.last_scan_started = 0.0
         self.signal_log = []
         self.last_outcome_update = 0.0
+        self.last_full_scan = 0.0
+        self.last_scan_duration = 0.0
+        self.last_scan_mode = "none"
+        self.scan_failures = 0
+        self.provider_backoff_until = 0.0
+        self.setup_states = {}
+        self._ai_cache = {}
         self.last_error = ""          # stale provider errors must not linger
         self._note("bot reset to $100")
         self._save()
         return {"ok": True}
 
     async def scan_now(self):
-        await self._scan()
+        await self._scan("full")
         self._save()
         return {"ok": True, "found": len(self.watchlist)}
 
     def state(self) -> dict:
         eq = self.equity()
+        now = time.time()
+        market_is_open = self.market_open()
+        interval = self.scan_interval(market_is_open, now)
+        anchor = self.last_scan_started or self.last_scan
+        due_at = max(self.provider_backoff_until,
+                     (anchor + interval) if anchor > 0 else now)
         wins = sum(1 for h in self.history if h.get("pnl", 0) > 0)
         n = len(self.history)
         spread_paid = sum(h.get("spread_cost", 0) for h in self.history)
@@ -641,8 +1057,11 @@ class PennyStockPaperBot:
             })
         return {
             "running": True, "enabled": self.enabled, "name": self.NAME,
+            "scanner_always_on": True,
+            "entries_enabled": self.enabled,
             "ai_model": (research.LAST_MODEL_USED or getattr(config, "PENNY_AI_MODEL", "?")),
-            "status": self.status, "market_open": self.market_open(),
+            "status": self.status, "market_open": market_is_open,
+            "session_phase": self.session_phase(market_is_open),
             "balance": round(self.balance, 2), "equity": round(eq, 2),
             "start_balance": START_BALANCE,
             "total_pnl": round(eq - START_BALANCE, 2),
@@ -656,10 +1075,22 @@ class PennyStockPaperBot:
             "open_count": len(self.pos), "max_open": MAX_OPEN,
             "scan_count": self.scan_count,
             "last_scan": self.last_scan,
+            "last_scan_started": self.last_scan_started,
+            "last_full_scan": self.last_full_scan,
+            "last_scan_mode": self.last_scan_mode,
+            "last_scan_duration_sec": self.last_scan_duration,
+            "scan_interval_sec": interval,
+            "next_scan_in_sec": max(0, int(due_at - now)),
+            "scan_in_progress": self._scan_lock.locked(),
+            "scan_failures": self.scan_failures,
+            "provider_backoff_sec": max(0, int(self.provider_backoff_until - now)),
+            "hot_setups": self.hot_setup_count(now),
+            "confirmation_required": CONFIRM_SCANS,
             "positions": positions,
             "watchlist": self.watchlist[:TOP_N],
             "signal_log": self.signal_log[:40],
             "signal_stats": self.signal_stats(),
+            "forward_validation": self.forward_validation(),
             "top_n": TOP_N,
             "regime": research.market_regime(),
             "edge_policy": research.edge_policy(),
@@ -668,14 +1099,19 @@ class PennyStockPaperBot:
             "history": self.history[:40],
             "log": self.log[:25],
             "last_error": self.last_error,
-            "rules": (f"evidence gate must be VALIDATED before any auto-trade; "
+            "rules": (f"always-on adaptive scans ({HOT_SCAN_SEC}s hot / {REGULAR_SCAN_SEC}s regular / "
+                      f"{EXTENDED_SCAN_SEC}s extended / {CLOSED_SCAN_SEC}s closed); "
+                      f"{CONFIRM_SCANS} separated observations and a dated catalyst required; "
+                      f"evidence gate must be VALIDATED before any auto-trade; "
                       f"risk {RISK_PCT}%/trade and {MAX_PORTFOLIO_RISK_PCT}% total, "
                       f"max {MAX_POSITION_PCT}% per name / {MAX_OPEN} open, spread cap {MAX_SPREAD_PCT}%, "
                       f"ATR-scaled stop with 2.5R target / trail {TRAIL_PCT}% after +{TRAIL_ARM_PCT}%, "
                       f"time exit {MAX_HOLD_DAYS}d"),
-            "note": ("Paper fills require a fresh regular-session bid/ask: buy at ask, sell at bid. "
+            "note": ("Research runs continuously even when entries are paused or the book is full. "
+                     "Pausing never disables protective exits. Paper fills require a fresh regular-session "
+                     "bid/ask: buy at ask, sell at bid. "
                      "After-hours cost values are ADV proxies for ranking only. Hard risk gates and "
-                     "technical confirmation run before the AI; the AI may veto but never promote a "
-                     "weak setup. Unvalidated candidates are never filled, but their accuracy is "
-                     "measured at 1/5/10 later sessions."),
+                     "technical/catalyst confirmation run before the AI; the AI may veto but never "
+                     "promote a weak setup. Confirmed unvalidated candidates are never filled, but "
+                     "cost-adjusted and IWM-relative results are measured at 1/5/10 later sessions."),
         }
