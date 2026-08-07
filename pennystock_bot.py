@@ -44,6 +44,7 @@ STATE_PATH = os.path.join(config.DATA_DIR, "pennystock_state.json")
 EDGE_POLICY_PATH = os.path.join(config.DATA_DIR, "pennystock_edge_policy.json")
 EDGE_REPORT_PATH = os.path.join(config.DATA_DIR, "pennystock_edge_report.json")
 LIVE_AUDIT_PATH = os.path.join(config.DATA_DIR, "pennystock_live_rule_audit.json")
+CATALYST_AUDIT_PATH = os.path.join(config.DATA_DIR, "pennystock_catalyst_confirmation.json")
 _EDGE_POLICY_CACHE: tuple[float, dict] = (-1.0, {})
 _LIVE_AUDIT_CACHE: tuple[float, dict] = (-1.0, {})
 
@@ -159,6 +160,25 @@ def live_rule_evidence() -> dict:
                 for k in ("composite", "hype", "technical") if rank.get(k)
             },
         }
+        # The catalyst gate is the desk's current premise, so its own out-of-sample
+        # result belongs next to the rule it replaced rather than sitting at
+        # "COLLECTING" while a ten-year point-in-time answer already exists.
+        try:
+            with open(CATALYST_AUDIT_PATH, encoding="utf-8") as f:
+                cat = json.load(f)
+            if cat.get("applicable"):
+                value["catalyst_gate"] = {
+                    "tested": True,
+                    "setups": cat.get("test_setups"),
+                    "gross_pct": cat.get("gross_pct"),
+                    "gross_ci_pct": cat.get("gross_ci_pct"),
+                    "profitable_at_any_modelled_cost": any(
+                        v.get("confidently_profitable")
+                        for v in (cat.get("net_at_cost") or {}).values()
+                    ),
+                }
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            pass
         _LIVE_AUDIT_CACHE = (mtime, value)
         return dict(value)
     except (OSError, ValueError, TypeError, json.JSONDecodeError):

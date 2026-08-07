@@ -596,3 +596,43 @@ class TestCostDecomposition(unittest.TestCase):
     def test_breakeven_cost_is_the_gross_expectancy(self):
         out = stats.cost_decomposition(self._book([0.02] * 50, 0.01))
         self.assertAlmostEqual(out["breakeven_cost_pct"], out["mean_gross_pct"], places=6)
+
+
+class TestEdgarCatalystTiming(unittest.TestCase):
+    """A catalyst dataset is only worth having if it cannot see the future."""
+
+    @staticmethod
+    def _cal(dates):
+        import pandas as pd
+        return pd.DatetimeIndex(pd.to_datetime(dates))
+
+    def test_a_filing_after_the_signal_is_invisible(self):
+        import pandas as pd
+        from research import edgar_catalysts as ed
+        cal = self._cal(["2024-03-01", "2024-06-15"])
+        # standing on 2024-03-10, the June filing must not exist yet
+        self.assertEqual(ed.days_since(cal, pd.Timestamp("2024-03-10")), 9.0)
+        # standing before every filing, there is no catalyst at all
+        self.assertEqual(ed.days_since(cal, pd.Timestamp("2024-01-01")), float("inf"))
+
+    def test_same_day_filing_counts_as_zero_days_old(self):
+        import pandas as pd
+        from research import edgar_catalysts as ed
+        cal = self._cal(["2024-03-01"])
+        self.assertEqual(ed.days_since(cal, pd.Timestamp("2024-03-01")), 0.0)
+
+    def test_empty_calendar_never_claims_a_catalyst(self):
+        import pandas as pd
+        from research import edgar_catalysts as ed
+        self.assertEqual(ed.days_since(self._cal([]), pd.Timestamp("2024-03-01")),
+                         float("inf"))
+        self.assertEqual(ed.days_since(None, pd.Timestamp("2024-03-01")), float("inf"))
+
+    def test_future_data_cannot_change_a_past_answer(self):
+        """Append later filings; every earlier answer must be byte-identical."""
+        import pandas as pd
+        from research import edgar_catalysts as ed
+        base = self._cal(["2023-01-10", "2023-05-02"])
+        extended = self._cal(["2023-01-10", "2023-05-02", "2024-09-09", "2025-02-02"])
+        for day in pd.bdate_range("2023-01-01", "2023-12-31", freq="7D"):
+            self.assertEqual(ed.days_since(base, day), ed.days_since(extended, day))

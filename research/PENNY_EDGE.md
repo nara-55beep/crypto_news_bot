@@ -166,6 +166,61 @@ improving the scoring weights is not a promising direction. Changing the univers
 the holding period, or the cost structure are the only levers left, and each is a new
 strategy requiring its own untouched test.
 
+## The catalyst requirement, tested instead of assumed
+
+The desk now refuses to call anything a setup without a dated catalyst. That is the
+right instinct - the price/volume core alone has zero gross expectancy, so an event
+is the only plausible source of one - but as shipped it was marked `COLLECTING` and
+would have needed years of forward signals before anyone could tell.
+
+`research/edgar_catalysts.py` makes it testable today. A SEC filing's `filingDate` is
+recorded when the document hits the wire and is never restated, which makes EDGAR the
+one genuinely point-in-time catalyst source available here for free. All 695 panel
+symbols mapped to a CIK, yielding **70,258 8-K events** and **24,102 offering
+filings** across ten years.
+
+On train+validation the catalyst filter looked like a real discovery - gross return
+before costs, so the comparison is not contaminated by the cost model:
+
+| Cell | Rows | Gross |
+|---|---:|---:|
+| no 8-K within 30 days | 109,489 | +0.167% |
+| 8-K today or yesterday | 10,946 | +0.694% |
+| hot tape + 8-K within 1 day | 4,342 | +0.655% |
+| hot tape + 8-K 1d + no offering in 90d | 2,983 | **+0.912%** |
+
+A five-fold improvement over the no-catalyst baseline, with a confidence interval
+that excluded zero. The offering filter pointed the same way: names with an offering
+filed inside 30 days returned +0.134% against +0.316% for those without.
+
+### It does not survive the untouched period
+
+The rule was pre-registered from that development evidence - top hype quintile, 8-K
+within one day, no offering in 90 days, threshold taken from the development window -
+and run **once** on 2025 onward:
+
+| | Setups | Gross | 95% CI |
+|---|---:|---:|---|
+| Untouched test | 2,783 over 390 signal days | **-0.115%** | [-0.935%, +0.705%] |
+
+Zero, and negative at every assumed cost from 0.35% to 2.00%. The development result
+was a search artifact: roughly a dozen cells were examined, so one interval excluding
+zero is what chance produces. This is the same lesson `penny_stats.py` was built to
+enforce, arriving one level up - it is not enough to correct for searching over
+*strategies* if the *features* are searched uncorrected.
+
+### One real finding did come out of it
+
+The research cost model is not neutral. It floors at 1.00% by construction
+(`max(0.01, cost)` in `estimated_round_trip_cost`), while the live scanner's own
+trusted quotes on sub-$5 names measure 0.08%-0.75%, mean **0.335%**. The model
+therefore charges about **4.6x** the observed spread.
+
+That does not rescue anything here - the test-period gross is negative before any
+cost at all - but it matters for future work. Any conclusion of the form "the signal
+is real but smaller than costs" drawn from this harness is partly a modelling
+assumption, and should be re-derived against measured spreads before being believed.
+
 ## Exact-strategy execution contract
 
 Research approval no longer transfers between strategies. The live scanner identifies

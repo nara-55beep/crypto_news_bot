@@ -268,6 +268,13 @@ function render(s){
           + '%  net ' + lr.test_mean_net_pct + '% (untouched test)',
         lr.diagnosis || ''
       ].concat(Object.entries(lr.rank_verdicts||{}).map(function(e){return e[0]+': '+e[1];}))
+       .concat((lr.catalyst_gate||{}).tested ? ['',
+          'catalyst gate (EDGAR point-in-time, untouched 2025+):',
+          '  ' + (lr.catalyst_gate.setups||0).toLocaleString() + ' setups, gross '
+            + lr.catalyst_gate.gross_pct + '%  CI ['
+            + (lr.catalyst_gate.gross_ci_pct||[]).join(', ') + ']',
+          '  profitable at any modelled cost: '
+            + (lr.catalyst_gate.profitable_at_any_modelled_cost ? 'yes' : 'no')] : [])
        .join('\n');
     }
   }
