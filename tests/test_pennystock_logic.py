@@ -1191,7 +1191,8 @@ class TestProgressIsOneNumber(unittest.TestCase):
         self.assertEqual(p["signal_days_logged"], 30)
         self.assertEqual(p["completed_signal_days"], 0)
         self.assertEqual(p["completed_days_remaining"], 60)
-        self.assertEqual(p["unresolved_signal_days"], 30)
+        self.assertEqual(p["incomplete_signal_days"], 30)
+        self.assertEqual(p["unresolved_rows"], 30)
 
     def test_clock_and_gate_agree(self):
         bot = paper.PennyStockPaperBot()
@@ -1219,3 +1220,68 @@ class TestProgressIsOneNumber(unittest.TestCase):
         blob = json.dumps(bot._evidence_clock()).lower()
         for banned in ("five years", "years of an unchanged", "12 signal days"):
             self.assertNotIn(banned, blob)
+
+
+class TestPartialBasketsAreExcluded(unittest.TestCase):
+    """A day where one name resolves and another never does is not a smaller sample,
+    it is a biased one: the unresolved names are the halted and delisted ones."""
+
+    @staticmethod
+    def _row(day, ticker, net=None, excess=None):
+        row = {"engine_version": paper.SIGNAL_ENGINE_VERSION,
+               paper.SIGNAL_DAY_FIELD: day, "ticker": ticker}
+        if net is not None:
+            outcome = {"net_return_pct": net}
+            if excess is not None:
+                outcome["net_excess_return_pct"] = excess
+            row["outcomes"] = {"5": outcome}
+        return row
+
+    def test_a_winner_plus_an_unresolved_name_is_not_a_completed_day(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [self._row("2026-06-01", "WIN", 10.0, 9.0),
+                          self._row("2026-06-01", "HALTED")]
+        p = bot.signal_day_progress()
+        self.assertEqual(p["completed_signal_days"], 0)
+        self.assertEqual(p["benchmarked_signal_days"], 0)
+        self.assertEqual(p["incomplete_signal_days"], 1)
+        self.assertEqual(p["unresolved_rows"], 1)
+
+    def test_the_survivor_return_never_reaches_the_mean(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [self._row("2026-06-01", "WIN", 10.0, 9.0),
+                          self._row("2026-06-01", "HALTED")]
+        self.assertEqual(bot.daily_baskets()["baskets"], [])
+        self.assertNotEqual(bot.forward_validation().get("mean_net_pct"), 10.0)
+
+    def test_a_wholly_resolved_day_still_counts(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [self._row("2026-06-01", "A", 10.0, 9.0),
+                          self._row("2026-06-01", "B", -4.0, -5.0)]
+        book = bot.daily_baskets()
+        self.assertEqual(len(book["baskets"]), 1)
+        self.assertAlmostEqual(book["baskets"][0]["net_pct"], 3.0)   # equal-weight
+        self.assertEqual(bot.signal_day_progress()["completed_signal_days"], 1)
+
+    def test_one_unbenchmarked_member_blocks_the_benchmark(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [self._row("2026-06-01", "A", 10.0, 9.0),
+                          self._row("2026-06-01", "B", -4.0)]      # no excess
+        p = bot.signal_day_progress()
+        self.assertEqual(p["completed_signal_days"], 1)
+        self.assertEqual(p["benchmarked_signal_days"], 0)
+
+    def test_retention_keeps_whole_sessions_past_the_sixty_day_gate(self):
+        """The old 400-row cap left ~57 days, so the 60-day gate was unreachable."""
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [self._row(f"2026-{m:02d}-{d:02d}", f"T{i}", 1.0, 0.5)
+                          for m in (5, 6, 7) for d in range(1, 26) for i in range(7)]
+        self.assertEqual(len(bot.signal_log), 75 * 7)      # 525 rows, 75 sessions
+        kept = bot._retained_signals()
+        days = {r[paper.SIGNAL_DAY_FIELD] for r in kept}
+        self.assertEqual(len(days), 75)                    # every session survives
+        self.assertGreater(len(days), 60)                  # the gate is reachable
+        # the old row cap would have cut this below the threshold it feeds
+        self.assertLess(len({r[paper.SIGNAL_DAY_FIELD] for r in bot.signal_log[:400]}), 60)
+        for day in days:                       # no session is retained in part
+            self.assertEqual(sum(1 for r in kept if r[paper.SIGNAL_DAY_FIELD] == day), 7)

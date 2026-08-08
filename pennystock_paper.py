@@ -98,6 +98,9 @@ SIGNAL_HORIZONS = (1, 5, 10)
 # same wrong key. A shared constant makes that class of drift impossible rather than
 # something a future test has to remember to catch.
 SIGNAL_DAY_FIELD = "signal_day"
+# Retention is measured in sessions, not rows. A 400-row cap silently truncated the
+# evidence below the 60-day gate it was supposed to feed, and cut sessions in half.
+SIGNAL_RETENTION_SESSIONS = 180
 SIGNAL_ENGINE_VERSION = 6
 
 
@@ -173,7 +176,7 @@ class PennyStockPaperBot:
                     "watchlist": self.watchlist[:30],
                     "day_key": self.day_key, "day_pnl": self.day_pnl,
                     "scan_count": self.scan_count,
-                    "signal_log": self.signal_log[:400],
+                    "signal_log": self._retained_signals(),
                     "last_full_scan": self.last_full_scan,
                     "setup_states": self.setup_states,
                     "engine_version": SIGNAL_ENGINE_VERSION,
@@ -554,44 +557,114 @@ class PennyStockPaperBot:
                    "win" if pnl >= 0 else "loss")
         self.pos.pop(ticker, None)
 
+    def _retained_signals(self) -> list[dict]:
+        """Keep whole sessions, not a row count.
+
+        A flat 400-row cap made the 60-day gate unreachable: at roughly seven signals a
+        session, 61 sessions is 427 rows, so truncation left about 57 distinct days and
+        the threshold could never be crossed. It also truncated mid-session, which is the
+        partial-basket bias again by another route. Retention is now counted in sessions,
+        and a session is kept whole or not at all.
+        """
+        by_day: dict[str, list[dict]] = {}
+        undated: list[dict] = []
+        for item in self.signal_log:
+            day = str(item.get(SIGNAL_DAY_FIELD) or "")
+            (by_day.setdefault(day, []) if day else undated).append(item)
+        keep_days = sorted(by_day, reverse=True)[:SIGNAL_RETENTION_SESSIONS]
+        kept = [row for day in keep_days for row in by_day[day]]
+        return kept + undated[:20]
+
+    def _proxy_cost_share(self, admitted_days: set[str]) -> float:
+        """Share of admitted rows whose cost was an ADV proxy rather than a real quote.
+
+        Scoped to the sessions that actually entered the mean, so it describes the
+        sample being reported rather than every row ever logged.
+        """
+        rows = [x for x in self.signal_log
+                if str(x.get(SIGNAL_DAY_FIELD) or "") in admitted_days]
+        if not rows:
+            return 0.0
+        return round(100 * sum(bool(x.get("cost_is_proxy")) for x in rows) / len(rows), 1)
+
+    def daily_baskets(self, horizon: str = "5") -> dict:
+        """Equal-weight basket per session, admitting only wholly resolved sessions.
+
+        A session is complete only when EVERY ticker logged that day has an outcome at
+        the horizon. Admitting partly resolved days silently drops the missing names from
+        the equal-weight basket, and the names that stay unresolved are exactly the ones
+        that halted, delisted or stopped returning data - overwhelmingly the losers. One
+        winner plus one halted name was scoring as a complete +10% day.
+
+        That is survivorship bias, reproduced inside the forward tracker built to avoid
+        it. Excluding the whole day is the conservative choice: a partial basket is not a
+        smaller sample, it is a biased one.
+        """
+        current = [x for x in self.signal_log
+                   if x.get("engine_version") == SIGNAL_ENGINE_VERSION
+                   and x.get(SIGNAL_DAY_FIELD)]
+        by_day: dict[str, list[dict]] = {}
+        for item in current:
+            by_day.setdefault(str(item[SIGNAL_DAY_FIELD]), []).append(item)
+
+        complete: list[dict] = []
+        incomplete_days, unresolved_rows = 0, 0
+        for day in sorted(by_day):
+            rows = by_day[day]
+            outcomes = [(r.get("outcomes") or {}).get(str(horizon)) for r in rows]
+            resolved = [o for o in outcomes
+                        if isinstance(o, dict) and o.get("net_return_pct") is not None]
+            missing = len(rows) - len(resolved)
+            if missing:
+                incomplete_days += 1
+                unresolved_rows += missing
+                continue
+            nets = [float(o["net_return_pct"]) for o in resolved]
+            excess = [o.get("net_excess_return_pct") for o in resolved]
+            complete.append({
+                "day": day,
+                "members": len(rows),
+                "net_pct": sum(nets) / len(nets),
+                # benchmarked only when EVERY member has a benchmark, for the same reason
+                "excess_pct": (sum(float(e) for e in excess) / len(excess)
+                               if all(e is not None for e in excess) else None),
+            })
+        return {
+            "horizon": str(horizon),
+            "baskets": complete,
+            "logged_days": len(by_day),
+            "logged_rows": len(current),
+            "incomplete_days": incomplete_days,
+            "unresolved_rows": unresolved_rows,
+        }
+
     def signal_day_progress(self, horizon: str = "5") -> dict:
         """The single count of forward progress, shared by the clock and the gate.
 
-        Three different quantities were being conflated. A *logged* signal day only
-        records that the rule fired; the verdict gate needs a *completed* outcome at the
-        horizon, and the benchmarked subset needs an IWM comparison as well. Counting
-        logged days let the clock read 60/60 while forward validation still reported
-        COLLECTING with nothing completed - the clock claimed done and the gate said not
-        started, about the same data.
-
-        Both callers now read these numbers, so they cannot disagree again.
+        Logged, completed and benchmarked are three different quantities: a logged day
+        only records that the rule fired. Counting logged days once let the clock read
+        60/60 while the gate still reported COLLECTING with nothing completed.
         """
-        current = [x for x in self.signal_log
-                   if x.get("engine_version") == SIGNAL_ENGINE_VERSION]
-        logged, completed, benchmarked = set(), set(), set()
-        for item in current:
-            day = str(item.get(SIGNAL_DAY_FIELD) or "")
-            if not day:
-                continue
-            logged.add(day)
-            outcome = (item.get("outcomes") or {}).get(str(horizon))
-            if isinstance(outcome, dict) and outcome.get("net_return_pct") is not None:
-                completed.add(day)
-                # must match forward_validation's own field exactly, not a plausible name
-                if outcome.get("net_excess_return_pct") is not None:
-                    benchmarked.add(day)
+        book = self.daily_baskets(horizon)
+        baskets = book["baskets"]
+        benchmarked = [b for b in baskets if b["excess_pct"] is not None]
         required = 60
         benchmark_required = math.ceil(0.8 * required)
+        coverage = (len(baskets) / book["logged_days"] * 100.0
+                    if book["logged_days"] else 0.0)
         return {
             "horizon": str(horizon),
-            "signal_days_logged": len(logged),
-            "completed_signal_days": len(completed),
+            "signal_days_logged": book["logged_days"],
+            "completed_signal_days": len(baskets),
             "benchmarked_signal_days": len(benchmarked),
             "completed_signal_days_required": required,
             "benchmarked_signal_days_required": benchmark_required,
-            "completed_days_remaining": max(0, required - len(completed)),
+            "completed_days_remaining": max(0, required - len(baskets)),
             "benchmark_days_remaining": max(0, benchmark_required - len(benchmarked)),
-            "unresolved_signal_days": max(0, len(logged) - len(completed)),
+            # days holding at least one unresolved ticker - NOT "days with nothing done"
+            "incomplete_signal_days": book["incomplete_days"],
+            "unresolved_rows": book["unresolved_rows"],
+            "outcome_coverage_pct": round(coverage, 1),
         }
 
     def _evidence_clock(self, horizon: str = "5") -> dict:
@@ -1039,28 +1112,14 @@ class PennyStockPaperBot:
         sample still lacks a licensed point-in-time universe and real fills, so the
         reproducible edge-policy audit remains the only execution gate.
         """
-        completed = []
-        for item in self.signal_log:
-            outcome = (item.get("outcomes") or {}).get(str(horizon))
-            if isinstance(outcome, dict) and outcome.get("net_return_pct") is not None:
-                completed.append((item, outcome))
-
-        by_day: dict[str, list[tuple[dict, dict]]] = {}
-        for item, outcome in completed:
-            by_day.setdefault(str(item.get(SIGNAL_DAY_FIELD) or "unknown"),
-                              []).append((item, outcome))
-
-        daily_net, daily_excess, daily_dates = [], [], []
-        for day in sorted(by_day):
-            rows = by_day[day]
-            nets = [float(outcome["net_return_pct"]) for _, outcome in rows]
-            excess = [float(outcome["net_excess_return_pct"]) for _, outcome in rows
-                      if outcome.get("net_excess_return_pct") is not None]
-            if nets:
-                daily_net.append(sum(nets) / len(nets))
-                daily_dates.append(day)
-            if excess:
-                daily_excess.append(sum(excess) / len(excess))
+        # Exactly the baskets the clock counts. Building a second, looser set here is
+        # what let a partly resolved day into the mean while the clock reported it as
+        # complete; the missing names are the halted and delisted ones.
+        book = self.daily_baskets(horizon)
+        daily_net = [b["net_pct"] for b in book["baskets"]]
+        daily_dates = [b["day"] for b in book["baskets"]]
+        daily_excess = [b["excess_pct"] for b in book["baskets"]
+                        if b["excess_pct"] is not None]
 
         mean, lo, hi = self._hac_mean_ci(daily_net)
         ex_mean, ex_lo, ex_hi = self._hac_mean_ci(daily_excess)
@@ -1093,7 +1152,8 @@ class PennyStockPaperBot:
                 f"need {required_days} completed signal days with benchmark coverage; "
                 f"have {progress['completed_signal_days']} net / "
                 f"{progress['benchmarked_signal_days']} benchmarked "
-                f"({progress['unresolved_signal_days']} logged but unresolved)"
+                f"({progress['incomplete_signal_days']} day(s) hold "
+                f"{progress['unresolved_rows']} unresolved ticker(s) and are excluded)"
             )
         elif mean <= 0 or ex_mean <= 0 or lo <= 0 or ex_lo <= 0:
             status = "REJECTED"
@@ -1104,17 +1164,22 @@ class PennyStockPaperBot:
 
         return {
             "status": status, "auto_trade_allowed": False, "reason": reason,
-            "horizon_sessions": int(horizon), "completed_signals": len(completed),
+            # counted from the admitted baskets only, so a partly resolved day cannot
+            # inflate the sample it was just excluded from
+            "horizon_sessions": int(horizon),
+            "completed_signals": sum(b["members"] for b in book["baskets"]),
             "signal_days": len(daily_net), "benchmarked_days": len(daily_excess),
-            "unique_tickers": len({item.get("ticker") for item, _ in completed}),
+            "unique_tickers": len({
+                x.get("ticker") for x in self.signal_log
+                if str(x.get(SIGNAL_DAY_FIELD) or "") in set(daily_dates)}),
+            "incomplete_signal_days": book["incomplete_days"],
+            "unresolved_rows": book["unresolved_rows"],
             "mean_net_pct": round(mean, 3),
             "net_hac_95_pct": [round(lo, 3), round(hi, 3)],
             "mean_net_excess_pct": round(ex_mean, 3) if daily_excess else None,
             "excess_hac_95_pct": ([round(ex_lo, 3), round(ex_hi, 3)]
                                   if daily_excess else None),
-            "cost_proxy_share_pct": (round(100 * sum(bool(item.get("cost_is_proxy"))
-                                                     for item, _ in completed) / len(completed), 1)
-                                      if completed else 0.0),
+            "cost_proxy_share_pct": self._proxy_cost_share(set(daily_dates)),
             "minimum_signal_days": required_days,
             "feasibility": planning,
             "grouping": "equal-weight basket per signal day",
@@ -1163,9 +1228,18 @@ class PennyStockPaperBot:
                     # "entries on" read as though the desk would trade, while the edge
                     # gate was refusing every fill. Execution did fail closed, but the
                     # status implied otherwise. Name the binding constraint instead.
+                    # Mirror _open()'s authorization exactly: auto_trade_allowed alone
+                    # would let a validated but UNRELATED strategy make the dashboard
+                    # claim entries are live while every fill still fails closed.
+                    policy = research.edge_policy() or {}
+                    authorized = bool(
+                        policy.get("auto_trade_allowed")
+                        and (policy.get("strategy_id")
+                             or policy.get("selected_strategy")) == research.LIVE_STRATEGY_ID
+                    )
                     if not self.enabled:
                         entry_state = "entries paused"
-                    elif not (research.edge_policy() or {}).get("auto_trade_allowed"):
+                    elif not authorized:
                         entry_state = "paper-entry toggle on; execution blocked by edge gate"
                     else:
                         entry_state = "entries on"
