@@ -1285,3 +1285,78 @@ class TestPartialBasketsAreExcluded(unittest.TestCase):
         self.assertLess(len({r[paper.SIGNAL_DAY_FIELD] for r in bot.signal_log[:400]}), 60)
         for day in days:                       # no session is retained in part
             self.assertEqual(sum(1 for r in kept if r[paper.SIGNAL_DAY_FIELD] == day), 7)
+
+
+class TestMissingnessBlocksVerdicts(unittest.TestCase):
+    """Excluding a matured-but-unresolved day is not conservative: the days that fail to
+    resolve hold the halted and delisted names, so dropping them removes losses."""
+
+    @staticmethod
+    def _done(day, ticker="A", net=2.0, excess=1.5):
+        return {"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                paper.SIGNAL_DAY_FIELD: day, "ticker": ticker,
+                "outcomes": {"5": {"net_return_pct": net, "net_excess_return_pct": excess}}}
+
+    @staticmethod
+    def _missing(day, ticker="HALTED"):
+        return {"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                paper.SIGNAL_DAY_FIELD: day, "ticker": ticker}
+
+    def _sixty_good_days(self):
+        return [self._done(f"2026-0{1 + i // 28}-{1 + i % 28:02d}") for i in range(60)]
+
+    def test_a_stale_missing_day_blocks_a_verdict_the_bound_cannot_survive(self):
+        """A thin edge cannot absorb a name going to zero, so the verdict is withheld."""
+        bot = paper.PennyStockPaperBot()
+        thin = [dict(row, outcomes={"5": {"net_return_pct": 0.5,
+                                          "net_excess_return_pct": 0.4}})
+                for row in self._sixty_good_days()]
+        bot.signal_log = thin + [self._missing("2026-03-20", "HALTED")]
+        verdict = bot.forward_validation()
+        self.assertEqual(verdict["status"], "DATA_INCOMPLETE")
+        self.assertFalse(verdict["auto_trade_allowed"])
+        self.assertGreater(verdict["stale_incomplete_days"], 0)
+        self.assertFalse(verdict["missing_outcome_bound"]["clears_zero"])
+
+    def test_a_robust_edge_survives_the_same_missing_day(self):
+        """The gate must stay passable: an edge big enough to absorb the worst case
+        stands, so this is a bound and not an unfalsifiable veto."""
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = self._sixty_good_days() + [self._missing("2026-03-20", "HALTED")]
+        verdict = bot.forward_validation()
+        self.assertTrue(verdict["missing_outcome_bound"]["clears_zero"])
+        self.assertEqual(verdict["status"], "PROMISING_NOT_VALIDATED")
+        self.assertFalse(verdict["auto_trade_allowed"])   # still never unlocks trading
+
+    def test_a_pending_day_does_not_block_anything(self):
+        """A horizon that has not elapsed yet is not evidence of anything."""
+        import datetime as dt
+        today = dt.datetime.now(paper.NY).date().isoformat()
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = self._sixty_good_days() + [self._missing(today, "TOOFRESH")]
+        book = bot.daily_baskets()
+        self.assertEqual(book["stale_incomplete_days"], 0)
+        self.assertEqual(book["pending_days"], 1)
+
+    def test_the_bound_assumes_missing_names_went_to_zero(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = self._sixty_good_days() + [self._missing("2026-03-20")]
+        bound = bot.missing_outcome_bound()
+        self.assertTrue(bound["applicable"])
+        self.assertEqual(bound["assumed_missing_outcome_pct"], -100.0)
+        self.assertLess(bound["bounded_mean_net_pct"], 2.0)
+
+    def test_signal_stats_is_labelled_non_evidentiary(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [self._done("2026-01-01", "WIN", 10.0, 9.0),
+                          self._missing("2026-01-01")]
+        block = bot.signal_stats()["5"]
+        self.assertFalse(block["evidentiary"])
+        self.assertEqual(block["admitted_basket_days"], 0)   # the day is not admitted
+        self.assertIn("survivor", block["basis"])
+
+    def test_a_save_failure_is_surfaced_not_swallowed(self):
+        bot = paper.PennyStockPaperBot()
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            bot._save()
+        self.assertIn("state save failed", bot.persistence_error)
