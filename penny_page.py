@@ -349,11 +349,15 @@ function render(s){
         + '<span>tradeable <i>'+w.tradeability+'</i></span></div>';
       const drivers = [].concat(w.hype_why||[],w.technical_why||[],w.catalyst_why||[],w.quality_why||[]).slice(0,4)
         .map(x=>'<span class="cat">'+esc(x)+'</span>').join('');
+      // A blank AI column read as "the model is broken". It is almost always "the model
+      // was never asked", because only mechanically eligible setups are reviewed.
       const deep = ai.bull_case ? '<details class="why"><summary>AI reasoning</summary><div class="reason">'
         + rl('Bull', ai.bull_case,'bull') + rl('Bear', ai.bear_case,'bear')
         + rl('Catalyst', ai.catalyst_assessment) + rl('Verdict', ai.why_this_verdict)
         + rl('Cost', ai.cost_hurdle) + rl('Watch', ai.what_to_watch)
-        + '</div></details>' : '';
+        + '</div></details>'
+        : (w.ai_error ? '<div class="nm">AI error: '+esc(w.ai_error)+'</div>'
+                      : (w.ai_skip_reason ? '<div class="nm">AI '+esc(w.ai_skip_reason)+'</div>' : ''));
       return '<tr><td><div class="'+rk+'">'+w.rank+'</div></td>'
         + '<td><span class="tick">'+esc(w.ticker)+'</span>'+(w.held?'<span class="held">HELD</span>':'')
         + '<div class="nm">'+esc(w.name||'')+'</div></td>'

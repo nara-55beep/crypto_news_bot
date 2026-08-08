@@ -78,7 +78,8 @@ SCREEN_POOL = 60           # how many raw candidates to score before ranking
 PULSE_SCREEN_POOL = 24
 PULSE_SCORE_LIMIT = 32
 DOSSIER_CONCURRENCY = 4    # bounded: faster than serial without a provider stampede
-AI_DEEP_DIVE = 10          # only the top setups get an AI call (free-tier token budget)
+AI_DEEP_DIVE = 10          # AI calls allowed PER SCAN (reviews resets each scan),
+                           # not per day - keeps one pass inside the free-tier budget
 RETRY_EMPTY_SEC = 5 * 60
 MAX_PROVIDER_BACKOFF_SEC = 30 * 60
 AI_CACHE_SEC = 45 * 60
@@ -155,6 +156,7 @@ class PennyStockPaperBot:
                  archive_path: str | None = None):
         self.state_path = state_path or STATE_PATH
         self.archive_path = archive_path or SIGNAL_ARCHIVE_PATH
+        self._quarantine_marker = self.archive_path + ".quarantine"
         self.enabled = False          # opt-in: needs AI credits to be useful
         self.balance = START_BALANCE
         self.pos: dict[str, Position] = {}
@@ -221,7 +223,9 @@ class PennyStockPaperBot:
             # a disk outage stayed memory-only until another archive event happened to
             # arrive. Retry it on the regular save path instead.
             if self._archive_outbox:
-                self._persist_outbox()
+                # flush to the archive first; only queue-file persistence if that fails
+                if not self._flush_archive_outbox():
+                    self._persist_outbox()
         except Exception as e:
             # A silent failure here loses the forward evidence while the service still
             # reports "no errors". Surface it instead.
@@ -680,24 +684,115 @@ class PennyStockPaperBot:
                                      self.archive_write_error,
                                      self.outbox_error) if x)
 
-    def _apply_evidence_event(self, event: dict) -> None:
-        """Fold one event into the authoritative store. Used by replay AND by a
-        successful append, so a flushed outbox is visible without a restart."""
+    @staticmethod
+    def valid_event(event) -> bool:
+        """Whether a decoded record is a usable event.
+
+        Syntactically valid JSON is not a valid event: a bare `[]` decoded fine, slipped
+        past corruption handling, and then crashed the reducer after malformed evidence
+        had already been written. Every record must be a dict with a known type, a
+        non-empty id, and the fields that type requires.
+        """
+        if not isinstance(event, dict):
+            return False
+        kind = event.get("event")
+        if not str(event.get("id") or "").strip():
+            return False
+        if kind == "signal":
+            return True
+        if kind == "benchmark":
+            return isinstance(event.get("legs"), dict)
+        if kind == "outcome":
+            return (str(event.get("horizon") or "").strip() != ""
+                    and isinstance(event.get("outcome"), dict))
+        return False
+
+    @classmethod
+    def _fold_evidence_event(cls, store: dict, event: dict) -> bool:
+        """The ONE reducer. Replay and live appends must not drift apart again.
+
+        Returns whether the event was applied. Assumes valid_event() already passed.
+        """
         sid = str(event.get("id") or "")
-        if not sid:
-            return
         kind = event.get("event")
         if kind == "signal":
-            self._evidence.setdefault(sid, {k: v for k, v in event.items()
-                                            if k != "event"})
-        elif sid in self._evidence:
-            row = self._evidence[sid]
-            if kind == "benchmark":
-                row.setdefault(SIGNAL_BENCHMARK_FIELD, {}).update(event.get("legs") or {})
-            elif kind == "outcome":
-                row.setdefault("outcomes", {})[str(event.get("horizon"))] = (
-                    event.get("outcome") or {})
-                row["resolved"] = bool(event.get("resolved"))
+            store.setdefault(sid, {k: v for k, v in event.items() if k != "event"})
+            return True
+        if sid not in store:
+            return False
+        row = store[sid]
+        if kind == "benchmark":
+            row.setdefault(SIGNAL_BENCHMARK_FIELD, {}).update(event.get("legs") or {})
+            return True
+        if kind == "outcome":
+            row.setdefault("outcomes", {})[str(event.get("horizon"))] = (
+                event.get("outcome") or {})
+            row["resolved"] = bool(event.get("resolved"))
+            return True
+        return False
+
+    def _apply_evidence_event(self, event: dict) -> None:
+        """Fold one appended event into the authoritative store, so a flushed outbox is
+        visible without a restart."""
+        if self.valid_event(event):
+            self._fold_evidence_event(self._evidence, event)
+
+    def _repair_torn_tail(self) -> bool:
+        """Truncate an unterminated final fragment, preserving it for inspection.
+
+        A torn tail is tolerated on read, but appending after one joins the new event to
+        the fragment and destroys both. The fragment is saved beside the archive and the
+        file is cut back to its last complete newline before any further append.
+        """
+        try:
+            if not os.path.exists(self.archive_path):
+                return True
+            with open(self.archive_path, "rb") as f:
+                raw = f.read()
+            if not raw or raw.endswith(b"\n"):
+                return True
+            cut = raw.rfind(b"\n") + 1
+            fragment = raw[cut:]
+            with open(self.archive_path + ".torn", "ab") as f:
+                f.write(fragment + b"\n")
+            with open(self.archive_path, "wb") as f:
+                f.write(raw[:cut])
+                f.flush()
+                os.fsync(f.fileno())
+            return True
+        except OSError:
+            return False
+
+    def _flush_archive_outbox(self) -> bool:
+        """Try to write a stranded queue to the archive itself.
+
+        Persisting the queue to its own file made it durable but not recorded: the events
+        still needed some later archive event to come along and carry them in. Recovery
+        must not depend on that.
+        """
+        if not self._archive_outbox:
+            return True
+        if not self._repair_torn_tail():
+            return False
+        pending = list(self._archive_outbox)
+        try:
+            os.makedirs(os.path.dirname(self.archive_path) or ".", exist_ok=True)
+            with open(self.archive_path, "a", encoding="utf-8") as f:
+                for row in pending:
+                    f.write(json.dumps(row, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+        except OSError as e:
+            self.archive_write_error = (
+                f"signal archive write failed: {type(e).__name__}; "
+                f"{len(pending)} event(s) awaiting retry")
+            return False
+        for row in pending:
+            self._apply_evidence_event(row)
+        self._archive_outbox = []
+        self._persist_outbox()
+        self.archive_write_error = ""
+        return True
 
     def _persist_outbox(self) -> bool:
         """Write the pending queue atomically so an outage cannot lose it on restart.
@@ -730,6 +825,16 @@ class PennyStockPaperBot:
 
     def _load_outbox(self) -> None:
         """Restore any queue left behind by a failed write in a previous run."""
+        # An unresolved quarantine keeps blocking regardless of the current outbox.
+        if os.path.exists(self._quarantine_marker):
+            try:
+                with open(self._quarantine_marker, encoding="utf-8") as f:
+                    entries = [x for x in f.read().splitlines() if x.strip()]
+            except OSError:
+                entries = []
+            self.outbox_error = (
+                f"{len(entries) or 1} unresolved outbox quarantine(s); evidence is "
+                f"incomplete until {os.path.basename(self._quarantine_marker)} is cleared")
         path = self.archive_path + ".outbox"
         if not os.path.exists(path):
             return
@@ -747,14 +852,32 @@ class PennyStockPaperBot:
                 bad += 1
         self._archive_outbox = restored
         if bad:
-            # Preserve the damaged file for recovery rather than overwriting it, and
-            # block verdicts: silently dropping queued events is evidence loss.
+            # A fixed ".corrupt" name overwrote any earlier quarantine, and the block
+            # vanished on the next restart because nothing re-read it. Unique names plus
+            # a marker file keep both the evidence and the block until resolved.
+            stamp = str(int(time.time() * 1000))
+            target = f"{path}.corrupt.{stamp}"
+            moved = False
             try:
-                os.replace(path, path + ".corrupt")
+                os.replace(path, target)
+                moved = True
             except OSError:
                 pass
-            self.outbox_error = (f"outbox had {bad} unreadable event(s); quarantined to "
-                                 f"{os.path.basename(path)}.corrupt - evidence incomplete")
+            try:
+                with open(self._quarantine_marker, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"at": stamp, "bad_events": bad,
+                                        "quarantined_to": os.path.basename(target)
+                                        if moved else None}) + chr(10))
+            except OSError:
+                pass
+            # Salvaged events are written back only AFTER the damaged file has moved,
+            # so they land in a fresh outbox rather than being erased with it.
+            self._persist_outbox()
+            self.outbox_error = (
+                f"outbox had {bad} unreadable event(s); "
+                + (f"quarantined to {os.path.basename(target)}" if moved
+                   else "quarantine move FAILED, damaged file left in place")
+                + " - evidence incomplete until resolved")
         elif restored:
             self.outbox_error = (f"{len(restored)} archived event(s) awaiting retry "
                                  f"from a previous run")
@@ -769,6 +892,16 @@ class PennyStockPaperBot:
         """
         event = {"event": kind, **payload}
         pending = list(self._archive_outbox) + [event]
+        if not self._repair_torn_tail():
+            # Appending onto an unterminated fragment concatenates the next event into
+            # it, so BOTH are unreadable on replay - the tear silently eats the next
+            # valid write. Hold the queue instead of corrupting more evidence.
+            self._archive_outbox = pending
+            self._persist_outbox()
+            self.archive_write_error = (
+                f"archive tail is torn and could not be repaired; "
+                f"{len(self._archive_outbox)} event(s) held")
+            return False
         try:
             os.makedirs(os.path.dirname(self.archive_path) or ".", exist_ok=True)
             with open(self.archive_path, "a", encoding="utf-8") as f:
@@ -832,18 +965,12 @@ class PennyStockPaperBot:
                 if not (tolerate_last and number == len(lines) - 1):
                     bad_before_end += 1
                 continue
-            sid = str(event.get("id") or "")
-            if not sid:
+            if not self.valid_event(event):
+                # decodes as JSON but is not an event: same severity as corrupt bytes
+                if not (tolerate_last and number == len(lines) - 1):
+                    bad_before_end += 1
                 continue
-            if event.get("event") == "signal":
-                rows.setdefault(sid, {k: v for k, v in event.items() if k != "event"})
-            elif event.get("event") == "benchmark" and sid in rows:
-                rows[sid].setdefault(SIGNAL_BENCHMARK_FIELD, {}).update(
-                    event.get("legs") or {})
-            elif event.get("event") == "outcome" and sid in rows:
-                rows[sid].setdefault("outcomes", {})[
-                    str(event.get("horizon"))] = event.get("outcome") or {}
-                rows[sid]["resolved"] = bool(event.get("resolved"))
+            self._fold_evidence_event(rows, event)
         # A clean full replay is the ONLY thing that may clear an integrity error.
         self.archive_integrity_error = ""
         if bad_before_end:
@@ -1233,6 +1360,19 @@ class PennyStockPaperBot:
             ai, ai_err, ai_model = None, "", ""
             rejected = self.hard_reject(d)
             eligible = research.mechanical_setup(d, r)
+            # An empty AI column looked identical whether the model was broken, out of
+            # quota, or simply never consulted. It is almost always the last of those -
+            # the AI only reviews mechanically eligible setups - so say which.
+            if rejected:
+                ai_skip = f"not reviewed: {rejected}"
+            elif not eligible:
+                ai_skip = ("not reviewed: no mechanical setup yet (needs the dated "
+                           "catalyst, confirmation and trusted quote first)")
+            elif reviews >= AI_DEEP_DIVE:
+                ai_skip = (f"not reviewed: this scan already used its {AI_DEEP_DIVE} "
+                           f"AI reviews (per scan, not per day)")
+            else:
+                ai_skip = ""
             if reviews < AI_DEEP_DIVE and not rejected and eligible:
                 self.status = f"AI reviewing #{rank} {d.ticker}..."
                 ai, ai_err, cached, ai_model = self._cached_ai(d, comp)
@@ -1271,6 +1411,7 @@ class PennyStockPaperBot:
                 "technical_why": r["technical_why"], "catalyst_why": r["catalyst_why"],
                 "trade_why": r["trade_why"], "data_completeness": d.data_completeness,
                 "signal": sig, "ai": ai, "ai_error": ai_err, "ai_model": ai_model,
+                "ai_skip_reason": ai_skip,
                 "rejected": rejected, "catalysts": d.catalysts[:5], "flags": d.flags[:6],
                 "catalyst_key": self._catalyst_key(d),
                 "catalyst_alignment": alignment,

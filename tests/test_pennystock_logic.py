@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -1136,7 +1137,10 @@ class TestFeasibilityGate(unittest.TestCase):
         result = bot.forward_validation()
         self.assertIn("feasibility", result)
         self.assertFalse(result["feasibility"]["applicable"])
-        self.assertIn("not assessable", result["feasibility"]["summary"])
+        # wording changed: an empty sample is a normal pre-data state, not a fault
+        summary = result["feasibility"]["summary"]
+        self.assertFalse(result["feasibility"]["applicable"])
+        self.assertIn("not yet measurable", summary)
         self.assertFalse(result["auto_trade_allowed"])
 
 
@@ -1718,9 +1722,15 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
         with mock.patch("builtins.open", side_effect=OSError("disk full")):
             bot._archive_event("outcome", {"id": "s1", "horizon": "5"})
         bot._save()                                          # the ordinary save path
-        self.assertTrue(os.path.exists(ap + ".outbox"))
+        # Recovery must COMPLETE, not merely make the queue durable: the event belongs
+        # in the archive, the queue empty, its file gone and the errors cleared.
+        self.assertTrue(os.path.exists(ap))
+        self.assertEqual(bot._archive_outbox, [])
+        self.assertFalse(os.path.exists(ap + ".outbox"))
+        self.assertEqual(bot.archive_write_error, "")
+        self.assertEqual(bot.outbox_error, "")
         restarted = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
-        self.assertEqual(len(restarted._archive_outbox), 1)
+        self.assertEqual(len(restarted._archive_outbox), 0)
 
     def test_a_corrupt_outbox_is_quarantined_and_blocks(self):
         tmp = tempfile.mkdtemp()
@@ -1729,9 +1739,17 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
             f.write("{not json\n")
         bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
                                        archive_path=ap)
+        import glob
         self.assertIn("quarantined", bot.outbox_error)
-        self.assertTrue(os.path.exists(ap + ".outbox.corrupt"))   # preserved, not lost
+        # unique name: a second quarantine must not overwrite the first
+        self.assertEqual(len(glob.glob(ap + ".outbox.corrupt.*")), 1)
         self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+        # and the block must SURVIVE a restart - renaming the file once used to end it
+        restarted = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                             archive_path=ap)
+        self.assertIn("quarantine", restarted.outbox_error)
+        self.assertEqual(restarted.forward_validation()["status"], "DATA_INCOMPLETE")
 
     def test_a_flushed_outbox_updates_the_store_without_a_restart(self):
         tmp = tempfile.mkdtemp()
@@ -1765,3 +1783,98 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
         bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
         legs = bot.evidence_rows()[0].get(paper.SIGNAL_BENCHMARK_FIELD) or {}
         self.assertEqual(sorted(legs), ["1", "10", "5"])   # cache-only 10 survives
+
+
+class TestArchiveRepairAndSchema(unittest.TestCase):
+    """A tolerated tear must not eat the next write, and JSON that parses is not
+    thereby a valid event."""
+
+    def _signal(self, sid, day="2026-01-01"):
+        return {"event": "signal", "id": sid, paper.SIGNAL_DAY_FIELD: day,
+                "ticker": "A", "engine_version": paper.SIGNAL_ENGINE_VERSION}
+
+    def test_an_append_after_a_torn_tail_survives_a_restart(self):
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        with open(ap, "w", encoding="utf-8") as f:
+            f.write(json.dumps(self._signal("s1")) + "\n")
+            f.write('{"event": "signal", "id": "torn"')          # unterminated
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        self.assertEqual(bot.archive_error, "")                  # tear tolerated on read
+        self.assertTrue(bot._archive_event("signal", self._signal("s2", "2026-01-02")))
+        restarted = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        ids = {r.get("id") for r in restarted.evidence_rows()}
+        self.assertEqual(restarted.archive_error, "")            # no new corruption
+        self.assertIn("s2", ids)                                 # the append survived
+        self.assertIn("s1", ids)
+        self.assertTrue(os.path.exists(ap + ".torn"))            # fragment preserved
+
+    def test_json_that_parses_but_is_not_an_event_is_corruption(self):
+        tmp = tempfile.mkdtemp()
+        ap = os.path.join(tmp, "a.jsonl")
+        with open(ap, "w", encoding="utf-8") as f:
+            f.write(json.dumps(self._signal("s1")) + "\n")
+            f.write("[]\n")                                      # valid JSON, not an event
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertIn("corrupt", bot.archive_integrity_error)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_event_schema_requires_type_id_and_payload(self):
+        v = paper.PennyStockPaperBot.valid_event
+        self.assertFalse(v([]))
+        self.assertFalse(v({"event": "signal"}))                   # no id
+        self.assertFalse(v({"event": "outcome", "id": "a"}))       # no horizon/outcome
+        self.assertFalse(v({"event": "benchmark", "id": "a", "legs": None}))
+        self.assertFalse(v({"event": "nonsense", "id": "a"}))
+        self.assertTrue(v({"event": "signal", "id": "a"}))
+        self.assertTrue(v({"event": "outcome", "id": "a", "horizon": "5",
+                           "outcome": {"net_return_pct": 1.0}}))
+
+    def test_replay_and_live_append_use_the_same_reducer(self):
+        """Regression for repeated schema drift: two reducers meant two behaviours."""
+        store = {}
+        paper.PennyStockPaperBot._fold_evidence_event(store, self._signal("s1"))
+        paper.PennyStockPaperBot._fold_evidence_event(
+            store, {"event": "outcome", "id": "s1", "horizon": "5",
+                    "outcome": {"net_return_pct": 2.0}, "resolved": True})
+        self.assertEqual(store["s1"]["outcomes"]["5"]["net_return_pct"], 2.0)
+        # an outcome for an unknown signal is ignored, not invented
+        self.assertFalse(paper.PennyStockPaperBot._fold_evidence_event(
+            store, {"event": "outcome", "id": "ghost", "horizon": "5",
+                    "outcome": {}}))
+
+
+class TestEnvOrRegistry(unittest.TestCase):
+    """setx writes the registry and only reaches later processes, so a key can be
+    installed and invisible at the same time."""
+
+    def test_process_env_wins(self):
+        import env_config
+        with mock.patch.dict(os.environ, {"PENNY_TEST_KEY": "from-env"}):
+            self.assertEqual(env_config.env_or_registry("PENNY_TEST_KEY"), "from-env")
+
+    def test_registry_is_used_when_the_process_env_lacks_it(self):
+        import env_config
+        if os.name != "nt":
+            self.skipTest("registry fallback is Windows-only")
+        os.environ.pop("PENNY_TEST_KEY", None)
+        fake = mock.MagicMock()
+        fake.QueryValueEx.return_value = ("from-registry", 1)
+        fake.OpenKey.return_value.__enter__.return_value = object()
+        with mock.patch.dict(sys.modules, {"winreg": fake}):
+            self.assertEqual(env_config.env_or_registry("PENNY_TEST_KEY"), "from-registry")
+        self.assertEqual(os.environ.get("PENNY_TEST_KEY"), "from-registry")
+        os.environ.pop("PENNY_TEST_KEY", None)
+
+    def test_a_missing_key_returns_the_default_not_an_error(self):
+        import env_config
+        self.assertEqual(
+            env_config.env_or_registry("PENNY_DEFINITELY_UNSET_KEY", "fallback"),
+            "fallback")
+
+    def test_the_shipped_example_config_uses_the_helper(self):
+        """The fix lived only in gitignored config.py, so a fresh clone never got it."""
+        src = open("config.example.py", encoding="utf-8").read()
+        self.assertIn("env_or_registry(\"GROQ_API_KEY\"", src)
+        self.assertNotIn("os.getenv(\"GROQ_API_KEY\"", src)

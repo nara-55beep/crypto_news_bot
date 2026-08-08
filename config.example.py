@@ -14,6 +14,8 @@ you have a real track record (see README).
 
 import os
 
+from env_config import env_or_registry
+
 # ---------------------------------------------------------------------------
 # 0. MODE
 # ---------------------------------------------------------------------------
@@ -120,7 +122,7 @@ AI_PROVIDER = "openai"
 # https://console.groq.com/keys and then set it as an environment variable:
 #     setx GROQ_API_KEY "your-new-key"
 # No credential fallback is committed; a missing environment value fails closed.
-AI_API_KEY = os.getenv("GROQ_API_KEY", "")
+AI_API_KEY = env_or_registry("GROQ_API_KEY", "")
 AI_BASE_URL = "https://api.groq.com/openai/v1"
 AI_MODEL    = "llama-3.1-8b-instant"
 # ^ the HIGH-FREQUENCY bots (news reactors) use this. Groq meters tokens PER MODEL
@@ -150,7 +152,7 @@ TOA_API_KEY = os.getenv("TOA_API_KEY", "")
 # ---- GROQ (the "GPTnews" strategy) — free, fast, OpenAI-compatible endpoint -----
 # Used by the paper News+Whale bot's "GPTnews" strategy via the openai library.
 # Get/rotate the key at https://console.groq.com/keys  (keep it secret).
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_API_KEY = env_or_registry("GROQ_API_KEY", "")
 GROQ_BASE_URL  = "https://api.groq.com/openai/v1"
 GROQ_MODEL     = "openai/gpt-oss-120b"
 GROQ_TIMEOUT_SEC = 8.0

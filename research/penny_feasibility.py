@@ -169,7 +169,13 @@ def feasibility(
 def verdict_line(result: dict) -> str:
     """One accurate planning sentence; never confuse feasibility with evidence."""
     if not result.get("applicable"):
-        return f"not assessable: {result.get('reason')}"
+        reason = str(result.get("reason") or "")
+        # Having no completed outcomes yet is the expected state of a freshly deployed
+        # rule, not a fault. Wording it as a failure made a normal condition look broken.
+        if "usable events" in reason or "signal days" in reason or "rate history" in reason:
+            return (f"not yet measurable - {reason}; power can only be estimated once "
+                    f"outcomes complete")
+        return f"not assessable: {reason}"
     if result["status"] == "RESOLVABLE_NOW":
         return (
             f"power is sufficient now to resolve a {result['target_effect_pct']:.1f}% "
