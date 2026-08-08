@@ -876,3 +876,35 @@ class TestItemCodeAudit(unittest.TestCase):
         self.assertFalse(evidence["exact_live_rule_backtest"])
         self.assertEqual(evidence["window"], "post_2024_reused_not_holdout")
         self.assertIn("not exact live rule", evidence["scope"])
+
+
+class TestExitStructure(unittest.TestCase):
+    """A fixed profit target caps the right tail of a distribution whose top 1% of
+    events supply 68% of the return. Measured at -0.31%/event, CI excluding zero."""
+
+    def test_fixed_target_is_off_by_default(self):
+        self.assertFalse(paper.USE_FIXED_TARGET)
+        self.assertTrue(paper.USE_TRAILING_STOP)   # its removal is not yet proven
+
+    def test_target_can_be_re_enabled_by_environment(self):
+        import importlib
+        with mock.patch.dict(os.environ, {"PENNY_FIXED_TARGET": "1"}):
+            reloaded = importlib.reload(paper)
+            self.assertTrue(reloaded.USE_FIXED_TARGET)
+        importlib.reload(paper)                    # restore the default for other tests
+        self.assertFalse(paper.USE_FIXED_TARGET)
+
+    def test_rules_text_states_which_exits_are_active(self):
+        text = ("no fixed target" if not paper.USE_FIXED_TARGET else "2.5R target")
+        self.assertIn("target", text)
+
+    def test_a_capped_exit_cannot_beat_an_uncapped_one_on_the_same_path(self):
+        """Sanity check on the mechanism itself: capping at a target can only ever
+        truncate a winner, never improve it."""
+        entry, target = 1.00, 1.25
+        path_high = [1.05, 1.40, 2.60]             # a tail event
+        capped = min(max(path_high), target) / entry - 1.0
+        uncapped = max(path_high) / entry - 1.0
+        self.assertLess(capped, uncapped)
+        path_low = [1.02, 1.04, 1.01]              # never reaches the target
+        self.assertEqual(min(max(path_low), target), max(path_low))

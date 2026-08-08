@@ -50,7 +50,18 @@ MAX_PER_SECTOR = 2         # concentration cap: 6 biotechs is one FDA headline, 
 DAILY_LOSS_LIMIT_PCT = 3.0
 
 STOP_PCT = 12.0            # initial stop below entry
-TP_PCT = 25.0              # take profit
+TP_PCT = 25.0              # take-profit level, still computed and displayed as a target
+# A fixed profit target is the wrong harness for this distribution. Over 5,187 deduped
+# 8-K events the median moves -0.55% across five sessions while the top 1% supply 68% of
+# the summed return, so capping the upside removes the only part that pays. Measured on
+# identical entries and identical stops, so survivorship and costs cancel:
+#   drop the 2.5R target (keep trail)  +0.314%/event, 95% CI [+0.044, +0.886]
+#   also drop the trail               +0.570%/event, CI [-0.156, +1.397]  (not proven)
+#   both together                     +0.884%/event, CI [+0.257, +1.916]
+# Only target removal is individually proven, so that is what changes by default; the
+# trail stays until its own interval clears zero. See research/penny_exit_structure.py.
+USE_FIXED_TARGET = os.getenv("PENNY_FIXED_TARGET", "0") == "1"
+USE_TRAILING_STOP = os.getenv("PENNY_TRAILING_STOP", "1") == "1"
 TRAIL_ARM_PCT = 12.0       # once up this much, trail
 TRAIL_PCT = 8.0            # trail distance from the high-water mark
 MAX_HOLD_DAYS = 10
@@ -499,7 +510,7 @@ class PennyStockPaperBot:
         bid, mid = d.bid, d.price
         if bid > p.high_water:
             p.high_water = bid
-        if not p.trailing and bid >= p.entry * (1 + TRAIL_ARM_PCT / 100.0):
+        if USE_TRAILING_STOP and not p.trailing and bid >= p.entry * (1 + TRAIL_ARM_PCT / 100.0):
             p.trailing = True
             p.stop = max(p.stop, p.entry)                       # at worst, breakeven
             self._note(f"{p.ticker} +{TRAIL_ARM_PCT:.0f}% - trailing armed, stop to breakeven", "info")
@@ -509,7 +520,7 @@ class PennyStockPaperBot:
         if bid <= p.stop:
             self._close(p.ticker, bid, mid, "trailing stop" if p.trailing else "stop loss")
             return
-        if bid >= p.take_profit:
+        if USE_FIXED_TARGET and bid >= p.take_profit:
             self._close(p.ticker, bid, mid, "take profit")
             return
         if (time.time() - p.opened_at) / 86400 >= MAX_HOLD_DAYS:
@@ -1105,8 +1116,12 @@ class PennyStockPaperBot:
                       f"evidence gate must be VALIDATED before any auto-trade; "
                       f"risk {RISK_PCT}%/trade and {MAX_PORTFOLIO_RISK_PCT}% total, "
                       f"max {MAX_POSITION_PCT}% per name / {MAX_OPEN} open, spread cap {MAX_SPREAD_PCT}%, "
-                      f"ATR-scaled stop with 2.5R target / trail {TRAIL_PCT}% after +{TRAIL_ARM_PCT}%, "
-                      f"time exit {MAX_HOLD_DAYS}d"),
+                      f"ATR-scaled stop, "
+                      + ("2.5R target, " if USE_FIXED_TARGET
+                         else "no fixed target (it measured -0.31%/event on a right-skewed tape), ")
+                      + (f"trail {TRAIL_PCT}% after +{TRAIL_ARM_PCT}%, " if USE_TRAILING_STOP
+                         else "no trail, ")
+                      + f"time exit {MAX_HOLD_DAYS}d"),
             "note": ("Research runs continuously even when entries are paused or the book is full. "
                      "Pausing never disables protective exits. Paper fills require a fresh regular-session "
                      "bid/ask: buy at ask, sell at bid. "
