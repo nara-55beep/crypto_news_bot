@@ -1477,10 +1477,10 @@ class TestArchiveIsAuthoritative(unittest.TestCase):
 
     def test_archive_and_state_health_are_tracked_separately(self):
         bot = isolated_bot(tempfile.mkdtemp())
-        bot.archive_error = "signal archive write failed: OSError"
+        bot.archive_write_error = "signal archive write failed: OSError"
         bot._save()                                   # a good save must not mask it
         self.assertEqual(bot.state_save_error, "")
-        self.assertIn("archive write failed", bot.archive_error)
+        self.assertIn("archive write failed", bot.archive_write_error)
 
 
 class TestEvidenceIntegrity(unittest.TestCase):
@@ -1658,3 +1658,110 @@ class TestEvidenceStoreIsAuthoritative(unittest.TestCase):
                                                    "net_excess_return_pct": 0.5}}}}
         bot.signal_log = []                            # the UI cache is empty
         self.assertEqual(bot.forward_validation()["unique_tickers"], 1)
+
+
+class TestHealthFieldsAreIndependent(unittest.TestCase):
+    """A successful write proves the write path works. It proves nothing about a corrupt
+    record already on disk, and must not clear that."""
+
+    @staticmethod
+    def _corrupt_archive(tmp):
+        ap = os.path.join(tmp, "a.jsonl")
+        with open(ap, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"event": "signal", "id": "a",
+                                paper.SIGNAL_DAY_FIELD: "2026-01-01",
+                                "engine_version": paper.SIGNAL_ENGINE_VERSION}) + "\n")
+            f.write("{corrupt\n")
+        return ap
+
+    def test_a_successful_append_does_not_clear_corruption(self):
+        tmp = tempfile.mkdtemp()
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=self._corrupt_archive(tmp))
+        self.assertIn("corrupt", bot.archive_integrity_error)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+        self.assertTrue(bot._archive_event("signal", {"id": "z"}))
+        self.assertIn("corrupt", bot.archive_integrity_error)          # still blocking
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_only_a_clean_replay_clears_an_integrity_error(self):
+        tmp = tempfile.mkdtemp()
+        ap = self._corrupt_archive(tmp)
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertNotEqual(bot.archive_integrity_error, "")
+        with open(ap, "w", encoding="utf-8") as f:                     # repaired on disk
+            f.write(json.dumps({"event": "signal", "id": "a",
+                                paper.SIGNAL_DAY_FIELD: "2026-01-01",
+                                "engine_version": paper.SIGNAL_ENGINE_VERSION}) + "\n")
+        bot._replay_archive()
+        self.assertEqual(bot.archive_integrity_error, "")
+
+    def test_memory_only_outbox_is_not_reported_as_durable(self):
+        """Total disk failure cannot be made durable; it must not claim to be. This runs
+        the PRODUCTION sequence - no manual call to a private recovery method."""
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            bot._archive_event("outcome", {"id": "s1", "horizon": "5"})
+        self.assertEqual(len(bot._archive_outbox), 1)
+        self.assertFalse(os.path.exists(ap + ".outbox"))    # honest: nothing reached disk
+        self.assertIn("memory only", bot.outbox_error)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_a_normal_save_retries_a_stranded_outbox(self):
+        """Recovery must not require another archive event to happen along."""
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            bot._archive_event("outcome", {"id": "s1", "horizon": "5"})
+        bot._save()                                          # the ordinary save path
+        self.assertTrue(os.path.exists(ap + ".outbox"))
+        restarted = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        self.assertEqual(len(restarted._archive_outbox), 1)
+
+    def test_a_corrupt_outbox_is_quarantined_and_blocks(self):
+        tmp = tempfile.mkdtemp()
+        ap = os.path.join(tmp, "a.jsonl")
+        with open(ap + ".outbox", "w", encoding="utf-8") as f:
+            f.write("{not json\n")
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertIn("quarantined", bot.outbox_error)
+        self.assertTrue(os.path.exists(ap + ".outbox.corrupt"))   # preserved, not lost
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_a_flushed_outbox_updates_the_store_without_a_restart(self):
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        bot._archive_event("signal", {"id": "s1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                      "ticker": "A",
+                                      "engine_version": paper.SIGNAL_ENGINE_VERSION})
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            bot._archive_event("outcome", {"id": "s1", "horizon": "5",
+                                           "outcome": {"net_return_pct": 4.0},
+                                           "resolved": True})
+        bot._archive_event("signal", {"id": "s2"})           # flushes the queue
+        rows = {r["id"]: r for r in bot.evidence_rows()}
+        self.assertIn("5", rows["s1"].get("outcomes") or {})  # visible without restart
+
+    def test_benchmark_legs_are_unioned_like_outcomes(self):
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        with open(ap, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"event": "signal", "id": "s1",
+                                paper.SIGNAL_DAY_FIELD: "2026-01-02", "ticker": "A",
+                                "engine_version": paper.SIGNAL_ENGINE_VERSION}) + "\n")
+            f.write(json.dumps({"event": "benchmark", "id": "s1",
+                                "legs": {"1": 0.1, "5": 0.5}}) + "\n")
+        with open(sp, "w", encoding="utf-8") as f:
+            json.dump({"signal_log": [{"id": "s1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                       "engine_version": paper.SIGNAL_ENGINE_VERSION,
+                                       paper.SIGNAL_BENCHMARK_FIELD: {
+                                           "1": 0.1, "5": 0.5, "10": 1.0}}]}, f)
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        legs = bot.evidence_rows()[0].get(paper.SIGNAL_BENCHMARK_FIELD) or {}
+        self.assertEqual(sorted(legs), ["1", "10", "5"])   # cache-only 10 survives

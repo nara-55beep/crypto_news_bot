@@ -183,7 +183,12 @@ class PennyStockPaperBot:
         self.engine_version_started_at = time.time()
         self.persistence_error = ""
         self.state_save_error = ""
-        self.archive_error = ""
+        # Three distinct failures. A successful append proves the WRITE works; it
+        # proves nothing about a corrupt record already on disk, and clearing one with
+        # the other is how corruption stopped blocking verdicts after any new signal.
+        self.archive_integrity_error = ""
+        self.archive_write_error = ""
+        self.outbox_error = ""
         self._archive_outbox: list[dict] = []
         self._evidence: dict[str, dict] = {}
         self._was_market_open = False
@@ -212,6 +217,11 @@ class PennyStockPaperBot:
                 }, f)
             os.replace(tmp, self.state_path)
             self.state_save_error = ""
+            # Production never called _persist_outbox on its own, so a queue stranded by
+            # a disk outage stayed memory-only until another archive event happened to
+            # arrive. Retry it on the regular save path instead.
+            if self._archive_outbox:
+                self._persist_outbox()
         except Exception as e:
             # A silent failure here loses the forward evidence while the service still
             # reports "no errors". Surface it instead.
@@ -282,7 +292,10 @@ class PennyStockPaperBot:
                 base = merged.get(sid, {})
                 outcomes = dict(base.get("outcomes") or {})
                 outcomes.update(row.get("outcomes") or {})
+                legs = dict(base.get(SIGNAL_BENCHMARK_FIELD) or {})
+                legs.update(row.get(SIGNAL_BENCHMARK_FIELD) or {})
                 merged[sid] = {**base, **row, "outcomes": outcomes,
+                               SIGNAL_BENCHMARK_FIELD: legs,
                                "resolved": bool(base.get("resolved")
                                                 or row.get("resolved"))}
             self._evidence = merged
@@ -661,18 +674,45 @@ class PennyStockPaperBot:
             return None
         return round((bench_close[future[horizon - 1]] / start - 1) * 100, 4)
 
-    def _persist_outbox(self) -> None:
+    @property
+    def archive_error(self) -> str:
+        return "; ".join(x for x in (self.archive_integrity_error,
+                                     self.archive_write_error,
+                                     self.outbox_error) if x)
+
+    def _apply_evidence_event(self, event: dict) -> None:
+        """Fold one event into the authoritative store. Used by replay AND by a
+        successful append, so a flushed outbox is visible without a restart."""
+        sid = str(event.get("id") or "")
+        if not sid:
+            return
+        kind = event.get("event")
+        if kind == "signal":
+            self._evidence.setdefault(sid, {k: v for k, v in event.items()
+                                            if k != "event"})
+        elif sid in self._evidence:
+            row = self._evidence[sid]
+            if kind == "benchmark":
+                row.setdefault(SIGNAL_BENCHMARK_FIELD, {}).update(event.get("legs") or {})
+            elif kind == "outcome":
+                row.setdefault("outcomes", {})[str(event.get("horizon"))] = (
+                    event.get("outcome") or {})
+                row["resolved"] = bool(event.get("resolved"))
+
+    def _persist_outbox(self) -> bool:
         """Write the pending queue atomically so an outage cannot lose it on restart.
 
-        Best effort: if this also fails, the in-memory queue still holds and
-        archive_error still blocks evidentiary verdicts.
+        Returns whether the queue actually reached disk. Total disk failure cannot be
+        made durable - but it must not be reported as durable either, which is exactly
+        what swallowing this exception did.
         """
         path = self.archive_path + ".outbox"
         try:
             if not self._archive_outbox:
                 if os.path.exists(path):
                     os.remove(path)
-                return
+                self.outbox_error = ""
+                return True
             tmp = path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 for row in self._archive_outbox:
@@ -680,23 +720,44 @@ class PennyStockPaperBot:
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, path)
-        except OSError:
-            pass
+            self.outbox_error = ""
+            return True
+        except OSError as e:
+            self.outbox_error = (
+                f"{len(self._archive_outbox)} event(s) held in memory only - "
+                f"outbox could not be written ({type(e).__name__})")
+            return False
 
     def _load_outbox(self) -> None:
         """Restore any queue left behind by a failed write in a previous run."""
         path = self.archive_path + ".outbox"
+        if not os.path.exists(path):
+            return
         try:
-            if not os.path.exists(path):
-                return
             with open(path, encoding="utf-8") as f:
-                self._archive_outbox = [json.loads(x) for x in f.read().splitlines()
-                                        if x.strip()]
-            if self._archive_outbox:
-                self.archive_error = (f"{len(self._archive_outbox)} archived event(s) "
-                                      f"awaiting retry from a previous run")
-        except (OSError, ValueError):
-            pass
+                lines = [x for x in f.read().splitlines() if x.strip()]
+        except OSError as e:
+            self.outbox_error = f"outbox unreadable ({type(e).__name__}); evidence may be lost"
+            return
+        restored, bad = [], 0
+        for line in lines:
+            try:
+                restored.append(json.loads(line))
+            except ValueError:
+                bad += 1
+        self._archive_outbox = restored
+        if bad:
+            # Preserve the damaged file for recovery rather than overwriting it, and
+            # block verdicts: silently dropping queued events is evidence loss.
+            try:
+                os.replace(path, path + ".corrupt")
+            except OSError:
+                pass
+            self.outbox_error = (f"outbox had {bad} unreadable event(s); quarantined to "
+                                 f"{os.path.basename(path)}.corrupt - evidence incomplete")
+        elif restored:
+            self.outbox_error = (f"{len(restored)} archived event(s) awaiting retry "
+                                 f"from a previous run")
 
     def _archive_event(self, kind: str, payload: dict) -> bool:
         """Append one immutable event. The archive is the record; the log is a cache.
@@ -715,9 +776,11 @@ class PennyStockPaperBot:
                     f.write(json.dumps(row, default=str) + "\n")
                 f.flush()
                 os.fsync(f.fileno())
+            for row in pending:
+                self._apply_evidence_event(row)
             self._archive_outbox = []
             self._persist_outbox()
-            self.archive_error = ""
+            self.archive_write_error = ""
             return True
         except OSError as e:
             # Hold it rather than drop it. A failed final-horizon event would otherwise
@@ -727,8 +790,9 @@ class PennyStockPaperBot:
             # smaller coat.
             self._archive_outbox = pending
             self._persist_outbox()
-            self.archive_error = (f"signal archive write failed: {type(e).__name__}; "
-                                  f"{len(self._archive_outbox)} event(s) awaiting retry")
+            self.archive_write_error = (
+                f"signal archive write failed: {type(e).__name__}; "
+                f"{len(self._archive_outbox)} event(s) awaiting retry")
             return False
 
     def _archive_signal(self, row: dict) -> None:
@@ -754,7 +818,7 @@ class PennyStockPaperBot:
             # corruption, not a tear.
             tolerate_last = bool(raw) and not raw.endswith("\n")
         except OSError as e:
-            self.archive_error = f"signal archive read failed: {type(e).__name__}"
+            self.archive_integrity_error = f"signal archive read failed: {type(e).__name__}"
             return []
 
         bad_before_end = 0
@@ -780,8 +844,10 @@ class PennyStockPaperBot:
                 rows[sid].setdefault("outcomes", {})[
                     str(event.get("horizon"))] = event.get("outcome") or {}
                 rows[sid]["resolved"] = bool(event.get("resolved"))
+        # A clean full replay is the ONLY thing that may clear an integrity error.
+        self.archive_integrity_error = ""
         if bad_before_end:
-            self.archive_error = (
+            self.archive_integrity_error = (
                 f"signal archive corrupt: {bad_before_end} unreadable line(s) before the "
                 f"end; evidence is incomplete")
         return sorted(rows.values(),
