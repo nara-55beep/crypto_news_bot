@@ -121,7 +121,10 @@ AI_PROVIDER = "openai"
 # SECURITY: this key was exposed in a shared transcript - ROTATE IT at
 # https://console.groq.com/keys and then set it as an environment variable:
 #     setx GROQ_API_KEY "your-new-key"
-# No credential fallback is committed; a missing environment value fails closed.
+# No credential is committed. The key is read from the environment, falling back to
+# Windows' persisted user environment (see env_config.py) because setx only reaches
+# processes started afterwards. If neither holds a value this fails closed: the AI
+# client raises at call time and scanning continues without AI review.
 AI_API_KEY = env_or_registry("GROQ_API_KEY", "")
 AI_BASE_URL = "https://api.groq.com/openai/v1"
 AI_MODEL    = "llama-3.1-8b-instant"

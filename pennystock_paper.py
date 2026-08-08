@@ -191,6 +191,9 @@ class PennyStockPaperBot:
         self.archive_integrity_error = ""
         self.archive_write_error = ""
         self.outbox_error = ""
+        # Separate from outbox_error: clearing a drained queue must not
+        # also clear the record that evidence was quarantined.
+        self.quarantine_error = ""
         self._archive_outbox: list[dict] = []
         self._evidence: dict[str, dict] = {}
         self._was_market_open = False
@@ -682,6 +685,7 @@ class PennyStockPaperBot:
     def archive_error(self) -> str:
         return "; ".join(x for x in (self.archive_integrity_error,
                                      self.archive_write_error,
+                                     self.quarantine_error,
                                      self.outbox_error) if x)
 
     @staticmethod
@@ -699,7 +703,10 @@ class PennyStockPaperBot:
         if not str(event.get("id") or "").strip():
             return False
         if kind == "signal":
-            return True
+            # a production signal always carries its session and engine version; without
+            # them it cannot be placed in a basket or filtered by rule version
+            return (str(event.get(SIGNAL_DAY_FIELD) or "").strip() != ""
+                    and event.get("engine_version") is not None)
         if kind == "benchmark":
             return isinstance(event.get("legs"), dict)
         if kind == "outcome":
@@ -738,11 +745,14 @@ class PennyStockPaperBot:
             self._fold_evidence_event(self._evidence, event)
 
     def _repair_torn_tail(self) -> bool:
-        """Truncate an unterminated final fragment, preserving it for inspection.
+        """Make the archive safely appendable without destroying a valid last event.
 
-        A torn tail is tolerated on read, but appending after one joins the new event to
-        the fragment and destroys both. The fragment is saved beside the archive and the
-        file is cut back to its last complete newline before any further append.
+        A missing trailing newline does NOT imply torn JSON - a complete event can simply
+        have been written without one, and truncating it silently deleted real evidence.
+        The fragment is parsed and validated first: valid means keep it and add the
+        newline, invalid means quarantine it. The rewrite goes through a temporary file
+        and os.replace, because opening the live archive "wb" truncates it before a
+        failed rewrite can finish.
         """
         try:
             if not os.path.exists(self.archive_path):
@@ -753,12 +763,22 @@ class PennyStockPaperBot:
                 return True
             cut = raw.rfind(b"\n") + 1
             fragment = raw[cut:]
-            with open(self.archive_path + ".torn", "ab") as f:
-                f.write(fragment + b"\n")
-            with open(self.archive_path, "wb") as f:
-                f.write(raw[:cut])
+            try:
+                decoded = json.loads(fragment.decode("utf-8", "strict"))
+                keep = self.valid_event(decoded)
+            except (ValueError, UnicodeDecodeError):
+                keep = False
+
+            body = raw if keep else raw[:cut]
+            if not keep:
+                with open(self.archive_path + ".torn", "ab") as f:
+                    f.write(fragment + b"\n")
+            tmp = self.archive_path + ".repair.tmp"
+            with open(tmp, "wb") as f:
+                f.write(body if body.endswith(b"\n") else body + b"\n")
                 f.flush()
                 os.fsync(f.fileno())
+            os.replace(tmp, self.archive_path)
             return True
         except OSError:
             return False
@@ -832,7 +852,7 @@ class PennyStockPaperBot:
                     entries = [x for x in f.read().splitlines() if x.strip()]
             except OSError:
                 entries = []
-            self.outbox_error = (
+            self.quarantine_error = (
                 f"{len(entries) or 1} unresolved outbox quarantine(s); evidence is "
                 f"incomplete until {os.path.basename(self._quarantine_marker)} is cleared")
         path = self.archive_path + ".outbox"
@@ -847,8 +867,15 @@ class PennyStockPaperBot:
         restored, bad = [], 0
         for line in lines:
             try:
-                restored.append(json.loads(line))
+                decoded = json.loads(line)
             except ValueError:
+                bad += 1
+                continue
+            # Parsing is not validity. A bare [] was queued as an event and later written
+            # into the archive, corrupting the evidence it was meant to protect.
+            if self.valid_event(decoded):
+                restored.append(decoded)
+            else:
                 bad += 1
         self._archive_outbox = restored
         if bad:
@@ -873,8 +900,8 @@ class PennyStockPaperBot:
             # Salvaged events are written back only AFTER the damaged file has moved,
             # so they land in a fresh outbox rather than being erased with it.
             self._persist_outbox()
-            self.outbox_error = (
-                f"outbox had {bad} unreadable event(s); "
+            self.quarantine_error = (
+                f"outbox had {bad} unusable event(s); "
                 + (f"quarantined to {os.path.basename(target)}" if moved
                    else "quarantine move FAILED, damaged file left in place")
                 + " - evidence incomplete until resolved")
@@ -955,6 +982,7 @@ class PennyStockPaperBot:
             return []
 
         bad_before_end = 0
+        orphans = 0
         for number, line in enumerate(lines):
             line = line.strip()
             if not line:
@@ -970,13 +998,20 @@ class PennyStockPaperBot:
                 if not (tolerate_last and number == len(lines) - 1):
                     bad_before_end += 1
                 continue
-            self._fold_evidence_event(rows, event)
+            if not self._fold_evidence_event(rows, event):
+                # A benchmark/outcome whose signal never appears cannot be ordered after
+                # its creation, so the archive is missing or misordered events.
+                orphans += 1
         # A clean full replay is the ONLY thing that may clear an integrity error.
         self.archive_integrity_error = ""
-        if bad_before_end:
+        if bad_before_end or orphans:
+            parts = []
+            if bad_before_end:
+                parts.append(f"{bad_before_end} unreadable line(s) before the end")
+            if orphans:
+                parts.append(f"{orphans} orphan event(s) with no preceding signal")
             self.archive_integrity_error = (
-                f"signal archive corrupt: {bad_before_end} unreadable line(s) before the "
-                f"end; evidence is incomplete")
+                "signal archive corrupt: " + "; ".join(parts) + "; evidence is incomplete")
         return sorted(rows.values(),
                       key=lambda r: str(r.get(SIGNAL_DAY_FIELD) or ""), reverse=True)
 

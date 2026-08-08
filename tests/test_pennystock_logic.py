@@ -1553,7 +1553,9 @@ class TestEvidenceIntegrity(unittest.TestCase):
             self.assertFalse(bot._archive_event("outcome", {"id": "x", "horizon": "5"}))
         self.assertEqual(len(bot._archive_outbox), 1)
         self.assertIn("awaiting retry", bot.archive_error)
-        self.assertTrue(bot._archive_event("signal", {"id": "y"}))   # both land now
+        self.assertTrue(bot._archive_event("signal", {
+            "id": "y", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+            "engine_version": paper.SIGNAL_ENGINE_VERSION}))         # both land now
         self.assertEqual(bot._archive_outbox, [])
         self.assertEqual(len(bot._replay_archive()), 1)              # y; x had no signal
 
@@ -1740,7 +1742,7 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
         bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
                                        archive_path=ap)
         import glob
-        self.assertIn("quarantined", bot.outbox_error)
+        self.assertIn("quarantined", bot.quarantine_error)
         # unique name: a second quarantine must not overwrite the first
         self.assertEqual(len(glob.glob(ap + ".outbox.corrupt.*")), 1)
         self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
@@ -1748,7 +1750,7 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
         # and the block must SURVIVE a restart - renaming the file once used to end it
         restarted = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
                                              archive_path=ap)
-        self.assertIn("quarantine", restarted.outbox_error)
+        self.assertIn("quarantine", restarted.quarantine_error)
         self.assertEqual(restarted.forward_validation()["status"], "DATA_INCOMPLETE")
 
     def test_a_flushed_outbox_updates_the_store_without_a_restart(self):
@@ -1824,10 +1826,13 @@ class TestArchiveRepairAndSchema(unittest.TestCase):
         v = paper.PennyStockPaperBot.valid_event
         self.assertFalse(v([]))
         self.assertFalse(v({"event": "signal"}))                   # no id
+        self.assertFalse(v({"event": "signal", "id": "a"}))        # no session/version
         self.assertFalse(v({"event": "outcome", "id": "a"}))       # no horizon/outcome
         self.assertFalse(v({"event": "benchmark", "id": "a", "legs": None}))
         self.assertFalse(v({"event": "nonsense", "id": "a"}))
-        self.assertTrue(v({"event": "signal", "id": "a"}))
+        self.assertTrue(v({"event": "signal", "id": "a",
+                           paper.SIGNAL_DAY_FIELD: "2026-01-01",
+                           "engine_version": paper.SIGNAL_ENGINE_VERSION}))
         self.assertTrue(v({"event": "outcome", "id": "a", "horizon": "5",
                            "outcome": {"net_return_pct": 1.0}}))
 
@@ -1875,6 +1880,78 @@ class TestEnvOrRegistry(unittest.TestCase):
 
     def test_the_shipped_example_config_uses_the_helper(self):
         """The fix lived only in gitignored config.py, so a fresh clone never got it."""
-        src = open("config.example.py", encoding="utf-8").read()
+        with open("config.example.py", encoding="utf-8") as handle:
+            src = handle.read()
         self.assertIn("env_or_registry(\"GROQ_API_KEY\"", src)
         self.assertNotIn("os.getenv(\"GROQ_API_KEY\"", src)
+
+
+class TestArchiveRepairIsNonDestructive(unittest.TestCase):
+    """Repair must make the archive appendable without deleting real evidence."""
+
+    def _sig(self, sid, day):
+        return {"event": "signal", "id": sid, paper.SIGNAL_DAY_FIELD: day,
+                "ticker": "A", "engine_version": paper.SIGNAL_ENGINE_VERSION}
+
+    def test_a_valid_final_event_without_a_newline_is_kept(self):
+        """A missing newline is not torn JSON. Truncating it deleted a real event."""
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        with open(ap, "w", encoding="utf-8") as f:
+            f.write(json.dumps(self._sig("s1", "2026-01-01")) + "\n")
+            f.write(json.dumps(self._sig("s2", "2026-01-02")))       # valid, no newline
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        bot._archive_event("signal", self._sig("s3", "2026-01-03"))
+        restarted = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        self.assertEqual(sorted(x["id"] for x in restarted.evidence_rows()),
+                         ["s1", "s2", "s3"])
+        self.assertEqual(restarted.archive_error, "")
+
+    def test_an_invalid_final_fragment_is_still_quarantined(self):
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        with open(ap, "w", encoding="utf-8") as f:
+            f.write(json.dumps(self._sig("s1", "2026-01-01")) + "\n")
+            f.write('{"event": "signal", "id": "tor')               # genuinely torn
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        bot._archive_event("signal", self._sig("s3", "2026-01-03"))
+        restarted = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        self.assertEqual(sorted(x["id"] for x in restarted.evidence_rows()), ["s1", "s3"])
+        self.assertTrue(os.path.exists(ap + ".torn"))
+
+    def test_an_orphan_outcome_blocks_validation(self):
+        tmp = tempfile.mkdtemp()
+        ap = os.path.join(tmp, "a.jsonl")
+        with open(ap, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"event": "outcome", "id": "ghost", "horizon": "5",
+                                "outcome": {"net_return_pct": 1.0}}) + "\n")
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertIn("orphan", bot.archive_integrity_error)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_an_invalid_outbox_event_is_quarantined_not_queued(self):
+        tmp = tempfile.mkdtemp()
+        ap = os.path.join(tmp, "a.jsonl")
+        with open(ap + ".outbox", "w", encoding="utf-8") as f:
+            f.write("[]\n")                                   # parses, not an event
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertEqual(bot._archive_outbox, [])             # never queued
+        self.assertIn("unusable", bot.quarantine_error)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_salvage_cannot_clear_the_quarantine_block(self):
+        """Draining the queue must not erase the record that evidence was lost."""
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        with open(ap + ".outbox", "w", encoding="utf-8") as f:
+            f.write(json.dumps({"event": "signal", "id": "ok",
+                                paper.SIGNAL_DAY_FIELD: "2026-01-01",
+                                "engine_version": paper.SIGNAL_ENGINE_VERSION}) + "\n")
+            f.write("[]\n")
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+        bot._save()                                           # drains the good event
+        self.assertNotEqual(bot.quarantine_error, "")         # block survives salvage
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
