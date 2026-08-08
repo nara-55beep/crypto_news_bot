@@ -50,17 +50,12 @@ MAX_PER_SECTOR = 2         # concentration cap: 6 biotechs is one FDA headline, 
 DAILY_LOSS_LIMIT_PCT = 3.0
 
 STOP_PCT = 12.0            # initial stop below entry
-TP_PCT = 25.0              # take-profit level, still computed and displayed as a target
-# A fixed profit target is the wrong harness for this distribution. Over 5,187 deduped
-# 8-K events the median moves -0.55% across five sessions while the top 1% supply 68% of
-# the summed return, so capping the upside removes the only part that pays. Measured on
-# identical entries and identical stops, so survivorship and costs cancel:
-#   drop the 2.5R target (keep trail)  +0.314%/event, 95% CI [+0.044, +0.886]
-#   also drop the trail               +0.570%/event, CI [-0.156, +1.397]  (not proven)
-#   both together                     +0.884%/event, CI [+0.257, +1.916]
-# Only target removal is individually proven, so that is what changes by default; the
-# trail stays until its own interval clears zero. See research/penny_exit_structure.py.
-USE_FIXED_TARGET = os.getenv("PENNY_FIXED_TARGET", "0") == "1"
+TP_PCT = 25.0              # take profit
+# Exit research can propose a change, but only an exact, point-in-time v3 audit may
+# change the default. The broad 8-K result did not replicate on the stricter reaction
+# proxy, so the fixed target remains on. Researchers can still run the paper-only
+# experiment explicitly with PENNY_FIXED_TARGET=0.
+USE_FIXED_TARGET = os.getenv("PENNY_FIXED_TARGET", "1") == "1"
 USE_TRAILING_STOP = os.getenv("PENNY_TRAILING_STOP", "1") == "1"
 TRAIL_ARM_PCT = 12.0       # once up this much, trail
 TRAIL_PCT = 8.0            # trail distance from the high-water mark
@@ -1118,7 +1113,7 @@ class PennyStockPaperBot:
                       f"max {MAX_POSITION_PCT}% per name / {MAX_OPEN} open, spread cap {MAX_SPREAD_PCT}%, "
                       f"ATR-scaled stop, "
                       + ("2.5R target, " if USE_FIXED_TARGET
-                         else "no fixed target (it measured -0.31%/event on a right-skewed tape), ")
+                         else "no fixed target (paper-only experiment), ")
                       + (f"trail {TRAIL_PCT}% after +{TRAIL_ARM_PCT}%, " if USE_TRAILING_STOP
                          else "no trail, ")
                       + f"time exit {MAX_HOLD_DAYS}d"),

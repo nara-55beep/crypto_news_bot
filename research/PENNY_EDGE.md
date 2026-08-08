@@ -376,60 +376,49 @@ individual codes fails its family-wise test (p=0.467). The defensible conclusion
 not for directional prediction. This matches the deployed implementation—v3 gives no
 bullish score merely because a filing carries a "material" code.
 
-## The exit was the problem, not the entry
+## Exit structure: useful hypothesis, failed deployment gate
 
-Every attempt to forecast gains here has failed, and published work agrees the well is
-dry: Martineau (2022) finds post-earnings drift gone even for microcaps, with prices
-absorbing surprises on the announcement day. So the entry side was set aside and the
-harness examined instead.
+The first exit audit made an unsafe inference. It treated 5,187 broadly eligible 8-K
+events as though they were v3 entries, simulated ten trading sessions even though the
+bot uses ten calendar days, and quoted a family-wise test of the best rule versus zero
+as evidence that target removal beat the current exit. It also used maximum path price
+to argue that a capped exit cannot win; a target plainly can win when price reaches the
+target and subsequently reverses.
 
-### The distribution is a lottery, and the desk was trading it like a coin flip
+Version 2 fixes those errors. It uses the first session on or after the ten-calendar-day
+deadline, applies conservative same-bar stop/trail handling, measures paired differences
+against the current stop + 2.5R target + trail, and runs the family-wise test on those
+differences. It reports both the broad sample and a reaction-confirmed proxy with price,
+reaction, volume, close-location, liquidity, volatility, dilution and three-entry daily
+capacity filters.
 
-Across 5,187 eligible deduped 8-K events in the development window:
+### Direct result for removing only the fixed target
 
-| | |
-|---|---:|
-| mean 5-session return | +1.58% |
-| **median** | **-0.55%** |
-| share positive | 46.7% |
-| skew | 3.94 |
-| **share of total return from the top 1% of events** | **68%** |
+| Scope/window | Events | Signal days | Paired basket effect | 95% CI |
+|---|---:|---:|---:|---|
+| Broad 8-K, development | 5,187 | 1,520 | +0.164% | [-0.056%, +0.454%] |
+| Broad 8-K, post-2024 reused | 6,017 | 389 | +0.022% | [-0.080%, +0.127%] |
+| Reaction proxy, development | 59 | 57 | -0.157% | [-0.765%, +0.536%] |
+| Reaction proxy, post-2024 reused | 53 | 47 | -0.168% | [-0.593%, 0.000%] |
 
-The typical event loses money and the mean is manufactured by a handful of outliers.
-A fixed 2.5R profit target is close to the worst possible harness for that shape: it
-truncates the rare +60% event to roughly +25% while keeping every ordinary loser whole.
+The claimed target-removal improvement no longer clears zero after matching the live
+calendar horizon and handling daily-bar ambiguity conservatively. More importantly, its
+sign reverses in the closer reaction-confirmed proxy. Removing both target and trail is
+also negative in that proxy: -1.544% in development and -0.383% post-2024, with both
+intervals crossing zero. The proxy is sparse enough that the six-slot limit causes no
+additional skips, so it provides no evidence about portfolio-capacity gains.
 
-### Measured, holding entries and stops fixed
+Because a daily bar cannot reveal whether its low occurred before or after a new high
+tightened the trail, the audit also repeats target removal while deferring a newly raised
+trail until the next bar. Deployment requires agreement under both conventions; neither
+reaction-proxy interval clears zero under the deferred convention either. This prevents
+an arbitrary same-bar assumption from deciding the production default.
 
-Only the exit varies, so survivorship, costs and left-tail truncation affect each row
-equally and the differences are attributable to the harness. Paired, same events:
-
-| Change | Effect per event | 95% CI | |
-|---|---:|---|---|
-| drop the 2.5R target (keep trail) | **+0.314%** | [+0.044, +0.886] | proven |
-| then drop the trail as well | +0.570% | [-0.156, +1.397] | not proven |
-| both together | **+0.884%** | [+0.257, +1.916] | proven |
-
-Levels tell the same story, and it is monotone - every mechanism that caps the upside
-costs money: `live_current` +0.150% < `stop_and_target` +0.283% < `trail_no_target`
-+0.464% < `stop_only` +1.034% < `hold_only` +2.565%. Family-wise across the five exit
-rules, p=0.002.
-
-### What changed, and what deliberately did not
-
-`PENNY_FIXED_TARGET` now defaults off: the target's removal is individually proven. The
-trailing stop stays on (`PENNY_TRAILING_STOP=1`) because its own interval spans zero -
-the combined result is significant but that does not license removing a leg that is not.
-
-**This is not a profitable strategy.** `stop_only` at +1.034% carries CI [+0.08, +2.49],
-barely clear of zero before realistic costs, and `hold_only` - the best-looking row - is
-the one most inflated by a survivor-only panel, since names that went to zero are absent
-precisely where the right tail is measured. Concentration is the practical blocker: a
-mean living in 1% of events needs breadth to collect, and six slots on a $100 account
-will not reach it.
-
-The defensible claim is narrower: the desk was giving away roughly 0.3-0.9% per event to
-its own exit logic, and that is now fixed.
+`PENNY_FIXED_TARGET` therefore defaults **on** again. It can be set to `0` for an
+explicit paper experiment, but not as a claimed improvement. The exit result is
+`REJECTED_FOR_DEPLOYMENT` until an exact point-in-time v3 sample, executable quotes,
+intraday paths and a delisted-inclusive universe exist. The post-2024 window has already
+been examined and is sensitivity evidence, not a clean holdout.
 
 ### A hypothesis that failed, recorded so it is not retried
 

@@ -6,6 +6,7 @@ from unittest import mock
 
 import pennystock_bot as research
 import pennystock_paper as paper
+from research import penny_exit_structure as exit_structure
 from research import penny_stats as stats
 
 
@@ -879,32 +880,46 @@ class TestItemCodeAudit(unittest.TestCase):
 
 
 class TestExitStructure(unittest.TestCase):
-    """A fixed profit target caps the right tail of a distribution whose top 1% of
-    events supply 68% of the return. Measured at -0.31%/event, CI excluding zero."""
+    """Exit hypotheses stay experimental until they match the deployed entry rule."""
 
-    def test_fixed_target_is_off_by_default(self):
-        self.assertFalse(paper.USE_FIXED_TARGET)
-        self.assertTrue(paper.USE_TRAILING_STOP)   # its removal is not yet proven
+    def test_fixed_target_and_trail_are_on_by_default(self):
+        self.assertTrue(paper.USE_FIXED_TARGET)
+        self.assertTrue(paper.USE_TRAILING_STOP)
 
-    def test_target_can_be_re_enabled_by_environment(self):
+    def test_target_can_be_disabled_only_by_explicit_environment(self):
         import importlib
-        with mock.patch.dict(os.environ, {"PENNY_FIXED_TARGET": "1"}):
+        with mock.patch.dict(os.environ, {"PENNY_FIXED_TARGET": "0"}):
             reloaded = importlib.reload(paper)
-            self.assertTrue(reloaded.USE_FIXED_TARGET)
-        importlib.reload(paper)                    # restore the default for other tests
-        self.assertFalse(paper.USE_FIXED_TARGET)
+            self.assertFalse(reloaded.USE_FIXED_TARGET)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            importlib.reload(paper)
+            self.assertTrue(paper.USE_FIXED_TARGET)
 
-    def test_rules_text_states_which_exits_are_active(self):
-        text = ("no fixed target" if not paper.USE_FIXED_TARGET else "2.5R target")
-        self.assertIn("target", text)
+    def test_ten_days_means_calendar_days_not_ten_sessions(self):
+        import pandas as pd
+        sessions = pd.bdate_range("2026-08-03", periods=20)
+        position = exit_structure._deadline_position(sessions, 0)
+        self.assertEqual(sessions[position], pd.Timestamp("2026-08-13"))
+        self.assertEqual(position, 8)
 
-    def test_a_capped_exit_cannot_beat_an_uncapped_one_on_the_same_path(self):
-        """Sanity check on the mechanism itself: capping at a target can only ever
-        truncate a winner, never improve it."""
-        entry, target = 1.00, 1.25
-        path_high = [1.05, 1.40, 2.60]             # a tail event
-        capped = min(max(path_high), target) / entry - 1.0
-        uncapped = max(path_high) / entry - 1.0
-        self.assertLess(capped, uncapped)
-        path_low = [1.02, 1.04, 1.01]              # never reaches the target
-        self.assertEqual(min(max(path_low), target), max(path_low))
+    def test_target_can_help_when_a_winner_reverses(self):
+        """The old max-high test was wrong: uncapped exits do not sell at max high."""
+        entry, target, final_close = 1.00, 1.25, 0.90
+        capped_realized = target / entry - 1.0
+        uncapped_realized = final_close / entry - 1.0
+        self.assertGreater(capped_realized, uncapped_realized)
+
+    def test_reaction_proxy_never_uses_future_returns(self):
+        import pandas as pd
+        row = {
+            "negative_event": False, "raw_close": 2.0, "reaction_pct": 8.0,
+            "volume_ratio": 2.0, "close_location": 0.8,
+            "dollar_volume20": 8_000_000, "atr_pct": 0.1, "max_ret20": 0.1,
+            "dilution_age_days": 200, "signal_date": pd.Timestamp("2024-01-02"),
+        }
+        first = dict(row, gross_5=-0.9, ticker="AAA")
+        second = dict(row, gross_5=5.0, ticker="BBB")
+        selected = exit_structure._reaction_confirmed_proxy(
+            pd.DataFrame([first, second])
+        )
+        self.assertEqual(set(selected["ticker"]), {"AAA", "BBB"})

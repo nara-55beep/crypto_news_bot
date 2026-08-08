@@ -1,4 +1,4 @@
-"""A predictor of harm, because that is the only thing this data supports predicting.
+"""A falsified harm-filter hypothesis, retained to prevent result shopping.
 
 Every attempt to forecast *gains* in this universe has failed, and not narrowly: the
 live composite's price/volume core measured a gross expectancy of exactly zero over
@@ -7,15 +7,10 @@ direction (family-wise p=0.467). Published work agrees the well has run dry - Ma
 (2022) finds post-earnings drift gone even for microcaps, with prices absorbing surprises
 on the announcement date.
 
-One asymmetry survived all of it. Nothing forecasts gains, but several observable
-features reliably precede *losses*: recent dilution filings, distress item codes,
-lottery-like run-ups, sub-$1 prices. That is not a consolation prize. It matches the
-academic record on floating-price "toxic" convertibles, which produce significant
-negative abnormal returns after issuance in exactly this market-cap band, and it is the
-concern that actually binds a small account - capital preservation, not stock picking.
-
-Statistically it is also the easier problem. The harm effects run -1% to -2% per event
-against positive effects that never cleared noise, so a modest sample can resolve them.
+This audit asked whether dilution, distress, lottery run-ups, sub-$1 prices and unstable
+ranges could at least predict harm. They could not: every flag selected a higher mean
+return in this survivor-only, right-skewed panel, while medians and uncertainty did not
+support a deployable filter. Nothing in this module is used by the live scorer.
 
 Method follows the corrected conventions rather than my earlier flawed ones: the live
 price/liquidity floor is re-applied at *event* time instead of trusting panel
@@ -50,8 +45,8 @@ REPORT_PATH = ROOT / "data" / "pennystock_harm_model.json"
 METHOD_VERSION = "harm-v1-2026-08-08"
 ADVERSE_ITEMS = frozenset(edgar.NEGATIVE_8K_ITEMS)
 
-#: Pre-registered flags. Each is observable at the signal close and each has a stated
-#: reason to expect harm; none was chosen by looking at its own outcome first.
+#: Pre-specified flags for this audit. Each is observable at the signal close and has
+#: an economic reason to expect harm; the failed result is retained unchanged.
 FLAGS = {
     "recent_dilution_filing": (
         "an offering was filed within 90 days - supply is arriving",
