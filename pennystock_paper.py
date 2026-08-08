@@ -554,36 +554,69 @@ class PennyStockPaperBot:
                    "win" if pnl >= 0 else "loss")
         self.pos.pop(ticker, None)
 
-    def _evidence_clock(self) -> dict:
+    def signal_day_progress(self, horizon: str = "5") -> dict:
+        """The single count of forward progress, shared by the clock and the gate.
+
+        Three different quantities were being conflated. A *logged* signal day only
+        records that the rule fired; the verdict gate needs a *completed* outcome at the
+        horizon, and the benchmarked subset needs an IWM comparison as well. Counting
+        logged days let the clock read 60/60 while forward validation still reported
+        COLLECTING with nothing completed - the clock claimed done and the gate said not
+        started, about the same data.
+
+        Both callers now read these numbers, so they cannot disagree again.
+        """
+        current = [x for x in self.signal_log
+                   if x.get("engine_version") == SIGNAL_ENGINE_VERSION]
+        logged, completed, benchmarked = set(), set(), set()
+        for item in current:
+            day = str(item.get(SIGNAL_DAY_FIELD) or "")
+            if not day:
+                continue
+            logged.add(day)
+            outcome = (item.get("outcomes") or {}).get(str(horizon))
+            if isinstance(outcome, dict) and outcome.get("net_return_pct") is not None:
+                completed.add(day)
+                # must match forward_validation's own field exactly, not a plausible name
+                if outcome.get("net_excess_return_pct") is not None:
+                    benchmarked.add(day)
+        required = 60
+        benchmark_required = math.ceil(0.8 * required)
+        return {
+            "horizon": str(horizon),
+            "signal_days_logged": len(logged),
+            "completed_signal_days": len(completed),
+            "benchmarked_signal_days": len(benchmarked),
+            "completed_signal_days_required": required,
+            "benchmarked_signal_days_required": benchmark_required,
+            "completed_days_remaining": max(0, required - len(completed)),
+            "benchmark_days_remaining": max(0, benchmark_required - len(benchmarked)),
+            "unresolved_signal_days": max(0, len(logged) - len(completed)),
+        }
+
+    def _evidence_clock(self, horizon: str = "5") -> dict:
         """How much forward evidence exists, and what a version bump would discard.
 
         Filtering the signal log to the current engine version is right: prior-rule
         outcomes would contaminate forward accuracy. The unpriced side is that each bump
-        restarts collection at zero, and the desk needs 60 completed signal days before
-        it can even leave COLLECTING. At the historical proxy's ~12 signal days a year
-        that is roughly five years of an unchanged rule - so a strategy revised every few
-        days can never accumulate a verdict, whatever its event rate. Making the cost
-        visible is the point; it is a planning figure, never evidence of an edge.
+        restarts collection at zero. Making that cost visible is the point.
+
+        No ETA is offered. This rule's own signal rate has never been measured, and the
+        historical proxy's rate cannot be promoted into an estimate for it.
         """
+        progress = self.signal_day_progress(horizon)
         days_live = max(0.0, (time.time() - self.engine_version_started_at) / 86400.0)
-        collected = len({str(x.get(SIGNAL_DAY_FIELD) or "")
-                         for x in self.signal_log if x.get("engine_version")
-                         == SIGNAL_ENGINE_VERSION} - {""})
-        required = 60
         return {
             "strategy_id": research.LIVE_STRATEGY_ID,
             "engine_version": SIGNAL_ENGINE_VERSION,
             "days_since_version_change": round(days_live, 2),
-            "signal_days_collected": collected,
-            "signal_days_required": required,
-            "signal_days_remaining": max(0, required - collected),
-            "discarded_by_next_version_bump": collected,
+            **progress,
+            "discarded_by_next_version_bump": progress["signal_days_logged"],
             "note": ("a strategy change discards every row above and restarts this "
-                     "clock. 60 signal days is only the minimum before a first verdict "
-                     "- which may well be REJECTED - not proof of profitability. No ETA "
-                     "is given here: this rule's own signal rate has never been "
-                     "measured, and the historical proxy's rate cannot be promoted to "
-                     "an estimate for it."),
+                     "clock. Progress toward a verdict is measured in COMPLETED signal "
+                     "days, not logged ones: a logged day only records that the rule "
+                     "fired. 60 completed days is the minimum before a first verdict, "
+                     "which may itself be REJECTED - it is not proof of profitability."),
         }
 
     def _manage(self, p: Position, d):
@@ -880,7 +913,8 @@ class PennyStockPaperBot:
 
     async def _update_signal_outcomes(self):
         """Attach causal, cost-adjusted 1/5/10-session returns to prior signals."""
-        pending = [x for x in self.signal_log if not x.get("resolved") and x.get("signal_day")]
+        pending = [x for x in self.signal_log
+                   if not x.get("resolved") and x.get(SIGNAL_DAY_FIELD)]
         if not pending or research.yf is None:
             self.last_outcome_update = time.time()
             return
@@ -908,7 +942,8 @@ class PennyStockPaperBot:
                 hist = hist.dropna(subset=["Close"])
                 dates = [x.date().isoformat() for x in hist.index]
                 for item in items:
-                    indices = [i for i, day in enumerate(dates) if day > item["signal_day"]]
+                    indices = [i for i, day in enumerate(dates)
+                               if day > item[SIGNAL_DAY_FIELD]]
                     outcomes = item.setdefault("outcomes", {})
                     entry = float(item.get("price") or 0)
                     if entry <= 0:
@@ -925,12 +960,12 @@ class PennyStockPaperBot:
                         if benchmark is not None and not benchmark.empty:
                             bench_dates = [x.date().isoformat() for x in benchmark.index]
                             bench_idx = [i for i, day in enumerate(bench_dates)
-                                         if day > item["signal_day"]]
+                                         if day > item[SIGNAL_DAY_FIELD]]
                             if len(bench_idx) >= horizon:
                                 # Use the same signal snapshot convention as the stock:
                                 # signal-day close to the matching future close.
                                 prior_rows = [i for i, day in enumerate(bench_dates)
-                                              if day <= item["signal_day"]]
+                                              if day <= item[SIGNAL_DAY_FIELD]]
                                 if prior_rows:
                                     bench_entry = float(item.get("benchmark_price") or 0)
                                     if bench_entry <= 0:
@@ -1012,7 +1047,8 @@ class PennyStockPaperBot:
 
         by_day: dict[str, list[tuple[dict, dict]]] = {}
         for item, outcome in completed:
-            by_day.setdefault(str(item.get("signal_day") or "unknown"), []).append((item, outcome))
+            by_day.setdefault(str(item.get(SIGNAL_DAY_FIELD) or "unknown"),
+                              []).append((item, outcome))
 
         daily_net, daily_excess, daily_dates = [], [], []
         for day in sorted(by_day):
@@ -1045,13 +1081,19 @@ class PennyStockPaperBot:
             self._forward_feasibility_cache = (feasibility_key, planning)
         else:
             planning = dict(self._forward_feasibility_cache[1])
-        required_days = 60
-        enough_excess = len(daily_excess) >= math.ceil(0.8 * required_days)
-        if len(daily_net) < required_days or not enough_excess:
+        # Same source as the evidence clock, so the two can never report different
+        # progress against the same log.
+        progress = self.signal_day_progress(horizon)
+        required_days = progress["completed_signal_days_required"]
+        enough_excess = (progress["benchmarked_signal_days"]
+                         >= progress["benchmarked_signal_days_required"])
+        if progress["completed_signal_days"] < required_days or not enough_excess:
             status = "COLLECTING"
             reason = (
                 f"need {required_days} completed signal days with benchmark coverage; "
-                f"have {len(daily_net)} net / {len(daily_excess)} benchmarked"
+                f"have {progress['completed_signal_days']} net / "
+                f"{progress['benchmarked_signal_days']} benchmarked "
+                f"({progress['unresolved_signal_days']} logged but unresolved)"
             )
         elif mean <= 0 or ex_mean <= 0 or lo <= 0 or ex_lo <= 0:
             status = "REJECTED"
@@ -1118,7 +1160,15 @@ class PennyStockPaperBot:
                     self._scan_task = asyncio.create_task(self._scan(plan))
 
                 if not self._scan_lock.locked():
-                    entry_state = "entries on" if self.enabled else "entries paused"
+                    # "entries on" read as though the desk would trade, while the edge
+                    # gate was refusing every fill. Execution did fail closed, but the
+                    # status implied otherwise. Name the binding constraint instead.
+                    if not self.enabled:
+                        entry_state = "entries paused"
+                    elif not (research.edge_policy() or {}).get("auto_trade_allowed"):
+                        entry_state = "paper-entry toggle on; execution blocked by edge gate"
+                    else:
+                        entry_state = "entries on"
                     if self.pos:
                         self.status = (f"watching {len(self.pos)} position(s); continuous research, "
                                        f"{entry_state}")

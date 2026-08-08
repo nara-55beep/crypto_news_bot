@@ -504,7 +504,8 @@ class PennyStockLogicTests(unittest.TestCase):
         for day in range(10):
             for name in range(6):
                 bot.signal_log.append({
-                    "ticker": f"T{name}", "signal_day": f"2026-01-{day + 1:02d}",
+                    "ticker": f"T{name}", paper.SIGNAL_DAY_FIELD: f"2026-01-{day + 1:02d}",
+                    "engine_version": paper.SIGNAL_ENGINE_VERSION,
                     "outcomes": {"5": {"net_return_pct": 2.0,
                                          "net_excess_return_pct": 1.0}},
                 })
@@ -519,7 +520,8 @@ class PennyStockLogicTests(unittest.TestCase):
         ):
             bot = paper.PennyStockPaperBot()
         bot.signal_log = [{
-            "ticker": f"T{day % 35}", "signal_day": f"day-{day:03d}",
+            "ticker": f"T{day % 35}", paper.SIGNAL_DAY_FIELD: f"day-{day:03d}",
+            "engine_version": paper.SIGNAL_ENGINE_VERSION,
             "outcomes": {"5": {"net_return_pct": 2.0,
                                  "net_excess_return_pct": 1.0}},
         } for day in range(70)]
@@ -1138,10 +1140,10 @@ class TestEvidenceClock(unittest.TestCase):
                           self._production_row("2026-08-06"),
                           self._production_row("2026-08-06")]
         clock = bot._evidence_clock()
-        self.assertEqual(clock["signal_days_collected"], 2)      # deduped by session
+        self.assertEqual(clock["signal_days_logged"], 2)      # deduped by session
         self.assertEqual(clock["discarded_by_next_version_bump"], 2)
-        self.assertEqual(clock["signal_days_remaining"],
-                         clock["signal_days_required"] - 2)
+        self.assertEqual(clock["completed_days_remaining"],
+                         clock["completed_signal_days_required"])
 
     def test_a_renamed_session_key_cannot_pass_unnoticed(self):
         """Regression for the actual bug: any other key must count as nothing, so a
@@ -1150,14 +1152,14 @@ class TestEvidenceClock(unittest.TestCase):
         for wrong in ("day", "signal_date", "session"):
             bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
                                wrong: "2026-08-05"}]
-            self.assertEqual(bot._evidence_clock()["signal_days_collected"], 0,
+            self.assertEqual(bot._evidence_clock()["signal_days_logged"], 0,
                              f"{wrong!r} must not be mistaken for the session key")
 
     def test_prior_version_rows_do_not_count_as_evidence(self):
         bot = paper.PennyStockPaperBot()
         bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION - 1,
                            paper.SIGNAL_DAY_FIELD: "2026-01-01"}]
-        self.assertEqual(bot._evidence_clock()["signal_days_collected"], 0)
+        self.assertEqual(bot._evidence_clock()["signal_days_logged"], 0)
 
     def test_clock_is_planning_not_evidence(self):
         bot = paper.PennyStockPaperBot()
@@ -1165,3 +1167,55 @@ class TestEvidenceClock(unittest.TestCase):
         self.assertNotIn("edge", json.dumps(clock).lower())
         self.assertNotIn("profitable", json.dumps(clock).lower())
         self.assertIn("strategy_id", clock)
+
+
+class TestProgressIsOneNumber(unittest.TestCase):
+    """The clock and the verdict gate must never report different progress against the
+    same log. Logged 60/60 while the gate said COLLECTING with nothing completed."""
+
+    @staticmethod
+    def _row(day, *, completed=False, benchmarked=False):
+        row = {"engine_version": paper.SIGNAL_ENGINE_VERSION,
+               paper.SIGNAL_DAY_FIELD: day, "ticker": "TEST"}
+        if completed:
+            outcome = {"net_return_pct": 1.0}
+            if benchmarked:
+                outcome["net_excess_return_pct"] = 0.5
+            row["outcomes"] = {"5": outcome}
+        return row
+
+    def test_logged_days_are_not_counted_as_progress(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [self._row(f"2026-06-{d:02d}") for d in range(1, 31)]
+        p = bot.signal_day_progress()
+        self.assertEqual(p["signal_days_logged"], 30)
+        self.assertEqual(p["completed_signal_days"], 0)
+        self.assertEqual(p["completed_days_remaining"], 60)
+        self.assertEqual(p["unresolved_signal_days"], 30)
+
+    def test_clock_and_gate_agree(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [self._row(f"2026-06-{d:02d}") for d in range(1, 31)]
+        clock = bot._evidence_clock()
+        gate = bot.forward_validation()
+        self.assertEqual(gate["status"], "COLLECTING")
+        self.assertGreater(clock["completed_days_remaining"], 0)
+        # the clock must not claim completion while the gate is still collecting
+        self.assertFalse(clock["completed_days_remaining"] == 0
+                         and gate["status"] == "COLLECTING")
+
+    def test_benchmark_coverage_is_tracked_separately(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = ([self._row(f"2026-06-{d:02d}", completed=True) for d in range(1, 11)]
+                          + [self._row(f"2026-07-{d:02d}", completed=True, benchmarked=True)
+                             for d in range(1, 6)])
+        p = bot.signal_day_progress()
+        self.assertEqual(p["completed_signal_days"], 15)
+        self.assertEqual(p["benchmarked_signal_days"], 5)
+        self.assertLess(p["benchmarked_signal_days"], p["completed_signal_days"])
+
+    def test_no_eta_survives_anywhere_in_the_clock(self):
+        bot = paper.PennyStockPaperBot()
+        blob = json.dumps(bot._evidence_clock()).lower()
+        for banned in ("five years", "years of an unchanged", "12 signal days"):
+            self.assertNotIn(banned, blob)
