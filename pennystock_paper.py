@@ -104,7 +104,7 @@ SIGNAL_RETENTION_SESSIONS = 180
 # Days whose horizon has not elapsed are legitimately unmeasurable. Days that matured and
 # still have no outcome are informative: a name that stops resolving has usually halted or
 # delisted. The two must never be pooled.
-HORIZON_GRACE_DAYS = 3
+HORIZON_GRACE_SESSIONS = 2
 # What a permanently missing outcome is assumed to be worth when bounding the result. A
 # halted microcap can go to zero, so the bound uses the true worst case rather than a
 # comfortable one.
@@ -171,6 +171,8 @@ class PennyStockPaperBot:
         self._last_mark = 0.0
         self.engine_version_started_at = time.time()
         self.persistence_error = ""
+        self.state_save_error = ""
+        self.archive_error = ""
         self._was_market_open = False
         self._scan_lock = asyncio.Lock()
         self._load()
@@ -195,15 +197,19 @@ class PennyStockPaperBot:
                     "engine_version_started_at": self.engine_version_started_at,
                 }, f)
             os.replace(tmp, STATE_PATH)
-            self.persistence_error = ""
+            self.state_save_error = ""
         except Exception as e:
             # A silent failure here loses the forward evidence while the service still
             # reports "no errors". Surface it instead.
-            self.persistence_error = f"state save failed: {type(e).__name__}: {e}"[:160]
+            self.state_save_error = f"state save failed: {type(e).__name__}: {e}"[:160]
 
     def _load(self):
         try:
             if not os.path.exists(STATE_PATH):
+                # The archive outlives the state file, so evidence is restored even when
+                # only the cache is missing.
+                self.signal_log = [x for x in self._replay_archive()
+                                   if x.get("engine_version") == SIGNAL_ENGINE_VERSION]
                 return
             with open(STATE_PATH, encoding="utf-8") as f:      # was leaking the handle
                 d = json.load(f)
@@ -243,10 +249,15 @@ class PennyStockPaperBot:
             # Version 1 observations include signals produced by the old rule that
             # could promote an AI WATCH to BUY. They are invalid training/evaluation
             # data and must not contaminate forward accuracy statistics.
-            self.signal_log = [x for x in (d.get("signal_log") or [])
+            # The archive is the record. The persisted list is a cache, so it is used
+            # only when the archive has nothing - otherwise retention could silently
+            # change a past statistic across a restart.
+            replayed = self._replay_archive()
+            source = replayed if replayed else (d.get("signal_log") or [])
+            self.signal_log = [x for x in source
                                if x.get("engine_version") == SIGNAL_ENGINE_VERSION]
-        except Exception:
-            pass
+        except Exception as e:
+            self.state_save_error = f"state load failed: {type(e).__name__}: {e}"[:160]
 
     def _note(self, msg: str, kind: str = "info"):
         self.log.insert(0, {"t": time.time(), "kind": kind, "msg": msg})
@@ -590,19 +601,55 @@ class PennyStockPaperBot:
         kept = [row for day in keep_days for row in by_day[day]]
         return kept + undated[:20]
 
-    def _archive_signal(self, row: dict) -> None:
-        """Append-only evidence, so retention can never change a past statistic.
+    def _archive_event(self, kind: str, payload: dict) -> None:
+        """Append one immutable event. The archive is the record; the log is a cache.
 
-        The hot log is trimmed for memory, which meant analytics saw 181 sessions before
-        a restart and 180 after - the same question answered differently depending on
-        uptime. Nothing is discarded here; the trimmed log is only a cache over this.
+        Appending only signal creations made this useless as evidence: outcomes arrive
+        later, so the archive held rows that were permanently unresolved and could
+        restore nothing. Creations and every horizon outcome are both events now, keyed
+        by the signal's own id, so a restart rebuilds the same statistics.
         """
         try:
             os.makedirs(config.DATA_DIR, exist_ok=True)
             with open(SIGNAL_ARCHIVE_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps(row, default=str) + "\n")
+                f.write(json.dumps({"event": kind, **payload}, default=str) + "\n")
+            self.archive_error = ""
         except OSError as e:
-            self.persistence_error = f"signal archive write failed: {type(e).__name__}"
+            self.archive_error = f"signal archive write failed: {type(e).__name__}"
+
+    def _archive_signal(self, row: dict) -> None:
+        self._archive_event("signal", row)
+
+    def _replay_archive(self) -> list[dict]:
+        """Rebuild the signal log from the event archive, newest session first."""
+        rows: dict[str, dict] = {}
+        try:
+            if not os.path.exists(SIGNAL_ARCHIVE_PATH):
+                return []
+            with open(SIGNAL_ARCHIVE_PATH, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                    except ValueError:
+                        continue          # a torn final line must not lose the rest
+                    sid = str(event.get("id") or "")
+                    if not sid:
+                        continue
+                    if event.get("event") == "signal":
+                        rows.setdefault(sid, {k: v for k, v in event.items()
+                                              if k != "event"})
+                    elif event.get("event") == "outcome" and sid in rows:
+                        rows[sid].setdefault("outcomes", {})[
+                            str(event.get("horizon"))] = event.get("outcome") or {}
+                        rows[sid]["resolved"] = bool(event.get("resolved"))
+        except OSError as e:
+            self.archive_error = f"signal archive read failed: {type(e).__name__}"
+            return []
+        return sorted(rows.values(),
+                      key=lambda r: str(r.get(SIGNAL_DAY_FIELD) or ""), reverse=True)
 
     def _proxy_cost_share(self, admitted_days: set[str]) -> float:
         """Share of admitted rows whose cost was an ADV proxy rather than a real quote.
@@ -616,6 +663,22 @@ class PennyStockPaperBot:
             return 0.0
         return round(100 * sum(bool(x.get("cost_is_proxy")) for x in rows) / len(rows), 1)
 
+    def _recent_sessions(self) -> list:
+        """Recent IWM trading dates, cached. Empty if unavailable - callers fall back."""
+        now = time.time()
+        cached_at, cached = getattr(self, "_session_cache", (0.0, []))
+        if cached and now - cached_at < 6 * 3600:
+            return cached
+        dates: list = []
+        try:
+            if research.yf is not None:
+                hist = research.yf.Ticker("IWM").history(period="6mo", interval="1d")
+                dates = [d.date() for d in hist.index]
+        except Exception:
+            dates = []
+        self._session_cache = (now, dates)
+        return dates
+
     def daily_baskets(self, horizon: str = "5") -> dict:
         """Equal-weight basket per session, admitting only wholly resolved sessions.
 
@@ -626,8 +689,9 @@ class PennyStockPaperBot:
         winner plus one halted name was scoring as a complete +10% day.
 
         That is survivorship bias, reproduced inside the forward tracker built to avoid
-        it. Excluding the whole day is the conservative choice: a partial basket is not a
-        smaller sample, it is a biased one.
+        it. Excluding a partial basket is necessary but NOT sufficient - dropping a
+        matured unresolved day is itself biased, which is why such days are classified
+        stale and fed to missing_outcome_bound() rather than discarded.
         """
         current = [x for x in self.signal_log
                    if x.get("engine_version") == SIGNAL_ENGINE_VERSION
@@ -636,9 +700,25 @@ class PennyStockPaperBot:
         for item in current:
             by_day.setdefault(str(item[SIGNAL_DAY_FIELD]), []).append(item)
 
-        # Calendar allowance for a session-counted horizon, plus a grace period.
-        mature_after = math.ceil(int(horizon) * 7 / 5) + HORIZON_GRACE_DAYS
+        # Maturity in exchange sessions, not calendar days: a calendar approximation
+        # calls a day stale across a long holiday weekend when its horizon has not
+        # actually elapsed, manufacturing informative-missingness out of a closed market.
         today = datetime.now(NY).date()
+        need = int(horizon) + HORIZON_GRACE_SESSIONS
+        sessions = self._recent_sessions()
+        fallback_days = math.ceil(need * 7 / 5) + 2
+
+        def is_mature(day: str) -> bool:
+            try:
+                d = datetime.strptime(day, "%Y-%m-%d").date()
+            except ValueError:
+                return True                     # unparseable dates are treated as mature
+            if sessions:
+                return sum(1 for s in sessions if s > d) >= need
+            # no calendar: err toward "pending" rather than toward "stale"
+            return (today - d).days >= fallback_days
+
+        mature_after = need
 
         complete: list[dict] = []
         pending_days, stale_days = 0, 0
@@ -651,11 +731,7 @@ class PennyStockPaperBot:
                         if isinstance(o, dict) and o.get("net_return_pct") is not None]
             missing = len(rows) - len(resolved)
             if missing:
-                try:
-                    age = (today - datetime.strptime(day, "%Y-%m-%d").date()).days
-                except ValueError:
-                    age = mature_after + 1        # unparseable dates are treated as mature
-                if age < mature_after:
+                if not is_mature(day):
                     pending_days += 1
                     pending_rows += missing
                 else:
@@ -663,10 +739,19 @@ class PennyStockPaperBot:
                     stale_days += 1
                     stale_rows += missing
                     nets = [float(o["net_return_pct"]) for o in resolved]
-                    stale_detail.append({"day": day, "members": len(rows),
-                                         "missing": missing,
-                                         "resolved_net_pct": (sum(nets) / len(nets)
-                                                              if nets else None)})
+                    exc = [float(o["net_excess_return_pct"]) for o in resolved
+                           if o.get("net_excess_return_pct") is not None]
+                    costs = [float(r.get("cost_pct") or 0.0) for r in rows]
+                    benches = [float(o["benchmark_return_pct"]) for o in resolved
+                               if o.get("benchmark_return_pct") is not None]
+                    stale_detail.append({
+                        "day": day, "members": len(rows), "missing": missing,
+                        "resolved_net_pct": (sum(nets) / len(nets)) if nets else None,
+                        "resolved_excess_pct": (sum(exc) / len(exc)) if exc else None,
+                        "cost_pct": (sum(costs) / len(costs)) if costs else 0.0,
+                        # the benchmark is observable even when the name is not
+                        "benchmark_pct": (sum(benches) / len(benches)) if benches else 0.0,
+                    })
                 continue
             nets = [float(o["net_return_pct"]) for o in resolved]
             excess = [o.get("net_excess_return_pct") for o in resolved]
@@ -687,11 +772,13 @@ class PennyStockPaperBot:
             "pending_rows": pending_rows,
             "stale_incomplete_days": stale_days,
             "stale_incomplete_rows": stale_rows,
+            # full set for computation; the API truncates for display only
+            "stale_all": stale_detail,
             "stale_detail": stale_detail[:20],
             # kept for callers that only want "not complete"
             "incomplete_days": pending_days + stale_days,
             "unresolved_rows": pending_rows + stale_rows,
-            "mature_after_days": mature_after,
+            "mature_after_sessions": mature_after,
         }
 
     def missing_outcome_bound(self, horizon: str = "5") -> dict:
@@ -703,25 +790,54 @@ class PennyStockPaperBot:
         result survives assuming those names went to zero.
         """
         book = self.daily_baskets(horizon)
-        rows: list[float] = []
+        series: list[tuple[str, float, float | None]] = []
         for basket in book["baskets"]:
-            rows.extend([basket["net_pct"]] * basket["members"])
-        for day in book["stale_detail"]:
-            resolved = day.get("resolved_net_pct")
-            resolved_members = day["members"] - day["missing"]
-            if resolved is not None and resolved_members > 0:
-                rows.extend([float(resolved)] * resolved_members)
-            rows.extend([MISSING_OUTCOME_ASSUMPTION_PCT] * day["missing"])
-        if not rows:
-            return {"applicable": False, "reason": "no admitted or stale rows"}
-        bounded = sum(rows) / len(rows)
+            series.append((basket["day"], basket["net_pct"], basket["excess_pct"]))
+        # Every stale day, not a truncated preview: the display cap belongs in the API.
+        for day in book["stale_all"]:
+            members = day["members"]
+            if not members:
+                continue
+            resolved_n = members - day["missing"]
+            # A halted name is not merely -100%: the round trip is still charged, so the
+            # after-cost outcome is worse than a total loss.
+            worst = MISSING_OUTCOME_ASSUMPTION_PCT - float(day.get("cost_pct") or 0.0)
+            net_sum = (float(day["resolved_net_pct"]) * resolved_n
+                       if day.get("resolved_net_pct") is not None else 0.0)
+            net = (net_sum + worst * day["missing"]) / members
+            # The benchmark for a missing name is observable independently of the name,
+            # so the bounded excess is the same worst case measured against it.
+            if day.get("resolved_excess_pct") is not None and resolved_n:
+                ex_sum = float(day["resolved_excess_pct"]) * resolved_n
+            else:
+                ex_sum = 0.0
+            bench = float(day.get("benchmark_pct") or 0.0)
+            excess = (ex_sum + (worst - bench) * day["missing"]) / members
+            series.append((day["day"], net, excess))
+        if not series:
+            return {"applicable": False, "reason": "no admitted or stale days"}
+
+        series.sort(key=lambda row: row[0])            # HAC needs chronological order
+        nets = [row[1] for row in series]
+        excesses = [row[2] for row in series if row[2] is not None]
+        mean, lo, hi = self._hac_mean_ci(nets)
+        ex_mean, ex_lo, ex_hi = self._hac_mean_ci(excesses) if excesses else (0.0, 0.0, 0.0)
         return {
             "applicable": True,
             "assumed_missing_outcome_pct": MISSING_OUTCOME_ASSUMPTION_PCT,
-            "bounded_mean_net_pct": round(bounded, 3),
-            "rows_included": len(rows),
+            "assumption": "missing outcome = -100% minus the modelled round trip",
+            "bounded_mean_net_pct": round(mean, 3),
+            "bounded_net_hac_95_pct": [round(lo, 3), round(hi, 3)],
+            "bounded_mean_excess_pct": round(ex_mean, 3) if excesses else None,
+            "bounded_excess_hac_95_pct": ([round(ex_lo, 3), round(ex_hi, 3)]
+                                          if excesses else None),
+            "signal_days_included": len(series),
+            "imputed_days": len(book["stale_all"]),
             "imputed_rows": book["stale_incomplete_rows"],
-            "clears_zero": bool(bounded > 0),
+            # the same dependence-robust standard the verdict itself uses, applied to the
+            # bounded series - a positive mean with an interval spanning zero is not a
+            # result that survives the missing outcomes
+            "clears_zero": bool(lo > 0 and (not excesses or ex_lo > 0)),
         }
 
     def signal_day_progress(self, horizon: str = "5") -> dict:
@@ -1150,6 +1266,12 @@ class PennyStockPaperBot:
                             "stop_hit": bool(item.get("stop") and float(rows["Low"].min()) <= float(item["stop"])),
                         }
                     item["resolved"] = all(str(h) in outcomes for h in SIGNAL_HORIZONS)
+                    for h in SIGNAL_HORIZONS:
+                        if str(h) in outcomes:
+                            self._archive_event("outcome", {
+                                "id": item.get("id"), "horizon": str(h),
+                                "outcome": outcomes[str(h)],
+                                "resolved": item["resolved"]})
             except Exception as e:
                 self.last_error = f"outcome {ticker}: {type(e).__name__}"
             await asyncio.sleep(0.2)
@@ -1469,7 +1591,9 @@ class PennyStockPaperBot:
             "open_count": len(self.pos), "max_open": MAX_OPEN,
             "scan_count": self.scan_count,
             "evidence_clock": self._evidence_clock(),
-            "persistence_error": self.persistence_error,
+            "persistence_error": "; ".join(x for x in (self.state_save_error, self.archive_error) if x),
+            "state_save_error": self.state_save_error,
+            "archive_error": self.archive_error,
             "last_scan": self.last_scan,
             "last_scan_started": self.last_scan_started,
             "last_full_scan": self.last_full_scan,

@@ -6,8 +6,26 @@ from unittest import mock
 
 import pennystock_bot as research
 import pennystock_paper as paper
+
+# Redirect the append-only archive for the WHOLE module. Per-test patching missed the
+# tests that build a bot through other helpers, and five TEST rows reached the real
+# evidence archive before anyone noticed. A module-level redirect cannot be forgotten.
+_ARCHIVE_TMP = tempfile.mkdtemp(prefix="penny-test-archive-")
+paper.SIGNAL_ARCHIVE_PATH = os.path.join(_ARCHIVE_TMP, "archive.jsonl")
 from research import penny_exit_structure as exit_structure
 from research import penny_stats as stats
+
+
+def isolated_bot(tmpdir):
+    """A bot whose state AND append-only archive are both redirected.
+
+    Patching STATE_PATH alone let tests append TEST rows into the production evidence
+    archive - five of them reached it before this was noticed. Anything that writes must
+    be redirected, not just the file a test happens to think about.
+    """
+    with mock.patch.object(paper, "STATE_PATH", os.path.join(tmpdir, "state.json")),          mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH",
+                           os.path.join(tmpdir, "archive.jsonl")):
+        return paper.PennyStockPaperBot()
 
 
 def complete_dossier(**changes):
@@ -107,7 +125,7 @@ class PennyStockLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")
         ):
-            bot = paper.PennyStockPaperBot()
+            bot = isolated_bot(tempfile.mkdtemp())
         artifact = complete_dossier(spread_pct=38.0, spread_reliable=True)
         with mock.patch.object(research, "edge_policy", return_value={
             "status": "VALIDATED", "auto_trade_allowed": True,
@@ -293,7 +311,7 @@ class PennyStockLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             state = os.path.join(tmp, "state.json")
             with mock.patch.object(paper, "STATE_PATH", state):
-                bot = paper.PennyStockPaperBot()
+                bot = isolated_bot(tempfile.mkdtemp())
                 board = [{
                     "ticker": "TEST", "rank": 1, "price": 2.0,
                     "composite": 70, "hype": 70, "technical": 70,
@@ -322,7 +340,10 @@ class PennyStockLogicTests(unittest.TestCase):
                         }},
                     ],
                 }, handle)
-            with mock.patch.object(paper, "STATE_PATH", state):
+            # this test supplies its own state file, so only the archive is redirected
+            with mock.patch.object(paper, "STATE_PATH", state), \
+                 mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH",
+                                   os.path.join(tmp, "archive.jsonl")):
                 bot = paper.PennyStockPaperBot()
         self.assertEqual([row["ticker"] for row in bot.watchlist], ["NEW"])
 
@@ -425,7 +446,7 @@ class PennyStockLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")
         ):
-            bot = paper.PennyStockPaperBot()
+            bot = isolated_bot(tempfile.mkdtemp())
 
         def board(price):
             return [{
@@ -452,7 +473,7 @@ class PennyStockLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")
         ):
-            bot = paper.PennyStockPaperBot()
+            bot = isolated_bot(tempfile.mkdtemp())
         board = [{
             "ticker": "TEST", "price": 2.0, "catalyst_key": "news-1",
             "market_state": "CLOSED", "quote_reliable": False,
@@ -472,7 +493,7 @@ class PennyStockLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")
         ):
-            bot = paper.PennyStockPaperBot()
+            bot = isolated_bot(tempfile.mkdtemp())
         bot.enabled = False
         bot.pos = {str(i): object() for i in range(paper.MAX_OPEN)}
         bot.last_scan = 700
@@ -483,7 +504,7 @@ class PennyStockLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")
         ):
-            bot = paper.PennyStockPaperBot()
+            bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [{"outcomes": {"5": {
             "return_pct": 1.0, "net_return_pct": -0.5,
             "net_excess_return_pct": -1.0, "target1_hit": False,
@@ -499,7 +520,7 @@ class PennyStockLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")
         ):
-            bot = paper.PennyStockPaperBot()
+            bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = []
         for day in range(10):
             for name in range(6):
@@ -518,7 +539,7 @@ class PennyStockLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")
         ):
-            bot = paper.PennyStockPaperBot()
+            bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [{
             "ticker": f"T{day % 35}", paper.SIGNAL_DAY_FIELD: f"day-{day:03d}",
             "engine_version": paper.SIGNAL_ENGINE_VERSION,
@@ -605,7 +626,7 @@ class TestMarketRegime(unittest.TestCase):
 
 class TestSectorConcentration(unittest.TestCase):
     def test_cap_blocks_third_position_in_one_sector(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.pos = {}
         for i, t in enumerate(("AAA", "BBB")):
             bot.pos[t] = paper.Position(
@@ -1110,7 +1131,7 @@ class TestFeasibilityGate(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")
         ):
-            bot = paper.PennyStockPaperBot()
+            bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = []
         result = bot.forward_validation()
         self.assertIn("feasibility", result)
@@ -1135,7 +1156,7 @@ class TestEvidenceClock(unittest.TestCase):
                 paper.SIGNAL_DAY_FIELD: day, "ticker": "TEST"}
 
     def test_clock_counts_rows_in_the_production_format(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._production_row("2026-08-05"),
                           self._production_row("2026-08-06"),
                           self._production_row("2026-08-06")]
@@ -1148,7 +1169,7 @@ class TestEvidenceClock(unittest.TestCase):
     def test_a_renamed_session_key_cannot_pass_unnoticed(self):
         """Regression for the actual bug: any other key must count as nothing, so a
         future rename fails loudly instead of silently reading zero."""
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         for wrong in ("day", "signal_date", "session"):
             bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
                                wrong: "2026-08-05"}]
@@ -1156,13 +1177,13 @@ class TestEvidenceClock(unittest.TestCase):
                              f"{wrong!r} must not be mistaken for the session key")
 
     def test_prior_version_rows_do_not_count_as_evidence(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION - 1,
                            paper.SIGNAL_DAY_FIELD: "2026-01-01"}]
         self.assertEqual(bot._evidence_clock()["signal_days_logged"], 0)
 
     def test_clock_is_planning_not_evidence(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         clock = bot._evidence_clock()
         self.assertNotIn("edge", json.dumps(clock).lower())
         self.assertNotIn("profitable", json.dumps(clock).lower())
@@ -1185,7 +1206,7 @@ class TestProgressIsOneNumber(unittest.TestCase):
         return row
 
     def test_logged_days_are_not_counted_as_progress(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._row(f"2026-06-{d:02d}") for d in range(1, 31)]
         p = bot.signal_day_progress()
         self.assertEqual(p["signal_days_logged"], 30)
@@ -1195,7 +1216,7 @@ class TestProgressIsOneNumber(unittest.TestCase):
         self.assertEqual(p["unresolved_rows"], 30)
 
     def test_clock_and_gate_agree(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._row(f"2026-06-{d:02d}") for d in range(1, 31)]
         clock = bot._evidence_clock()
         gate = bot.forward_validation()
@@ -1206,7 +1227,7 @@ class TestProgressIsOneNumber(unittest.TestCase):
                          and gate["status"] == "COLLECTING")
 
     def test_benchmark_coverage_is_tracked_separately(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = ([self._row(f"2026-06-{d:02d}", completed=True) for d in range(1, 11)]
                           + [self._row(f"2026-07-{d:02d}", completed=True, benchmarked=True)
                              for d in range(1, 6)])
@@ -1216,7 +1237,7 @@ class TestProgressIsOneNumber(unittest.TestCase):
         self.assertLess(p["benchmarked_signal_days"], p["completed_signal_days"])
 
     def test_no_eta_survives_anywhere_in_the_clock(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         blob = json.dumps(bot._evidence_clock()).lower()
         for banned in ("five years", "years of an unchanged", "12 signal days"):
             self.assertNotIn(banned, blob)
@@ -1238,7 +1259,7 @@ class TestPartialBasketsAreExcluded(unittest.TestCase):
         return row
 
     def test_a_winner_plus_an_unresolved_name_is_not_a_completed_day(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._row("2026-06-01", "WIN", 10.0, 9.0),
                           self._row("2026-06-01", "HALTED")]
         p = bot.signal_day_progress()
@@ -1248,14 +1269,14 @@ class TestPartialBasketsAreExcluded(unittest.TestCase):
         self.assertEqual(p["unresolved_rows"], 1)
 
     def test_the_survivor_return_never_reaches_the_mean(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._row("2026-06-01", "WIN", 10.0, 9.0),
                           self._row("2026-06-01", "HALTED")]
         self.assertEqual(bot.daily_baskets()["baskets"], [])
         self.assertNotEqual(bot.forward_validation().get("mean_net_pct"), 10.0)
 
     def test_a_wholly_resolved_day_still_counts(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._row("2026-06-01", "A", 10.0, 9.0),
                           self._row("2026-06-01", "B", -4.0, -5.0)]
         book = bot.daily_baskets()
@@ -1264,7 +1285,7 @@ class TestPartialBasketsAreExcluded(unittest.TestCase):
         self.assertEqual(bot.signal_day_progress()["completed_signal_days"], 1)
 
     def test_one_unbenchmarked_member_blocks_the_benchmark(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._row("2026-06-01", "A", 10.0, 9.0),
                           self._row("2026-06-01", "B", -4.0)]      # no excess
         p = bot.signal_day_progress()
@@ -1273,7 +1294,7 @@ class TestPartialBasketsAreExcluded(unittest.TestCase):
 
     def test_retention_keeps_whole_sessions_past_the_sixty_day_gate(self):
         """The old 400-row cap left ~57 days, so the 60-day gate was unreachable."""
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._row(f"2026-{m:02d}-{d:02d}", f"T{i}", 1.0, 0.5)
                           for m in (5, 6, 7) for d in range(1, 26) for i in range(7)]
         self.assertEqual(len(bot.signal_log), 75 * 7)      # 525 rows, 75 sessions
@@ -1307,7 +1328,7 @@ class TestMissingnessBlocksVerdicts(unittest.TestCase):
 
     def test_a_stale_missing_day_blocks_a_verdict_the_bound_cannot_survive(self):
         """A thin edge cannot absorb a name going to zero, so the verdict is withheld."""
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         thin = [dict(row, outcomes={"5": {"net_return_pct": 0.5,
                                           "net_excess_return_pct": 0.4}})
                 for row in self._sixty_good_days()]
@@ -1318,28 +1339,36 @@ class TestMissingnessBlocksVerdicts(unittest.TestCase):
         self.assertGreater(verdict["stale_incomplete_days"], 0)
         self.assertFalse(verdict["missing_outcome_bound"]["clears_zero"])
 
-    def test_a_robust_edge_survives_the_same_missing_day(self):
-        """The gate must stay passable: an edge big enough to absorb the worst case
-        stands, so this is a bound and not an unfalsifiable veto."""
-        bot = paper.PennyStockPaperBot()
-        bot.signal_log = self._sixty_good_days() + [self._missing("2026-03-20", "HALTED")]
+    def test_the_gate_is_passable_when_nothing_is_unresolved(self):
+        """A bound that nothing can clear is a veto, not a bound. With no stale day the
+        positive verdict still stands - and still never unlocks trading."""
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = self._sixty_good_days()
         verdict = bot.forward_validation()
+        self.assertEqual(verdict["stale_incomplete_days"], 0)
         self.assertTrue(verdict["missing_outcome_bound"]["clears_zero"])
         self.assertEqual(verdict["status"], "PROMISING_NOT_VALIDATED")
-        self.assertFalse(verdict["auto_trade_allowed"])   # still never unlocks trading
+        self.assertFalse(verdict["auto_trade_allowed"])
+
+    def test_one_catastrophic_missing_day_defeats_a_sixty_day_edge(self):
+        """Measured: a single -100% day widens the HAC interval past zero."""
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = self._sixty_good_days() + [self._missing("2026-03-20", "HALTED")]
+        verdict = bot.forward_validation()
+        self.assertEqual(verdict["status"], "DATA_INCOMPLETE")
 
     def test_a_pending_day_does_not_block_anything(self):
         """A horizon that has not elapsed yet is not evidence of anything."""
         import datetime as dt
         today = dt.datetime.now(paper.NY).date().isoformat()
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = self._sixty_good_days() + [self._missing(today, "TOOFRESH")]
         book = bot.daily_baskets()
         self.assertEqual(book["stale_incomplete_days"], 0)
         self.assertEqual(book["pending_days"], 1)
 
     def test_the_bound_assumes_missing_names_went_to_zero(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = self._sixty_good_days() + [self._missing("2026-03-20")]
         bound = bot.missing_outcome_bound()
         self.assertTrue(bound["applicable"])
@@ -1347,7 +1376,7 @@ class TestMissingnessBlocksVerdicts(unittest.TestCase):
         self.assertLess(bound["bounded_mean_net_pct"], 2.0)
 
     def test_signal_stats_is_labelled_non_evidentiary(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [self._done("2026-01-01", "WIN", 10.0, 9.0),
                           self._missing("2026-01-01")]
         block = bot.signal_stats()["5"]
@@ -1356,7 +1385,98 @@ class TestMissingnessBlocksVerdicts(unittest.TestCase):
         self.assertIn("survivor", block["basis"])
 
     def test_a_save_failure_is_surfaced_not_swallowed(self):
-        bot = paper.PennyStockPaperBot()
+        bot = isolated_bot(tempfile.mkdtemp())
         with mock.patch("builtins.open", side_effect=OSError("disk full")):
             bot._save()
-        self.assertIn("state save failed", bot.persistence_error)
+        self.assertIn("state save failed", bot.state_save_error)
+
+
+class TestBoundIsDependenceRobust(unittest.TestCase):
+    """The bound must meet the same standard as the verdict it guards: a positive mean
+    whose HAC interval spans zero has not survived the missing outcomes."""
+
+    @staticmethod
+    def _done(day, net=2.0, excess=1.5, ticker="A"):
+        return {"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                paper.SIGNAL_DAY_FIELD: day, "ticker": ticker, "cost_pct": 1.0,
+                "outcomes": {"5": {"net_return_pct": net, "net_excess_return_pct": excess,
+                                   "benchmark_return_pct": 0.5}}}
+
+    def test_a_positive_mean_with_an_interval_spanning_zero_does_not_clear(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = [self._done(f"2026-0{1 + i // 28}-{1 + i % 28:02d}")
+                          for i in range(60)]
+        bot.signal_log.append({"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                               paper.SIGNAL_DAY_FIELD: "2026-03-20",
+                               "ticker": "HALTED", "cost_pct": 1.0})
+        bound = bot.missing_outcome_bound()
+        self.assertGreater(bound["bounded_mean_net_pct"], 0)          # mean is positive
+        self.assertLess(bound["bounded_net_hac_95_pct"][0], 0)        # interval is not
+        self.assertFalse(bound["clears_zero"])
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_the_bound_weights_each_signal_day_equally(self):
+        """Row weighting let a crowded day outvote a sparse one and understated the hit."""
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = [self._done("2026-01-01", ticker=f"T{i}") for i in range(9)]
+        bot.signal_log += [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                            paper.SIGNAL_DAY_FIELD: "2026-01-02", "ticker": "HALTED",
+                            "cost_pct": 1.0}]
+        bound = bot.missing_outcome_bound()
+        self.assertEqual(bound["signal_days_included"], 2)            # days, not rows
+        # one clean day at +2 and one day bounded to -101 -> about -49.5, not -8.3
+        self.assertLess(bound["bounded_mean_net_pct"], -40)
+
+    def test_costs_make_a_missing_outcome_worse_than_total_loss(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                           paper.SIGNAL_DAY_FIELD: "2026-01-02", "ticker": "H",
+                           "cost_pct": 1.5}]
+        bound = bot.missing_outcome_bound()
+        self.assertLess(bound["bounded_mean_net_pct"], -100.0)
+
+    def test_every_stale_day_is_bounded_not_only_the_first_twenty(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                           paper.SIGNAL_DAY_FIELD: f"2026-01-{d:02d}", "ticker": "H",
+                           "cost_pct": 1.0} for d in range(1, 26)]
+        book = bot.daily_baskets()
+        self.assertEqual(len(book["stale_all"]), 25)
+        self.assertEqual(len(book["stale_detail"]), 20)               # display cap only
+        self.assertEqual(bot.missing_outcome_bound()["imputed_days"], 25)
+
+
+class TestArchiveIsAuthoritative(unittest.TestCase):
+    def test_outcomes_survive_a_restart_through_the_archive(self):
+        tmp = tempfile.mkdtemp()
+        with mock.patch.object(paper, "STATE_PATH", os.path.join(tmp, "s.json")), \
+             mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH", os.path.join(tmp, "a.jsonl")):
+            bot = paper.PennyStockPaperBot()
+            bot._archive_event("signal", {"id": "sig1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                          "ticker": "A",
+                                          "engine_version": paper.SIGNAL_ENGINE_VERSION})
+            bot._archive_event("outcome", {"id": "sig1", "horizon": "5",
+                                           "outcome": {"net_return_pct": 3.0},
+                                           "resolved": True})
+            restored = paper.PennyStockPaperBot()
+        self.assertEqual(len(restored.signal_log), 1)
+        self.assertEqual(restored.signal_log[0]["outcomes"]["5"]["net_return_pct"], 3.0)
+
+    def test_a_torn_final_line_does_not_lose_earlier_events(self):
+        tmp = tempfile.mkdtemp()
+        path = os.path.join(tmp, "a.jsonl")
+        with mock.patch.object(paper, "STATE_PATH", os.path.join(tmp, "s.json")), \
+             mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH", path):
+            bot = paper.PennyStockPaperBot()
+            bot._archive_event("signal", {"id": "sig1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                          "engine_version": paper.SIGNAL_ENGINE_VERSION})
+            with open(path, "a", encoding="utf-8") as f:
+                f.write('{"event": "signal", "id": "trunc"')     # no newline, no close
+            self.assertEqual(len(paper.PennyStockPaperBot().signal_log), 1)
+
+    def test_archive_and_state_health_are_tracked_separately(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.archive_error = "signal archive write failed: OSError"
+        bot._save()                                   # a good save must not mask it
+        self.assertEqual(bot.state_save_error, "")
+        self.assertIn("archive write failed", bot.archive_error)

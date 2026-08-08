@@ -298,7 +298,7 @@ function render(s){
     stat('Open', (s.open_count||0)+' / '+(s.max_open||0)) +
     stat('Closed trades', s.trades||0) +
     stat('Win rate', (s.trades? s.win_rate+'%' : '—')) +
-    stat('5d net hit rate', s5.count ? s5.net_hit_rate+'% ('+s5.count+')' : 'collecting') +
+    stat('Verdict', esc((s.forward_validation||{}).status||'COLLECTING')) +
     stat('Open risk', money(s.open_risk||0)) +
     stat('Scans', s.scan_count||0) +
     stat('Next scan', s.scan_in_progress ? 'running' : (s.next_scan_in_sec||0)+'s') +
@@ -398,7 +398,7 @@ function render(s){
       +td(x.count||0)+td(x.count?(x.net_hit_rate+'%'):'collecting')+td(x.count?(x.avg_net_return_pct+'%'):'-')
       +td(x.count&&x.avg_net_excess_pct!=null?(x.avg_net_excess_pct+'%'):'-')
       +td(x.count?(x.target1_rate+'%'):'-')+td(x.count?(x.stop_rate+'%'):'-')+'</tr>';}).join('')
-  ) + '<div class="note">Forward verdict: <b>'+esc(fv.status||'COLLECTING')+'</b> — '
+  ) + '<div class="note"><b>Resolved rows only - non-evidentiary.</b> These averages cover whichever signals happened to resolve, so they carry the survivor bias the verdict below is built to remove; a winner beside an unresolved halted name still shows as a win. '+ ((AS['5']||{}).stale_incomplete_days ? '<b>'+((AS['5']||{}).stale_incomplete_days)+' matured day(s) still unresolved.</b> ' : '')+ '<br>Forward verdict: <b>'+esc(fv.status||'COLLECTING')+'</b> — '
     + esc(fv.reason||'waiting for confirmed observations')+'<br>'
     + 'Evidence unit: '+esc(fv.grouping||'signal-day baskets')+'; '+(fv.signal_days||0)
     + ' / '+(fv.minimum_signal_days||60)+' required days. This forward panel never unlocks trading by itself.</div>';
@@ -419,11 +419,18 @@ function render(s){
   $('log').innerHTML = (s.log||[]).map(l=>'<div class="'+esc(l.kind||'')+'">'+esc(l.msg)+'</div>').join('')
     || '<div style="padding:16px;color:var(--muted)">No activity.</div>';
 
+  // A lost write silently destroys the forward evidence, so it belongs in the banner
+  // ahead of any transient scan error rather than only in the API payload.
+  const problems = [];
+  if(s.state_save_error) problems.push('EVIDENCE AT RISK - '+s.state_save_error);
+  if(s.archive_error)    problems.push('EVIDENCE AT RISK - '+s.archive_error);
+  if(s.last_error)       problems.push(s.last_error);
   const e = $('errbox');
-  if(s.last_error){
+  if(problems.length){
+    const text = problems.join('   |   ');
     if(!e){ const d=document.createElement('div'); d.id='errbox'; d.className='err';
-            d.textContent=s.last_error; $('watchlist').parentNode.appendChild(d); }
-    else e.textContent = s.last_error;
+            d.textContent=text; $('watchlist').parentNode.appendChild(d); }
+    else e.textContent = text;
   } else if(e){ e.remove(); }
 }
 function stat(k,v,cls){ return '<div class="stat"><div class="k">'+k+'</div>'
