@@ -28,7 +28,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, asdict, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import config
@@ -52,7 +52,7 @@ DAILY_LOSS_LIMIT_PCT = 3.0
 
 STOP_PCT = 12.0            # initial stop below entry
 TP_PCT = 25.0              # take profit
-# Exit research can propose a change, but only an exact, point-in-time v3 audit may
+# Exit research can propose a change, but only an exact, point-in-time live-rule audit may
 # change the default. The broad 8-K result did not replicate on the stricter reaction
 # proxy, so the fixed target remains on. Researchers can still run the paper-only
 # experiment explicitly with PENNY_FIXED_TARGET=0.
@@ -92,7 +92,7 @@ CONFIRM_MAX_CHASE_PCT = 5.0
 SETUP_TTL_SEC = 2 * 60 * 60
 OUTCOME_UPDATE_SEC = 60 * 60
 SIGNAL_HORIZONS = (1, 5, 10)
-SIGNAL_ENGINE_VERSION = 5
+SIGNAL_ENGINE_VERSION = 6
 
 
 @dataclass
@@ -185,7 +185,16 @@ class PennyStockPaperBot:
             self.pos = {k: Position(**v) for k, v in (d.get("positions") or {}).items()}
             self.history = d.get("history") or []
             self.log = d.get("log") or []
-            self.watchlist = d.get("watchlist") or []
+            # A board row is a decision artifact, not generic cache data.  After a
+            # strategy implementation change, showing old rows under the new header
+            # misrepresents what the running rule decided.  Keep only exact-ID rows;
+            # the next scheduled scan repopulates the board.
+            self.watchlist = [
+                row for row in (d.get("watchlist") or [])
+                if isinstance(row, dict)
+                and isinstance(row.get("signal"), dict)
+                and row["signal"].get("strategy_id") == research.LIVE_STRATEGY_ID
+            ]
             self.day_key = str(d.get("day_key", ""))
             self.day_pnl = float(d.get("day_pnl", 0.0))
             self.scan_count = int(d.get("scan_count", 0))
@@ -265,17 +274,24 @@ class PennyStockPaperBot:
 
     @staticmethod
     def _catalyst_key(d) -> str:
-        news = "|".join(str(x.get("title") or "") for x in (d.news or [])[:3])
-        filings = "|".join(
-            f"{x.get('date','')}:{x.get('type','')}" for x in (d.recent_filings or [])[:3]
+        news = "|".join(
+            f"{x.get('when','')}:{x.get('publisher','')}:{x.get('title','')}"
+            for x in (d.news or [])[:5]
         )
-        return f"{news}::{filings}::{d.earnings_date}::{int(d.recent_offering)}"
+        filings = "|".join(
+            f"{x.get('accepted_at') or x.get('date','')}:{x.get('type','')}:"
+            f"{x.get('accessionNumber','')}:{','.join(str(v) for v in (x.get('items') or []))}"
+            for x in (d.recent_filings or [])[:5]
+        )
+        adverse = ",".join(str(x) for x in (d.adverse_8k_items or []))
+        return (f"{news}::{filings}::{d.earnings_date}::"
+                f"{int(d.recent_offering)}::{adverse}")
 
-    def _cached_ai(self, d, score: float) -> tuple[dict | None, str, bool]:
+    def _cached_ai(self, d, score: float) -> tuple[dict | None, str, bool, str]:
         """Reuse an analyst verdict only while its facts and price remain immaterially changed."""
         item = self._ai_cache.get(d.ticker)
         if not item:
-            return None, "", False
+            return None, "", False, ""
         ttl = AI_ERROR_CACHE_SEC if item.get("error") else AI_CACHE_SEC
         age = time.time() - float(item.get("t", 0))
         old_price = float(item.get("price", 0))
@@ -284,14 +300,16 @@ class PennyStockPaperBot:
         if (age > ttl or price_move >= AI_MATERIAL_PRICE_PCT
                 or score_move >= AI_MATERIAL_SCORE_POINTS
                 or item.get("catalyst_key") != self._catalyst_key(d)):
-            return None, "", False
-        return item.get("ai"), str(item.get("error") or ""), True
+            return None, "", False, ""
+        return (item.get("ai"), str(item.get("error") or ""), True,
+                str(item.get("model") or ""))
 
-    def _store_ai(self, d, score: float, ai: dict | None, error: str):
+    def _store_ai(self, d, score: float, ai: dict | None, error: str, model: str = ""):
         self._ai_cache[d.ticker] = {
             "t": time.time(), "price": d.price, "score": float(score),
             "catalyst_key": self._catalyst_key(d), "ai": ai,
             "error": str(error or "")[:160],
+            "model": str(model or ""),
         }
         # The cache is operational, not evidence. Bound it independently of the board.
         if len(self._ai_cache) > 100:
@@ -311,6 +329,11 @@ class PennyStockPaperBot:
             ticker = b["ticker"]
             sig = b.get("signal") or {}
             candidate = sig.get("candidate_action") in ("BUY", "STRONG BUY")
+            executable_observation = bool(
+                b.get("quote_reliable")
+                and str(b.get("market_state") or "").upper() == "REGULAR"
+                and not b.get("spread_estimated")
+            )
             prior = self.setup_states.get(ticker) or {}
             price = float(b.get("price") or 0)
             catalyst_key = str(b.get("catalyst_key") or "")
@@ -319,7 +342,7 @@ class PennyStockPaperBot:
             first_price = price
             reset_reason = ""
 
-            if candidate:
+            if candidate and executable_observation:
                 gap = now - float(prior.get("last_seen", 0))
                 same_thesis = catalyst_key == str(prior.get("catalyst_key") or "")
                 old_first = float(prior.get("first_price", 0))
@@ -343,7 +366,10 @@ class PennyStockPaperBot:
                     elif prior.get("candidate") and chase > CONFIRM_MAX_CHASE_PCT:
                         reset_reason = f"price chased {chase:.1f}% since detection"
 
-            confirmed = bool(candidate and hits >= CONFIRM_SCANS)
+            elif candidate:
+                reset_reason = "waiting for fresh regular-session executable quote"
+
+            confirmed = bool(candidate and executable_observation and hits >= CONFIRM_SCANS)
             state = {
                 "engine_version": SIGNAL_ENGINE_VERSION,
                 "candidate": candidate, "confirmed": confirmed, "hits": hits,
@@ -351,6 +377,7 @@ class PennyStockPaperBot:
                 "first_price": first_price, "last_price": price,
                 "catalyst_key": catalyst_key,
                 "candidate_action": sig.get("candidate_action"),
+                "executable_observation": executable_observation,
                 "reset_reason": reset_reason,
             }
             self.setup_states[ticker] = state
@@ -359,16 +386,23 @@ class PennyStockPaperBot:
                           else "not_eligible"),
                 "confirmed": confirmed, "observations": hits,
                 "required": CONFIRM_SCANS, "first_seen": first_seen,
+                "executable_observation": executable_observation,
                 "reset_reason": reset_reason,
             }
             b["confirmation"] = confirmation
             sig["confirmed"] = confirmed
             sig["confirmation_observations"] = hits
             if candidate and not confirmed:
-                sig["why"] = (
-                    f"setup detected {hits}/{CONFIRM_SCANS}; waiting for a separated "
-                    "confirmation scan before any entry"
-                )
+                if not executable_observation:
+                    sig["why"] = (
+                        "research candidate only; waiting for a fresh, plausible "
+                        "regular-session bid/ask before confirmation"
+                    )
+                else:
+                    sig["why"] = (
+                        f"setup detected {hits}/{CONFIRM_SCANS}; waiting for a separated "
+                        "confirmation scan before any entry"
+                    )
                 # A future validated policy may otherwise expose a BUY before the
                 # persistence gate. RESEARCH already means track-only and stays so.
                 if sig.get("action") in ("BUY", "STRONG BUY"):
@@ -437,9 +471,9 @@ class PennyStockPaperBot:
             self._note(f"skip {d.ticker}: effective spread {eff:.1f}% exceeds the "
                        f"{MAX_SPREAD_PCT}% cap", "info")
             return
-        if not d.spread_reliable:
-            self._note(f"skip {d.ticker}: no fresh regular-session bid/ask; "
-                       "the displayed cost is only an ADV proxy", "info")
+        if estimated or not research.trusted_execution_quote(d):
+            self._note(f"skip {d.ticker}: no trusted regular-session bid/ask; "
+                       "the displayed cost is only an ADV proxy or the book is suspect", "info")
             return
         signal_entry = float(sig.get("entry") or d.price)
         if signal_entry > 0 and abs(d.price / signal_entry - 1) > 0.05:
@@ -617,27 +651,29 @@ class PennyStockPaperBot:
         board = []
         reviews = 0
         for rank, (comp, d, r) in enumerate(top, start=1):
-            ai, ai_err = None, ""
+            ai, ai_err, ai_model = None, "", ""
             rejected = self.hard_reject(d)
             eligible = research.mechanical_setup(d, r)
             if reviews < AI_DEEP_DIVE and not rejected and eligible:
                 self.status = f"AI reviewing #{rank} {d.ticker}..."
-                ai, ai_err, cached = self._cached_ai(d, comp)
+                ai, ai_err, cached, ai_model = self._cached_ai(d, comp)
                 if not cached:
                     try:
                         # Review the same snapshot that was ranked. Re-fetching here
                         # used to let the AI and mechanical engine see different facts.
                         res = await research.analyse_dossier(d)
                         ai, ai_err = res.get("ai"), res.get("ai_error", "")
+                        ai_model = str(res.get("model") or "")
                         if ai_err:
                             self.last_error = ai_err[:140]
                     except Exception as e:
                         ai_err = f"{type(e).__name__}: {str(e)[:80]}"
-                    self._store_ai(d, comp, ai, ai_err)
+                    self._store_ai(d, comp, ai, ai_err, ai_model)
                     reviews += 1
                     await asyncio.sleep(2.5)
             sig = research.signal_from(d, r, ai)
             spread, spread_estimated = research.effective_spread(d)
+            alignment = research.catalyst_alignment(d)
             board.append({
                 "rank": rank, "ticker": d.ticker, "name": d.name,
                 "price": round(d.price, 4), "change_pct": round(d.change_pct, 2),
@@ -646,6 +682,8 @@ class PennyStockPaperBot:
                 "spread_estimated": spread_estimated,
                 "spread_unreliable": spread_estimated,
                 "market_state": d.market_state,
+                "bid": round(d.bid, 4), "ask": round(d.ask, 4),
+                "quote_age_min": round(d.quote_age_min, 2),
                 "volume_surge": round(d.volume_surge, 2),
                 "composite": r["composite"], "hype": r["hype"],
                 "technical": r["technical"], "catalyst": r["catalyst"],
@@ -653,10 +691,24 @@ class PennyStockPaperBot:
                 "hype_why": r["hype_why"], "quality_why": r["quality_why"],
                 "technical_why": r["technical_why"], "catalyst_why": r["catalyst_why"],
                 "trade_why": r["trade_why"], "data_completeness": d.data_completeness,
-                "signal": sig, "ai": ai, "ai_error": ai_err,
+                "signal": sig, "ai": ai, "ai_error": ai_err, "ai_model": ai_model,
                 "rejected": rejected, "catalysts": d.catalysts[:5], "flags": d.flags[:6],
                 "catalyst_key": self._catalyst_key(d),
-                "quote_reliable": d.spread_reliable,
+                "catalyst_alignment": alignment,
+                "sec_accessions": [
+                    str(x.get("accessionNumber") or "")
+                    for x in (d.recent_filings or []) if x.get("official_sec")
+                ][:5],
+                "sec_items": list(d.recent_8k_items or []),
+                "adverse_sec_items": list(d.adverse_8k_items or []),
+                "news_snapshot": [
+                    {"title": str(x.get("title") or "")[:180],
+                     "publisher": str(x.get("publisher") or "")[:60],
+                     "when": str(x.get("when") or "")[:30],
+                     "age_hours": x.get("age_hours")}
+                    for x in (d.news or [])[:5]
+                ],
+                "quote_reliable": research.trusted_execution_quote(d),
                 "held": d.ticker in self.pos, "t": time.time(),
             })
 
@@ -728,7 +780,12 @@ class PennyStockPaperBot:
             act = b["signal"]["action"]
             candidate_action = b["signal"].get("candidate_action", act)
             confirmed = bool((b.get("confirmation") or {}).get("confirmed"))
-            if candidate_action in ("BUY", "STRONG BUY") and confirmed:
+            executable_snapshot = bool(
+                b.get("quote_reliable")
+                and str(b.get("market_state") or "").upper() == "REGULAR"
+                and not b.get("spread_estimated")
+            )
+            if candidate_action in ("BUY", "STRONG BUY") and confirmed and executable_snapshot:
                 # One observation per ticker/session. Repeated adaptive scans are
                 # correlated duplicates, not independent evidence of accuracy.
                 if any(x.get("ticker") == b["ticker"] and x.get("signal_day") == signal_day
@@ -736,6 +793,7 @@ class PennyStockPaperBot:
                     continue
                 self.signal_log.insert(0, {
                     "id": uuid.uuid4().hex[:10], "t": now, "signal_day": signal_day,
+                    "signal_at_utc": datetime.fromtimestamp(now, timezone.utc).isoformat(),
                     "engine_version": SIGNAL_ENGINE_VERSION,
                     "strategy_id": research.LIVE_STRATEGY_ID,
                     "ticker": b["ticker"], "action": act,
@@ -744,6 +802,11 @@ class PennyStockPaperBot:
                     "confirmation_observations": (b.get("confirmation") or {}).get("observations"),
                     "executed": act in ("BUY", "STRONG BUY"),
                     "rank": b["rank"], "price": b["price"],
+                    "decision_mid": b["price"],
+                    "bid": b.get("bid"), "ask": b.get("ask"),
+                    "quote_age_min": b.get("quote_age_min"),
+                    "market_state": b.get("market_state"),
+                    "quote_reliable": True,
                     "modeled_round_trip_cost_pct": b.get("spread_pct"),
                     "cost_is_proxy": bool(b.get("spread_estimated")),
                     "benchmark_ticker": "IWM",
@@ -753,6 +816,14 @@ class PennyStockPaperBot:
                     "composite": b["composite"], "hype": b["hype"],
                     "technical": b.get("technical"), "catalyst": b.get("catalyst"),
                     "quality": b["quality"], "tradeability": b.get("tradeability"),
+                    "catalyst_alignment": b.get("catalyst_alignment") or {},
+                    "sec_accessions": b.get("sec_accessions") or [],
+                    "sec_items": b.get("sec_items") or [],
+                    "adverse_sec_items": b.get("adverse_sec_items") or [],
+                    "news_snapshot": b.get("news_snapshot") or [],
+                    "ai_model": b.get("ai_model") or "",
+                    "ai_verdict": (b.get("ai") or {}).get("verdict"),
+                    "ai_conviction": (b.get("ai") or {}).get("conviction"),
                     "outcomes": {}, "resolved": False,
                 })
         self.signal_log = self.signal_log[:400]
@@ -1128,7 +1199,9 @@ class PennyStockPaperBot:
             "last_error": self.last_error,
             "rules": (f"always-on adaptive scans ({HOT_SCAN_SEC}s hot / {REGULAR_SCAN_SEC}s regular / "
                       f"{EXTENDED_SCAN_SEC}s extended / {CLOSED_SCAN_SEC}s closed); "
-                      f"{CONFIRM_SCANS} separated observations and a dated catalyst required; "
+                      f"official non-adverse 8-K + headline aligned within "
+                      f"{research.CATALYST_ALIGNMENT_HOURS:.0f}h; "
+                      f"{CONFIRM_SCANS} separated trusted regular-session quotes required; "
                       f"evidence gate must be VALIDATED before any auto-trade; "
                       f"risk {RISK_PCT}%/trade and {MAX_PORTFOLIO_RISK_PCT}% total, "
                       f"max {MAX_POSITION_PCT}% per name / {MAX_OPEN} open, spread cap {MAX_SPREAD_PCT}%, "
@@ -1141,7 +1214,8 @@ class PennyStockPaperBot:
             "note": ("Research runs continuously even when entries are paused or the book is full. "
                      "Pausing never disables protective exits. Paper fills require a fresh regular-session "
                      "bid/ask: buy at ask, sell at bid. "
-                     "After-hours cost values are ADV proxies for ranking only. Hard risk gates and "
+                     "After-hours, stale, locked, or internally suspect books are ADV proxies for "
+                     "ranking only and never count as confirmations. Hard risk gates and "
                      "technical/catalyst confirmation run before the AI; the AI may veto but never "
                      "promote a weak setup. Confirmed unvalidated candidates are never filled, but "
                      "cost-adjusted and IWM-relative results are measured at 1/5/10 later sessions."),

@@ -334,11 +334,13 @@ function render(s){
                  :a==='NO TRADE'?'s-no':'s-avoid';
       const rk = 'rank'+(w.rank===1?' t1':w.rank===2?' t2':w.rank===3?' t3':'');
       const chg = Number(w.change_pct)||0;
-      const levels = (a==='BUY'||a==='STRONG BUY'||a==='RESEARCH')
+      const levels = (a==='BUY'||a==='STRONG BUY')
         ? '<div class="lv"><b>entry</b> <span class="e">$'+sig.entry+'</span><br>'
           +'<b>stop</b> <span class="s">$'+sig.stop+'</span> <span style="color:#5d6673">-'+sig.risk_pct+'%</span><br>'
           +'<b>tgt</b> <span class="t">$'+sig.target1+' / $'+sig.target2+'</span></div>'
-        : '<span style="color:#5d6673;font-size:11px">—</span>';
+        : a==='RESEARCH'
+          ? '<span style="color:#8ab4d6;font-size:11px">TRACK ONLY<br>no authorized trade levels</span>'
+          : '<span style="color:#5d6673;font-size:11px">—</span>';
       const scores = '<div class="mini" style="flex-direction:column;gap:3px">'
         + '<span>hype <i>'+w.hype+'</i></span>'
         + '<span>technical <i>'+w.technical+'</i></span>'
@@ -360,7 +362,8 @@ function render(s){
         + '<td><span class="sig '+cls+'">'+esc(a)+'</span>'+scoreBar(w.composite)
         + '<div class="nm" style="margin-top:3px">'+esc(sig.why||'')+'</div>'
         + (['BUY','STRONG BUY'].includes(sig.candidate_action)
-          ?'<div class="nm">confirmation '+(cf.observations||0)+' / '+(cf.required||s.confirmation_required||2)+'</div>':'')
+          ?'<div class="nm">confirmation '+(cf.observations||0)+' / '+(cf.required||s.confirmation_required||2)
+            +(cf.executable_observation?'':' · waiting for trusted live quote')+'</div>':'')
         + '</td>'
         + '<td>'+levels+'</td><td>'+scores+'</td>'
         + '<td>'+drivers+deep+'</td></tr>';
@@ -371,12 +374,14 @@ function render(s){
   const SG = W.filter(w=>['BUY','STRONG BUY','RESEARCH'].includes((w.signal||{}).action));
   $('signals').innerHTML = SG.length ? table(
     ['#','Ticker','Action','Entry','Stop','Target 1','Target 2','Confirmation','Status'],
-    SG.map(w=>{ const g=w.signal, cf=w.confirmation||{};
+    SG.map(w=>{ const g=w.signal, cf=w.confirmation||{}, tradable=['BUY','STRONG BUY'].includes(g.action);
       const cls = g.action==='STRONG BUY'?'s-strong':g.action==='BUY'?'s-buy':'s-research';
       return '<tr><td class="mono">'+w.rank+'</td><td class="tick">'+esc(w.ticker)+'</td>'
         + '<td><span class="sig '+cls+'">'+esc(g.action)+'</span></td>'
-        + '<td class="mono e">$'+g.entry+'</td><td class="mono r">$'+g.stop+'</td>'
-        + '<td class="mono g">$'+g.target1+'</td><td class="mono g">$'+g.target2+'</td>'
+        + '<td class="mono '+(tradable?'e':'')+'">'+(tradable?'$'+g.entry:'reference $'+g.entry)+'</td>'
+        + '<td class="mono r">'+(tradable?'$'+g.stop:'—')+'</td>'
+        + '<td class="mono g">'+(tradable?'$'+g.target1:'—')+'</td>'
+        + '<td class="mono g">'+(tradable?'$'+g.target2:'—')+'</td>'
         + '<td class="mono">'+(cf.observations||0)+' / '+(cf.required||s.confirmation_required||2)
         + (cf.confirmed?' <span class="v v-buy">CONFIRMED</span>':'')+'</td>'
         + '<td>'+(w.held?'<span class="held">in book</span>'

@@ -27,6 +27,19 @@ def complete_dossier(**changes):
         close_location=0.85, return_5d_pct=10.0, return_20d_pct=15.0,
         sma20_distance_pct=8.0, high20_distance_pct=-1.0, atr_pct=8.0,
         fresh_news_count=2, latest_news_age_hours=5.0,
+        news=[{
+            "title": "Company reports a material operating update",
+            "publisher": "Independent News", "when": "2026-08-08T14:00:00Z",
+            "age_hours": 5.0,
+        }],
+        recent_filings=[{
+            "date": "2026-08-08", "accepted_at": "2026-08-08T14:30:00Z",
+            "type": "8-K", "title": "TEST", "age_hours": 4.5,
+            "age_days": 0.2, "items": ["8.01"],
+            "accessionNumber": "0000000000-26-000001", "official_sec": True,
+        }],
+        sec_8k_verified=True, latest_sec_8k_age_hours=4.5,
+        recent_8k_items=["8.01"], adverse_8k_items=[],
     )
     values.update(changes)
     return research.Dossier(**values)
@@ -73,6 +86,7 @@ class PennyStockLogicTests(unittest.TestCase):
         spread, estimated = research.effective_spread(artifact)
         self.assertTrue(estimated)
         self.assertLess(spread, 4.0)
+        self.assertFalse(research.trusted_execution_quote(artifact))
 
         # the rescue must not resurrect a name that is genuinely untradeable
         thin = complete_dossier(
@@ -87,6 +101,26 @@ class PennyStockLogicTests(unittest.TestCase):
         spread, estimated = research.effective_spread(locked)
         self.assertTrue(estimated)
         self.assertGreater(spread, 0.0)
+        self.assertFalse(research.trusted_execution_quote(locked))
+
+    def test_proxy_or_suspect_quote_cannot_reach_paper_fill(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            paper, "STATE_PATH", os.path.join(tmp, "state.json")
+        ):
+            bot = paper.PennyStockPaperBot()
+        artifact = complete_dossier(spread_pct=38.0, spread_reliable=True)
+        with mock.patch.object(research, "edge_policy", return_value={
+            "status": "VALIDATED", "auto_trade_allowed": True,
+            "strategy_id": research.LIVE_STRATEGY_ID,
+        }):
+            bot._open(
+                artifact,
+                {"verdict": "SPECULATIVE_BUY", "conviction": "high"},
+                {"strategy_id": research.LIVE_STRATEGY_ID, "entry": artifact.price},
+                rank=1,
+            )
+        self.assertEqual(bot.pos, {})
+        self.assertTrue(any("book is suspect" in x["msg"] for x in bot.log))
 
     def test_ai_can_veto_but_never_promote_or_override_avoid(self):
         d = complete_dossier()
@@ -265,6 +299,8 @@ class PennyStockLogicTests(unittest.TestCase):
                     "composite": 70, "hype": 70, "technical": 70,
                     "catalyst": 60, "quality": 60, "tradeability": 90,
                     "spread_pct": 1.0, "spread_estimated": False,
+                    "market_state": "REGULAR", "quote_reliable": True,
+                    "bid": 1.99, "ask": 2.01, "quote_age_min": 1.0,
                     "confirmation": {"confirmed": True, "observations": 2},
                     "signal": {"action": "BUY", "stop": 1.8,
                                "candidate_action": "BUY",
@@ -273,6 +309,22 @@ class PennyStockLogicTests(unittest.TestCase):
                 bot._record_signals(board)
                 bot._record_signals(board)
                 self.assertEqual(len(bot.signal_log), 1)
+
+    def test_strategy_upgrade_drops_stale_dashboard_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = os.path.join(tmp, "state.json")
+            with open(state, "w", encoding="utf-8") as handle:
+                json.dump({
+                    "watchlist": [
+                        {"ticker": "OLD", "signal": {"strategy_id": "old-rule"}},
+                        {"ticker": "NEW", "signal": {
+                            "strategy_id": research.LIVE_STRATEGY_ID,
+                        }},
+                    ],
+                }, handle)
+            with mock.patch.object(paper, "STATE_PATH", state):
+                bot = paper.PennyStockPaperBot()
+        self.assertEqual([row["ticker"] for row in bot.watchlist], ["NEW"])
 
     def test_price_breakout_without_dated_catalyst_stays_watch(self):
         d = complete_dossier(
@@ -298,16 +350,44 @@ class PennyStockLogicTests(unittest.TestCase):
         )
         self.assertFalse(research.has_dated_catalyst(d))
 
-    def test_verified_material_sec_item_is_a_dated_catalyst(self):
+    def test_sec_item_without_aligned_headline_is_not_a_trade_catalyst(self):
         d = complete_dossier(
-            fresh_news_count=0, latest_news_age_hours=-1,
+            fresh_news_count=0, latest_news_age_hours=-1, news=[],
             sec_8k_verified=True, latest_sec_8k_age_hours=2,
             recent_8k_items=["2.02", "9.01"], adverse_8k_items=[],
+            recent_filings=[{
+                "type": "8-K", "official_sec": True, "age_hours": 2,
+                "items": ["2.02", "9.01"], "accessionNumber": "a",
+            }],
         )
-        self.assertTrue(research.has_dated_catalyst(d))
+        self.assertFalse(research.has_dated_catalyst(d))
         score, reasons = research.catalyst_score(d)
         self.assertEqual(score, 0)
         self.assertTrue(any("direction not proven" in value for value in reasons))
+
+    def test_headline_and_material_sec_event_must_be_time_aligned(self):
+        d = complete_dossier(
+            latest_news_age_hours=3,
+            news=[{"title": "Earnings released", "publisher": "News",
+                   "when": "2026-08-08T15:00:00Z", "age_hours": 3}],
+            sec_8k_verified=True, latest_sec_8k_age_hours=4,
+            recent_8k_items=["2.02", "9.01"], adverse_8k_items=[],
+            recent_filings=[{
+                "type": "8-K", "official_sec": True, "age_hours": 4,
+                "items": ["2.02", "9.01"], "accessionNumber": "a",
+                "accepted_at": "2026-08-08T14:00:00Z",
+            }],
+        )
+        aligned = research.catalyst_alignment(d)
+        self.assertTrue(aligned["aligned"])
+        self.assertEqual(aligned["accession"], "a")
+        self.assertTrue(research.has_dated_catalyst(d))
+        score, reasons = research.catalyst_score(d)
+        self.assertEqual(score, 45)
+        self.assertTrue(any("official 8-K aligned" in value for value in reasons))
+
+        d.news[0]["age_hours"] = 40
+        self.assertFalse(research.has_dated_catalyst(d))
 
     def test_sec_discovery_cannot_spend_slots_on_non_penny_issuers(self):
         class FakeYF:
@@ -350,6 +430,8 @@ class PennyStockLogicTests(unittest.TestCase):
         def board(price):
             return [{
                 "ticker": "TEST", "price": price, "catalyst_key": "news-1",
+                "market_state": "REGULAR", "quote_reliable": True,
+                "spread_estimated": False,
                 "signal": {"action": "RESEARCH", "candidate_action": "BUY"},
             }]
 
@@ -365,6 +447,26 @@ class PennyStockLogicTests(unittest.TestCase):
         self.assertFalse(chased[0]["confirmation"]["confirmed"])
         self.assertEqual(chased[0]["confirmation"]["observations"], 1)
         self.assertIn("chased", chased[0]["confirmation"]["reset_reason"])
+
+    def test_after_hours_or_proxy_quote_cannot_confirm_a_setup(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            paper, "STATE_PATH", os.path.join(tmp, "state.json")
+        ):
+            bot = paper.PennyStockPaperBot()
+        board = [{
+            "ticker": "TEST", "price": 2.0, "catalyst_key": "news-1",
+            "market_state": "CLOSED", "quote_reliable": False,
+            "spread_estimated": True,
+            "signal": {"action": "RESEARCH", "candidate_action": "BUY"},
+        }]
+        bot._update_setup_states(board, now=1_000)
+        bot._update_setup_states(board, now=1_100)
+        self.assertFalse(board[0]["confirmation"]["confirmed"])
+        self.assertEqual(board[0]["confirmation"]["observations"], 0)
+        self.assertFalse(board[0]["confirmation"]["executable_observation"])
+        self.assertIn("regular-session", board[0]["confirmation"]["reset_reason"])
+        bot._record_signals(board)
+        self.assertEqual(bot.signal_log, [])
 
     def test_research_scan_is_not_blocked_by_paused_entries_or_full_book(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
@@ -459,6 +561,14 @@ class TestMarketRegime(unittest.TestCase):
         d.high20_distance_pct = -1.0; d.close_location = 0.85
         d.atr_pct = 8.0
         d.fresh_news_count = 1; d.latest_news_age_hours = 4.0
+        d.news = [{"title": "Material update", "publisher": "News",
+                   "when": "2026-08-08T14:00:00Z", "age_hours": 4.0}]
+        d.sec_8k_verified = True; d.latest_sec_8k_age_hours = 4.5
+        d.recent_8k_items = ["8.01"]
+        d.recent_filings = [{
+            "type": "8-K", "official_sec": True, "age_hours": 4.5,
+            "items": ["8.01"], "accessionNumber": "regime-test",
+        }]
         return d
 
     def test_riskoff_blocks_a_buy(self):

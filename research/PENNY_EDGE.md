@@ -286,7 +286,7 @@ remain slower because there is no executable opportunity to miss.
 ## Exact-strategy execution contract
 
 Research approval no longer transfers between strategies. The live scanner identifies
-itself as `live_sec_item_confirm_v3`; the policy loader and the final fill path both require the
+itself as `live_sec_news_align_v4`; the policy loader and the final fill path both require the
 validated policy to name that exact implementation. A future validation of
 `profitable_earnings_beat`, for example, cannot unlock the unrelated composite/AI
 scanner. Mismatches fail closed as `STRATEGY_MISMATCH` while candidates continue to be
@@ -447,21 +447,46 @@ history and reports `INFEASIBLE_WITHIN_HORIZON`, not an impossibility claim. Its
 |---|---:|---:|---:|---:|---:|
 | Broad 8-K proxy | 11,204 | 1,909 | 9.5y | 1.08% | 0.0 |
 | Reaction-confirmed 8-K proxy | 112 | 104 | 8.5y | 3.52% | 17.8 |
-| Exact prospective v3 | 0 completed | 0 | — | not assessable | not assessable |
+| Exact prospective v4 | 0 completed | 0 | — | not assessable | not assessable |
 
 The reaction-confirmed stream is still only a closer historical proxy. It lacks
 point-in-time headlines, fundamentals, AI vetoes, two-scan persistence, executable
 quotes, regime state and delisted names. Therefore its 17.8-year estimate cannot be
-promoted to a claim about the exact v3 rule. It says that this proxy is impractical to
+promoted to a claim about the exact v4 rule. It says that this proxy is impractical to
 evaluate within five more years if its signal rate and dependence-adjusted dispersion
 remain stationary.
 
 `research/penny_feasibility.py` now exposes those assumptions and is also connected to
 the paper bot's prospective `forward_validation` output. The prospective tracker still
-cannot authorize trades; the reproducible edge policy remains `REJECTED`. Until exact v3
+cannot authorize trades; the reproducible edge policy remains `REJECTED`. Until exact v4
 outcomes accumulate over enough calendar history, its own rate and power are correctly
 reported as `not assessable` rather than guessed from a proxy.
 
 Feasibility passing means only that a specified effect size can be measured with the
 chosen confidence and power. It says nothing about whether the effect exists, whether it
 is positive, or whether it survives execution costs.
+
+## Live implementation integrity correction: v4
+
+The next code audit found that the v3 identifier overstated what the implementation
+required. `has_dated_catalyst()` accepted either a fresh Yahoo headline or a material
+SEC event, so a potentially promotional press release could qualify without EDGAR
+corroboration. The confirmation state also counted observations when the displayed
+spread was only an ADV proxy, and a provider quote rejected as internally implausible
+could still reach the paper-fill path because the raw `spread_reliable` flag remained
+true.
+
+`live_sec_news_align_v4` fixes that contract:
+
+- a candidate requires a non-adverse material 8-K and a headline timestamp aligned
+  within 24 hours; the AI must still confirm direction and can only veto;
+- confirmation hits require an unlocked, internally plausible regular-session bid/ask
+  with a last-trade freshness proxy of at most five minutes;
+- an ADV spread proxy can rank a research candidate but can never confirm or fill it;
+- every prospective record now retains the SEC accession/items, headline snapshot, AI
+  model/verdict, bid/ask, quote age, market state, and exact decision timestamp.
+
+The strategy and signal-engine identifiers changed, so older prospective observations
+cannot silently mix with v4. This is an evidence-integrity and false-positive reduction,
+not proof of profitability. The reproducible policy remains `REJECTED`, and v4 starts a
+new forward sample at zero.

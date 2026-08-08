@@ -53,11 +53,19 @@ _PENNY_UNIVERSE_CACHE: tuple[float, set[str]] = (0.0, set())
 PENNY_UNIVERSE_TTL_SEC = 15 * 60
 
 # Research authorization belongs to an exact implementation, not to the broad idea of
-# "buying penny stocks".  Version 3 requires an item-aware, independently verified
-# SEC catalyst as well as price/volume confirmation; the old price-only composite was
-# decisively negative out of sample.  Changing the identifier is intentional: evidence
-# for an older implementation must never unlock this one.
-LIVE_STRATEGY_ID = "live_sec_item_confirm_v3"
+# "buying penny stocks".  Version 4 requires a time-aligned headline AND an official,
+# non-adverse SEC 8-K.  The previous implementation was named as though SEC confirmation
+# were mandatory but still let an arbitrary fresh Yahoo headline qualify by itself.
+# Changing the identifier is intentional: evidence for an older implementation must
+# never unlock this one.
+LIVE_STRATEGY_ID = "live_sec_news_align_v4"
+
+# A provider's regularMarketTime timestamps the last trade, not the bid/ask update.  It
+# is still the best freshness evidence available on the free feed, so keep the window
+# tight and require an internally plausible, unlocked book before calling it usable for
+# confirmation or a paper fill.
+MAX_EXECUTION_QUOTE_AGE_MIN = 5.0
+CATALYST_ALIGNMENT_HOURS = 24.0
 
 # The shared config.AI_TIMEOUT_SEC is deliberately tight (6s) because the news bots
 # must DROP a stale signal rather than trade it. Company analysis has no such decay -
@@ -189,7 +197,7 @@ def live_rule_evidence() -> dict:
             pass
         # Item codes classify disclosure type and adverse events; they do not earn
         # bullish points by themselves.  Show the closest causal marginal audit with
-        # its limitations instead of mislabelling it an exact v3 backtest.
+        # its limitations instead of mislabelling it an exact live-rule backtest.
         try:
             with open(ITEM_AUDIT_PATH, encoding="utf-8") as f:
                 item = json.load(f)
@@ -476,8 +484,9 @@ def build_dossier(ticker: str) -> Dossier:
         if d.bid > 0 and d.ask > 0 and d.ask >= d.bid:
             d.spread_pct = (d.ask - d.bid) / ((d.ask + d.bid) / 2) * 100
         d.spread_reliable = bool(
-            d.market_state == "REGULAR" and 0 <= d.quote_age_min <= 30
-            and d.bid > 0 and d.ask >= d.bid
+            d.market_state == "REGULAR"
+            and 0 <= d.quote_age_min <= MAX_EXECUTION_QUOTE_AGE_MIN
+            and d.bid > 0 and d.ask > d.bid
         )
         hi52 = _safe(info, "fiftyTwoWeekHigh")
         if hi52 > 0 and d.price > 0:
@@ -931,6 +940,24 @@ def effective_spread(d: "Dossier") -> tuple[float, bool]:
     return est, True
 
 
+def trusted_execution_quote(d: "Dossier") -> bool:
+    """Whether the free feed is good enough for confirmation or a paper fill.
+
+    ``spread_reliable`` alone is insufficient: an apparently fresh but locked or
+    liquidity-contradicting Yahoo book is deliberately replaced by an ADV proxy in
+    ``effective_spread``.  A proxy is useful for ranking, never for execution.
+    """
+    _spread, estimated = effective_spread(d)
+    return bool(
+        d.market_state == "REGULAR"
+        and d.spread_reliable
+        and not estimated
+        and 0 <= d.quote_age_min <= MAX_EXECUTION_QUOTE_AGE_MIN
+        and d.bid > 0
+        and d.ask > d.bid
+    )
+
+
 def tradeability(d: "Dossier") -> tuple[float, list]:
     """0-100: can you actually get in and out without the costs eating the trade?"""
     pts, why = 100.0, []
@@ -974,15 +1001,98 @@ def technical_score(d: "Dossier") -> tuple[float, list]:
     return max(0.0, min(100.0, pts)), why
 
 
+def catalyst_alignment(d: "Dossier") -> dict:
+    """Match a news headline to an official material 8-K in event time.
+
+    A press release can be promotional and an item code does not reveal direction.
+    Requiring both makes each source corroborate the other's missing piece: EDGAR proves
+    a material disclosure happened, while the headline gives the AI text it can assess.
+    The match is deliberately temporal rather than semantic; the LLM remains a veto and
+    is never allowed to promote an unmatched event.
+    """
+    material_items = (
+        set(sec_edgar.EARNINGS_8K_ITEMS)
+        | set(sec_edgar.AGREEMENT_8K_ITEMS)
+        | {"1.05", "7.01", "8.01"}
+    )
+    events = []
+    for filing in d.recent_filings or []:
+        if not filing.get("official_sec") or str(filing.get("type") or "").upper() != "8-K":
+            continue
+        items = sorted(set(str(x) for x in (filing.get("items") or [])) & material_items)
+        if not items:
+            continue
+        try:
+            age = float(filing.get("age_hours"))
+        except (TypeError, ValueError):
+            try:
+                age = float(filing.get("age_days")) * 24.0
+            except (TypeError, ValueError):
+                continue
+        if 0 <= age <= FRESH_NEWS_HOURS:
+            events.append((age, filing, items))
+
+    headlines = []
+    for news in d.news or []:
+        try:
+            age = float(news.get("age_hours"))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= age <= FRESH_NEWS_HOURS and str(news.get("title") or "").strip():
+            headlines.append((age, news))
+
+    pairs = []
+    if not d.adverse_8k_items:
+        for event_age, filing, items in events:
+            for news_age, news in headlines:
+                gap = abs(event_age - news_age)
+                if gap <= CATALYST_ALIGNMENT_HOURS:
+                    pairs.append((gap, max(event_age, news_age), event_age, news_age,
+                                  filing, items, news))
+    if not pairs:
+        return {
+            "aligned": False,
+            "reason": ("adverse SEC item present" if d.adverse_8k_items else
+                       "no headline matched a non-adverse material 8-K within "
+                       f"{CATALYST_ALIGNMENT_HOURS:.0f}h"),
+            "material_event_count": len(events),
+            "fresh_headline_count": len(headlines),
+        }
+
+    _gap, _freshness, event_age, news_age, filing, items, news = min(
+        pairs, key=lambda value: (value[0], value[1])
+    )
+    return {
+        "aligned": True,
+        "gap_hours": round(abs(event_age - news_age), 2),
+        "event_age_hours": round(event_age, 2),
+        "news_age_hours": round(news_age, 2),
+        "accession": str(filing.get("accessionNumber") or ""),
+        "accepted_at": str(filing.get("accepted_at") or ""),
+        "items": items,
+        "headline": str(news.get("title") or "")[:180],
+        "publisher": str(news.get("publisher") or "")[:60],
+        "material_event_count": len(events),
+        "fresh_headline_count": len(headlines),
+    }
+
+
 def catalyst_score(d: "Dossier") -> tuple[float, list]:
-    """0-100: dated information supporting the move, with offering risk deducted."""
+    """0-100: corroborated dated information, with offering risk deducted."""
     pts, why = 0.0, []
-    if 0 <= d.latest_news_age_hours <= 24:
-        pts += 45; why.append(f"headline {d.latest_news_age_hours:.0f}h ago")
-    elif 0 <= d.latest_news_age_hours <= FRESH_NEWS_HOURS:
-        pts += 28; why.append(f"headline {d.latest_news_age_hours:.0f}h ago")
-    if d.fresh_news_count >= 3:
-        pts += 10; why.append(f"{d.fresh_news_count} fresh headlines")
+    aligned = catalyst_alignment(d)
+    if aligned.get("aligned"):
+        freshness = max(float(aligned["event_age_hours"]), float(aligned["news_age_hours"]))
+        if freshness <= 24:
+            pts += 45
+        else:
+            pts += 28
+        why.append(
+            f"headline + official 8-K aligned within {aligned['gap_hours']:.1f}h "
+            f"(items {', '.join(aligned['items'])})"
+        )
+    elif d.fresh_news_count:
+        why.append("fresh headline is not corroborated by a time-aligned material SEC 8-K")
     if 0 <= d.days_to_earnings <= 7:
         why.append(f"earnings in {d.days_to_earnings:.0f}d (binary risk, not published news)")
     items = set(d.recent_8k_items or [])
@@ -1007,22 +1117,11 @@ def has_dated_catalyst(d: "Dossier") -> bool:
     and volume as a substitute for a catalyst had no gross expectancy and lost money
     after costs.  This gate keeps unexplained promotion/volume spikes in WATCH.
     """
-    fresh_headline = 0 <= d.latest_news_age_hours <= FRESH_NEWS_HOURS
-    items = set(d.recent_8k_items or [])
-    material_items = (
-        set(sec_edgar.EARNINGS_8K_ITEMS)
-        | set(sec_edgar.AGREEMENT_8K_ITEMS)
-        | {"1.05", "7.01", "8.01"}
-    )
-    verified_sec_event = bool(
-        d.sec_8k_verified
-        and 0 <= d.latest_sec_8k_age_hours <= FRESH_NEWS_HOURS
-        and items & material_items
-        and not d.adverse_8k_items
-    )
-    # A scheduled earnings date is future binary risk, not information explaining a
-    # move today.  Likewise an arbitrary fresh form is not bullish by definition.
-    return bool(fresh_headline or verified_sec_event)
+    # A scheduled earnings date is future binary risk, an arbitrary headline may be a
+    # promotion, and an item code does not say whether terms are good.  V4 therefore
+    # needs a non-adverse material filing and a time-aligned headline; AI still has to
+    # confirm direction afterwards.
+    return bool(catalyst_alignment(d).get("aligned"))
 
 
 def hard_risk_reason(d: "Dossier") -> str:
@@ -1173,7 +1272,7 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
             "target1": round(px * (1 + target1_pct / 100.0), 4),
             "target2": round(px * (1 + target2_pct / 100.0), 4),
             "risk_pct": round(risk_pct, 1), "reward_pct": round(target2_pct, 1),
-            "needs_open_recheck": not d.spread_reliable,
+            "needs_open_recheck": not trusted_execution_quote(d),
             "strategy_id": LIVE_STRATEGY_ID,
             "regime": reg.get("label", "unknown"), "regime_score": reg.get("score", 50.0),
             "benchmark_price": reg.get("iwm_price", 0.0),
@@ -1224,6 +1323,7 @@ Your verdict is an independent risk review; it cannot override mechanical hard g
 
 def _dossier_text(d: Dossier) -> str:
     effective, estimated = effective_spread(d)
+    aligned = catalyst_alignment(d)
     runway = f"{d.runway_quarters:.1f} quarters" if d.runway_known else "UNKNOWN"
     dilution = f"{d.shares_change_pct:+.1f}%" if d.shares_change_known else "UNKNOWN"
     lines = [
@@ -1233,6 +1333,11 @@ def _dossier_text(d: Dossier) -> str:
         f"market cap ${d.market_cap/1e6:,.1f}M, float {d.float_shares/1e6:,.1f}M shares",
         f"execution cost {'proxy' if estimated else 'live spread'} {effective:.2f}% "
         f"(marketState={d.market_state}, raw quote={d.spread_pct:.2f}%, age={d.quote_age_min:.0f}m)",
+        ("verified event match: YES - official 8-K items "
+         + ", ".join(aligned.get("items") or [])
+         + f" and headline aligned by {float(aligned.get('gap_hours') or 0):.1f}h"
+         if aligned.get("aligned") else
+         "verified event match: NO - " + str(aligned.get("reason") or "unavailable")),
         f"revenue {'$'+format(d.revenue/1e6,',.1f')+'M' if d.revenue_known else 'UNKNOWN'}, "
         f"cash {'$'+format(d.cash/1e6,',.1f')+'M' if d.cash_known else 'UNKNOWN'}, "
         f"debt {'$'+format(d.debt/1e6,',.1f')+'M' if d.debt_known else 'UNKNOWN'}",
@@ -1258,9 +1363,14 @@ def _dossier_text(d: Dossier) -> str:
     else:
         lines.append("  - none retrieved")
     lines.append("")
-    lines.append("RECENT SEC FILINGS (form presence only; contents not verified):")
+    lines.append("RECENT SEC FILINGS (official rows retain acceptance time/items; item codes do not prove direction):")
     if d.recent_filings:
-        lines += [f"  - {x['date']} {x['type']} {x['title']}" for x in d.recent_filings[:8]]
+        lines += [
+            f"  - {x.get('accepted_at') or x.get('date','')} {x.get('type','')} "
+            f"items={','.join(str(v) for v in (x.get('items') or [])) or 'n/a'} "
+            f"accession={x.get('accessionNumber') or 'n/a'} {x.get('title','')}"
+            for x in d.recent_filings[:8]
+        ]
     else:
         lines.append("  - none retrieved")
     return "\n".join(lines)

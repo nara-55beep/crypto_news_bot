@@ -6,7 +6,7 @@ stationarity assumptions, how much additional calendar history an effect of a ch
 size would require.
 
 The historical streams available in this repository are proxies.  In particular, the
-reaction-confirmed 8-K filter is closer to the deployed v3 rule than the broad event
+reaction-confirmed 8-K filter is closer to the deployed rule than the broad event
 sample, but it still lacks point-in-time headlines, fundamentals, AI vetoes, two-scan
 persistence, executable quotes, regime state and delisted companies.  It must never be
 labelled the desk's exact entry population.
@@ -30,8 +30,8 @@ PLANNING_HORIZON_YEARS = 5.0
 TARGET_EFFECT_PCT = 2.0
 MIN_SIGNAL_DAYS = 5
 MIN_RATE_HISTORY_YEARS = 1.0
-V3_STRATEGY_ID = "live_sec_item_confirm_v3"
-V3_ENGINE_VERSION = 5
+CURRENT_STRATEGY_ID = "live_sec_news_align_v4"
+CURRENT_ENGINE_VERSION = 6
 
 
 def feasibility(
@@ -214,7 +214,7 @@ def compare(
     return output
 
 
-def _prospective_v3_stream() -> tuple[pd.Series, pd.Series]:
+def _prospective_live_stream() -> tuple[pd.Series, pd.Series]:
     """Completed 5-session outcomes recorded by the exact current signal engine."""
     path = ROOT / "data" / "pennystock_paper_state.json"
     try:
@@ -224,8 +224,8 @@ def _prospective_v3_stream() -> tuple[pd.Series, pd.Series]:
         return pd.Series(dtype=float), pd.Series(dtype="datetime64[ns]")
     returns, dates = [], []
     for signal in state.get("signal_log") or []:
-        if (signal.get("strategy_id") != V3_STRATEGY_ID
-                or signal.get("engine_version") != V3_ENGINE_VERSION):
+        if (signal.get("strategy_id") != CURRENT_STRATEGY_ID
+                or signal.get("engine_version") != CURRENT_ENGINE_VERSION):
             continue
         outcome = (signal.get("outcomes") or {}).get("5") or {}
         value = outcome.get("net_return_pct")
@@ -246,7 +246,7 @@ def main() -> int:
 
     frame = harm.build()
     proxy = exits._reaction_confirmed_proxy(frame)
-    live_returns, live_dates = _prospective_v3_stream()
+    live_returns, live_dates = _prospective_live_stream()
     calendar = pd.DatetimeIndex(base.load_panel(refresh=False)["frames"]["IWM"].index)
     streams = {
         "broad 8-K proxy": {
@@ -257,9 +257,9 @@ def main() -> int:
         "reaction-confirmed 8-K proxy": {
             "returns": proxy["gross_5"], "dates": proxy["signal_date"],
             "exact_live_rule": False,
-            "scope": "closer historical proxy; still missing several v3 gates",
+            "scope": "closer historical proxy; still missing several live-rule gates",
         },
-        "prospective exact v3 signals": {
+        "prospective exact v4 signals": {
             "returns": live_returns, "dates": live_dates,
             "exact_live_rule": True,
             "scope": "current engine's recorded net five-session outcomes",

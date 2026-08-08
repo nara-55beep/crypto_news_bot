@@ -1,6 +1,6 @@
 """Marginal 8-K item-code audit for the penny-stock research scanner.
 
-This is deliberately *not* called a backtest of ``live_sec_item_confirm_v3``.  The
+This is deliberately *not* called a backtest of ``live_sec_news_align_v4``.  The
 historical panel lacks point-in-time headlines, fundamentals, quotes and the two-scan
 confirmation state needed to reproduce that live rule.  It can answer a narrower
 question: after applying observable penny-price/liquidity constraints, do SEC item
