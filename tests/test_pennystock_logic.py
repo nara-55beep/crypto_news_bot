@@ -23,9 +23,9 @@ def isolated_bot(tmpdir):
     archive - five of them reached it before this was noticed. Anything that writes must
     be redirected, not just the file a test happens to think about.
     """
-    with mock.patch.object(paper, "STATE_PATH", os.path.join(tmpdir, "state.json")),          mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH",
-                           os.path.join(tmpdir, "archive.jsonl")):
-        return paper.PennyStockPaperBot()
+    return paper.PennyStockPaperBot(
+        state_path=os.path.join(tmpdir, "state.json"),
+        archive_path=os.path.join(tmpdir, "archive.jsonl"))
 
 
 def complete_dossier(**changes):
@@ -1398,7 +1398,7 @@ class TestBoundIsDependenceRobust(unittest.TestCase):
     @staticmethod
     def _done(day, net=2.0, excess=1.5, ticker="A"):
         return {"engine_version": paper.SIGNAL_ENGINE_VERSION,
-                paper.SIGNAL_DAY_FIELD: day, "ticker": ticker, "cost_pct": 1.0,
+                paper.SIGNAL_DAY_FIELD: day, "ticker": ticker, paper.SIGNAL_COST_FIELD: 1.0,
                 "outcomes": {"5": {"net_return_pct": net, "net_excess_return_pct": excess,
                                    "benchmark_return_pct": 0.5}}}
 
@@ -1431,8 +1431,9 @@ class TestBoundIsDependenceRobust(unittest.TestCase):
         bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
                            paper.SIGNAL_DAY_FIELD: "2026-01-02", "ticker": "H",
-                           "cost_pct": 1.5}]
+                           paper.SIGNAL_COST_FIELD: 1.5}]
         bound = bot.missing_outcome_bound()
+        self.assertAlmostEqual(bound["bounded_mean_net_pct"], -101.5, places=3)
         self.assertLess(bound["bounded_mean_net_pct"], -100.0)
 
     def test_every_stale_day_is_bounded_not_only_the_first_twenty(self):
@@ -1480,3 +1481,90 @@ class TestArchiveIsAuthoritative(unittest.TestCase):
         bot._save()                                   # a good save must not mask it
         self.assertEqual(bot.state_save_error, "")
         self.assertIn("archive write failed", bot.archive_error)
+
+
+class TestEvidenceIntegrity(unittest.TestCase):
+    """The evidence file must be one population, durable, and honest about damage."""
+
+    @staticmethod
+    def _archive(tmp, rows):
+        path = os.path.join(tmp, "a.jsonl")
+        with open(path, "w", encoding="utf-8") as f:
+            for r in rows:
+                f.write((r if isinstance(r, str) else json.dumps(r)) + "\n")
+        return path
+
+    def _sig(self, sid, day):
+        return {"event": "signal", "id": sid, paper.SIGNAL_DAY_FIELD: day,
+                "ticker": "A", "engine_version": paper.SIGNAL_ENGINE_VERSION}
+
+    def test_production_cost_field_reaches_the_bound(self):
+        """The writer's own field name, not one a fixture invented."""
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                           paper.SIGNAL_DAY_FIELD: "2026-01-02", "ticker": "H",
+                           paper.SIGNAL_COST_FIELD: 4.0}]
+        self.assertAlmostEqual(
+            bot.missing_outcome_bound()["bounded_mean_net_pct"], -104.0, places=3)
+
+    def test_analytics_do_not_change_when_one_more_signal_arrives(self):
+        tmp = tempfile.mkdtemp()
+        rows = [self._sig(f"s{i}", f"2026-{1 + i // 28:02d}-{1 + i % 28:02d}")
+                for i in range(181)]
+        path = self._archive(tmp, rows)
+        with mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH", path), \
+             mock.patch.object(paper, "STATE_PATH", os.path.join(tmp, "s.json")):
+            bot = paper.PennyStockPaperBot()
+            before = len({r[paper.SIGNAL_DAY_FIELD] for r in bot.evidence_rows()})
+            bot.signal_log = bot._retained_signals()          # the UI cache trims
+            after = len({r[paper.SIGNAL_DAY_FIELD] for r in bot.evidence_rows()})
+        self.assertEqual(before, 181)
+        self.assertEqual(before, after)      # analytics read the archive, not the cache
+
+    def test_corruption_before_the_end_is_reported_and_blocks_verdicts(self):
+        tmp = tempfile.mkdtemp()
+        path = self._archive(tmp, [self._sig("a", "2026-01-01"),
+                                   "{corrupt in the middle",
+                                   self._sig("b", "2026-01-02")])
+        with mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH", path), \
+             mock.patch.object(paper, "STATE_PATH", os.path.join(tmp, "s.json")):
+            bot = paper.PennyStockPaperBot()
+            self.assertIn("corrupt", bot.archive_error)
+            self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_only_a_torn_final_line_is_tolerated(self):
+        tmp = tempfile.mkdtemp()
+        path = self._archive(tmp, [self._sig("a", "2026-01-01")])
+        with open(path, "a", encoding="utf-8") as f:
+            f.write('{"event": "signal", "id": "torn"')
+        with mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH", path), \
+             mock.patch.object(paper, "STATE_PATH", os.path.join(tmp, "s.json")):
+            bot = paper.PennyStockPaperBot()
+            self.assertEqual(bot.archive_error, "")
+            self.assertEqual(len(bot.signal_log), 1)
+
+    def test_a_failed_append_is_retried_not_dropped(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            self.assertFalse(bot._archive_event("outcome", {"id": "x", "horizon": "5"}))
+        self.assertEqual(len(bot._archive_outbox), 1)
+        self.assertIn("awaiting retry", bot.archive_error)
+        self.assertTrue(bot._archive_event("signal", {"id": "y"}))   # both land now
+        self.assertEqual(bot._archive_outbox, [])
+        self.assertEqual(len(bot._replay_archive()), 1)              # y; x had no signal
+
+    def test_state_cache_and_archive_are_merged_by_id(self):
+        """A final-horizon event can fail after the cache was written, so neither side
+        is reliably newer - the outcomes are unioned."""
+        tmp = tempfile.mkdtemp()
+        path = self._archive(tmp, [self._sig("s1", "2026-01-02")])
+        state = os.path.join(tmp, "s.json")
+        with open(state, "w", encoding="utf-8") as f:
+            json.dump({"signal_log": [{"id": "s1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                       "engine_version": paper.SIGNAL_ENGINE_VERSION,
+                                       "outcomes": {"10": {"net_return_pct": 7.0}}}]}, f)
+        with mock.patch.object(paper, "SIGNAL_ARCHIVE_PATH", path), \
+             mock.patch.object(paper, "STATE_PATH", state):
+            bot = paper.PennyStockPaperBot()
+        self.assertEqual(len(bot.signal_log), 1)
+        self.assertIn("10", bot.signal_log[0]["outcomes"])   # cache-only outcome kept

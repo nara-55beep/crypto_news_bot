@@ -98,6 +98,14 @@ SIGNAL_HORIZONS = (1, 5, 10)
 # same wrong key. A shared constant makes that class of drift impossible rather than
 # something a future test has to remember to catch.
 SIGNAL_DAY_FIELD = "signal_day"
+# Same discipline as the session key. The bound read "cost_pct" while the writer stored
+# "modeled_round_trip_cost_pct", so every imputed loss was -100% instead of -100% minus
+# the round trip - and the tests agreed with the bug because their fixtures invented the
+# reader's name. One constant, used by writer, reader and fixtures.
+SIGNAL_COST_FIELD = "modeled_round_trip_cost_pct"
+# IWM's own horizon return, stored per signal so a name that never resolves still has a
+# benchmark leg. Without it the bounded excess collapses onto the bounded net.
+SIGNAL_BENCHMARK_FIELD = "benchmark_horizon_pct"
 # Retention is measured in sessions, not rows. A 400-row cap silently truncated the
 # evidence below the 60-day gate it was supposed to feed, and cut sessions in half.
 SIGNAL_RETENTION_SESSIONS = 180
@@ -143,7 +151,10 @@ class Position:
 class PennyStockPaperBot:
     NAME = NAME
 
-    def __init__(self):
+    def __init__(self, state_path: str | None = None,
+                 archive_path: str | None = None):
+        self.state_path = state_path or STATE_PATH
+        self.archive_path = archive_path or SIGNAL_ARCHIVE_PATH
         self.enabled = False          # opt-in: needs AI credits to be useful
         self.balance = START_BALANCE
         self.pos: dict[str, Position] = {}
@@ -173,6 +184,7 @@ class PennyStockPaperBot:
         self.persistence_error = ""
         self.state_save_error = ""
         self.archive_error = ""
+        self._archive_outbox: list[dict] = []
         self._was_market_open = False
         self._scan_lock = asyncio.Lock()
         self._load()
@@ -181,7 +193,7 @@ class PennyStockPaperBot:
     def _save(self):
         try:
             os.makedirs(config.DATA_DIR, exist_ok=True)
-            tmp = STATE_PATH + ".tmp"
+            tmp = self.state_path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({
                     "enabled": self.enabled, "balance": self.balance,
@@ -196,7 +208,7 @@ class PennyStockPaperBot:
                     "engine_version": SIGNAL_ENGINE_VERSION,
                     "engine_version_started_at": self.engine_version_started_at,
                 }, f)
-            os.replace(tmp, STATE_PATH)
+            os.replace(tmp, self.state_path)
             self.state_save_error = ""
         except Exception as e:
             # A silent failure here loses the forward evidence while the service still
@@ -205,13 +217,13 @@ class PennyStockPaperBot:
 
     def _load(self):
         try:
-            if not os.path.exists(STATE_PATH):
+            if not os.path.exists(self.state_path):
                 # The archive outlives the state file, so evidence is restored even when
                 # only the cache is missing.
                 self.signal_log = [x for x in self._replay_archive()
                                    if x.get("engine_version") == SIGNAL_ENGINE_VERSION]
                 return
-            with open(STATE_PATH, encoding="utf-8") as f:      # was leaking the handle
+            with open(self.state_path, encoding="utf-8") as f:      # was leaking the handle
                 d = json.load(f)
             # Discarding prior-version outcomes below is correct - old-rule signals would
             # contaminate forward accuracy. But it has an unpriced cost: every strategy
@@ -252,10 +264,27 @@ class PennyStockPaperBot:
             # The archive is the record. The persisted list is a cache, so it is used
             # only when the archive has nothing - otherwise retention could silently
             # change a past statistic across a restart.
-            replayed = self._replay_archive()
-            source = replayed if replayed else (d.get("signal_log") or [])
-            self.signal_log = [x for x in source
-                               if x.get("engine_version") == SIGNAL_ENGINE_VERSION]
+            merged: dict[str, dict] = {}
+            for row in (d.get("signal_log") or []):
+                sid = str(row.get("id") or "")
+                if sid:
+                    merged[sid] = dict(row)
+            for row in self._replay_archive():
+                sid = str(row.get("id") or "")
+                if not sid:
+                    continue
+                # union the outcomes: an event may have failed to append after the cache
+                # was written, so neither side is reliably newer than the other
+                base = merged.get(sid, {})
+                outcomes = dict(base.get("outcomes") or {})
+                outcomes.update(row.get("outcomes") or {})
+                merged[sid] = {**base, **row, "outcomes": outcomes,
+                               "resolved": bool(base.get("resolved")
+                                                or row.get("resolved"))}
+            self.signal_log = sorted(
+                (x for x in merged.values()
+                 if x.get("engine_version") == SIGNAL_ENGINE_VERSION),
+                key=lambda r: str(r.get(SIGNAL_DAY_FIELD) or ""), reverse=True)
         except Exception as e:
             self.state_save_error = f"state load failed: {type(e).__name__}: {e}"[:160]
 
@@ -601,7 +630,7 @@ class PennyStockPaperBot:
         kept = [row for day in keep_days for row in by_day[day]]
         return kept + undated[:20]
 
-    def _archive_event(self, kind: str, payload: dict) -> None:
+    def _archive_event(self, kind: str, payload: dict) -> bool:
         """Append one immutable event. The archive is the record; the log is a cache.
 
         Appending only signal creations made this useless as evidence: outcomes arrive
@@ -609,47 +638,87 @@ class PennyStockPaperBot:
         restore nothing. Creations and every horizon outcome are both events now, keyed
         by the signal's own id, so a restart rebuilds the same statistics.
         """
+        event = {"event": kind, **payload}
+        pending = list(self._archive_outbox) + [event]
         try:
-            os.makedirs(config.DATA_DIR, exist_ok=True)
-            with open(SIGNAL_ARCHIVE_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"event": kind, **payload}, default=str) + "\n")
+            os.makedirs(os.path.dirname(self.archive_path) or ".", exist_ok=True)
+            with open(self.archive_path, "a", encoding="utf-8") as f:
+                for row in pending:
+                    f.write(json.dumps(row, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            self._archive_outbox = []
             self.archive_error = ""
+            return True
         except OSError as e:
-            self.archive_error = f"signal archive write failed: {type(e).__name__}"
+            # Hold it rather than drop it. A failed final-horizon event would otherwise
+            # leave the pending queue marked resolved and never be recorded anywhere.
+            self._archive_outbox = pending[-500:]
+            self.archive_error = (f"signal archive write failed: {type(e).__name__}; "
+                                  f"{len(self._archive_outbox)} event(s) awaiting retry")
+            return False
 
     def _archive_signal(self, row: dict) -> None:
         self._archive_event("signal", row)
 
     def _replay_archive(self) -> list[dict]:
-        """Rebuild the signal log from the event archive, newest session first."""
+        """Rebuild every signal from the event archive, newest session first.
+
+        A crash can only ever tear the LAST line, so that alone is a tolerable loss. A
+        malformed line anywhere earlier means the file has been corrupted or edited, and
+        silently skipping it would quietly drop evidence - it sets archive_error, which
+        blocks evidentiary verdicts, rather than being swallowed.
+        """
         rows: dict[str, dict] = {}
         try:
-            if not os.path.exists(SIGNAL_ARCHIVE_PATH):
+            if not os.path.exists(self.archive_path):
                 return []
-            with open(SIGNAL_ARCHIVE_PATH, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        event = json.loads(line)
-                    except ValueError:
-                        continue          # a torn final line must not lose the rest
-                    sid = str(event.get("id") or "")
-                    if not sid:
-                        continue
-                    if event.get("event") == "signal":
-                        rows.setdefault(sid, {k: v for k, v in event.items()
-                                              if k != "event"})
-                    elif event.get("event") == "outcome" and sid in rows:
-                        rows[sid].setdefault("outcomes", {})[
-                            str(event.get("horizon"))] = event.get("outcome") or {}
-                        rows[sid]["resolved"] = bool(event.get("resolved"))
+            with open(self.archive_path, encoding="utf-8") as f:
+                lines = f.read().splitlines()
         except OSError as e:
             self.archive_error = f"signal archive read failed: {type(e).__name__}"
             return []
+
+        bad_before_end = 0
+        for number, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except ValueError:
+                if number < len(lines) - 1:
+                    bad_before_end += 1
+                continue
+            sid = str(event.get("id") or "")
+            if not sid:
+                continue
+            if event.get("event") == "signal":
+                rows.setdefault(sid, {k: v for k, v in event.items() if k != "event"})
+            elif event.get("event") == "outcome" and sid in rows:
+                rows[sid].setdefault("outcomes", {})[
+                    str(event.get("horizon"))] = event.get("outcome") or {}
+                rows[sid]["resolved"] = bool(event.get("resolved"))
+        if bad_before_end:
+            self.archive_error = (
+                f"signal archive corrupt: {bad_before_end} unreadable line(s) before the "
+                f"end; evidence is incomplete")
         return sorted(rows.values(),
                       key=lambda r: str(r.get(SIGNAL_DAY_FIELD) or ""), reverse=True)
+
+    def evidence_rows(self) -> list[dict]:
+        """The population analytics run on: the whole archive, never the UI cache.
+
+        Replay returned every session while the next _retained_signals() call trimmed to
+        180, so a statistic changed as soon as one more signal arrived. Analytics now
+        read the archive and the trimmed list is only what the dashboard renders.
+        """
+        rows = self._replay_archive()
+        if not rows:
+            rows = list(self.signal_log)
+        return [x for x in rows
+                if x.get("engine_version") == SIGNAL_ENGINE_VERSION
+                and x.get(SIGNAL_DAY_FIELD)]
 
     def _proxy_cost_share(self, admitted_days: set[str]) -> float:
         """Share of admitted rows whose cost was an ADV proxy rather than a real quote.
@@ -693,9 +762,7 @@ class PennyStockPaperBot:
         matured unresolved day is itself biased, which is why such days are classified
         stale and fed to missing_outcome_bound() rather than discarded.
         """
-        current = [x for x in self.signal_log
-                   if x.get("engine_version") == SIGNAL_ENGINE_VERSION
-                   and x.get(SIGNAL_DAY_FIELD)]
+        current = self.evidence_rows()
         by_day: dict[str, list[dict]] = {}
         for item in current:
             by_day.setdefault(str(item[SIGNAL_DAY_FIELD]), []).append(item)
@@ -741,9 +808,15 @@ class PennyStockPaperBot:
                     nets = [float(o["net_return_pct"]) for o in resolved]
                     exc = [float(o["net_excess_return_pct"]) for o in resolved
                            if o.get("net_excess_return_pct") is not None]
-                    costs = [float(r.get("cost_pct") or 0.0) for r in rows]
-                    benches = [float(o["benchmark_return_pct"]) for o in resolved
-                               if o.get("benchmark_return_pct") is not None]
+                    costs = [float(r.get(SIGNAL_COST_FIELD) or 0.0) for r in rows]
+                    # Independent of whether the NAME resolved: every row carries IWM's
+                    # own horizon return, so a halted ticker still has a benchmark leg.
+                    benches = [float((r.get(SIGNAL_BENCHMARK_FIELD) or {})[str(horizon)])
+                               for r in rows
+                               if str(horizon) in (r.get(SIGNAL_BENCHMARK_FIELD) or {})]
+                    if not benches:
+                        benches = [float(o["benchmark_return_pct"]) for o in resolved
+                                   if o.get("benchmark_return_pct") is not None]
                     stale_detail.append({
                         "day": day, "members": len(rows), "missing": missing,
                         "resolved_net_pct": (sum(nets) / len(nets)) if nets else None,
@@ -1166,7 +1239,7 @@ class PennyStockPaperBot:
                     "quote_age_min": b.get("quote_age_min"),
                     "market_state": b.get("market_state"),
                     "quote_reliable": True,
-                    "modeled_round_trip_cost_pct": b.get("spread_pct"),
+                    SIGNAL_COST_FIELD: b.get("spread_pct"),
                     "cost_is_proxy": bool(b.get("spread_estimated")),
                     "benchmark_ticker": "IWM",
                     "benchmark_price": b["signal"].get("benchmark_price"),
@@ -1213,6 +1286,27 @@ class PennyStockPaperBot:
                 benchmark = benchmark.dropna(subset=["Close"])
         except Exception:
             benchmark = None
+
+        # IWM's horizon return does not depend on the stock, so record it before any
+        # per-ticker fetch can fail. Previously a name with no history returned early and
+        # left the benchmark leg at zero, which collapsed the bounded excess onto the
+        # bounded net and made the two indistinguishable.
+        if benchmark is not None and not benchmark.empty:
+            bench_dates = [x.date().isoformat() for x in benchmark.index]
+            bench_close = [float(x) for x in benchmark["Close"]]
+            for item in pending:
+                legs = item.setdefault(SIGNAL_BENCHMARK_FIELD, {})
+                idx = [i for i, day in enumerate(bench_dates)
+                       if day > item[SIGNAL_DAY_FIELD]]
+                for horizon in SIGNAL_HORIZONS:
+                    key = str(horizon)
+                    if key in legs or len(idx) < horizon:
+                        continue
+                    start = bench_close[idx[0]]
+                    if start > 0:
+                        legs[key] = round(
+                            (bench_close[idx[horizon - 1]] / start - 1) * 100, 4)
+
         for ticker, items in by_ticker.items():
             try:
                 hist = await asyncio.to_thread(fetch_history, ticker)
@@ -1234,7 +1328,7 @@ class PennyStockPaperBot:
                         rows = hist.iloc[indices[:horizon]]
                         end_close = float(rows.iloc[-1]["Close"])
                         gross = (end_close / entry - 1) * 100
-                        cost = max(0.0, float(item.get("modeled_round_trip_cost_pct") or 0))
+                        cost = max(0.0, float(item.get(SIGNAL_COST_FIELD) or 0))
                         bench_return = None
                         if benchmark is not None and not benchmark.empty:
                             bench_dates = [x.date().isoformat() for x in benchmark.index]
@@ -1373,7 +1467,12 @@ class PennyStockPaperBot:
         required_days = progress["completed_signal_days_required"]
         enough_excess = (progress["benchmarked_signal_days"]
                          >= progress["benchmarked_signal_days_required"])
-        if progress["completed_signal_days"] < required_days or not enough_excess:
+        if self.archive_error:
+            # A damaged evidence file, or events stuck in the outbox, means the sample
+            # being measured is not the sample that was recorded. That outranks progress.
+            status = "DATA_INCOMPLETE"
+            reason = f"evidence integrity problem: {self.archive_error}"
+        elif progress["completed_signal_days"] < required_days or not enough_excess:
             status = "COLLECTING"
             reason = (
                 f"need {required_days} completed signal days with benchmark coverage; "
