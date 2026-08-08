@@ -331,57 +331,47 @@ point-in-time fundamentals/earnings estimates. The free Yahoo panel is useful
 for rejecting strategies, but it is not sufficient to prove one because it
 contains current survivors and reconstructed event data.
 
-## v3's item gate is measured backwards
+## Corrected marginal item-code audit
 
-`live_sec_item_confirm_v3` splits 8-K item codes into a **material** set it treats as
-tradeable (2.02 results, 1.01 agreements, 7.01 Reg FD, 8.01 other, 1.05 cyber) and an
-**adverse** set it hard-rejects (bankruptcy, delisting, default, impairment,
-restatement). Like v1 and the catalyst gate before it, both halves shipped as
-assumptions. `research/penny_item_code_test.py` measures them against 70,309
-point-in-time 8-K filings.
+An initial item-code report claimed v3 was "backwards." That report did not support the
+claim: it included observations when the stocks were not penny stocks, let material and
+adverse groups overlap, omitted live adverse code 3.02, counted repeated same-day
+filings separately, paired a trade-weighted mean with a day-weighted interval, treated
+gross return as net in the search test, and called already-viewed 2025+ data untouched.
+It also treated the Submissions API's `Z` timestamp as Eastern. A direct SEC-file check
+shows the raw header's 07:07:44 Eastern acceptance represented as 11:07:44Z in the API.
 
-Item codes were worth testing separately: the earlier catalyst work lumped every 8-K
-together, and a 2.02 earnings release is not a 5.07 shareholder vote. Averaging them
-is a good way to hide a real effect.
+`item-code-marginal-v2-2026-08-08` corrects those errors. It uses the same UTC-to-New
+York event clock as the causal event audit, collapses filings to one symbol/reaction-day,
+makes the groups mutually exclusive with the adverse veto first, applies the historical
+penny price and live share-volume floors, and uses a ten-session market-calendar block
+bootstrap. It reports equal-weight signal-day baskets and a 0.50% cost separately.
 
-### Development, gross return before costs
+### All eligible item events
 
-| Set | Events | Gross | 95% CI |
-|---|---:|---:|---|
-| material (v3 **buys** these) | 42,935 | **-0.372%** | [-0.529, -0.215] |
-| adverse (v3 **rejects** these) | 1,718 | +0.541% | [-0.170, +1.252] |
-| neither | 14,603 | -0.366% | [-0.601, -0.132] |
+| Window | Material events | Gross basket | Gross 95% CI | Net after 0.50% |
+|---|---:|---:|---|---:|
+| Development through 2024 | 3,717 | +1.812% | [+0.797%, +2.942%] | +1.312% |
+| Post-2024, already viewed | 4,226 | -0.301% | [-1.686%, +1.101%] | -0.801% |
 
-The set v3 trades is the *worst* of the three, and its interval excludes zero. Filtering
-for "material" 8-Ks is worse than not filtering at all.
+The development effect disappears and changes sign. The later gross interval includes
+zero, so these results do **not** prove the category is inverted; they show that its
+earlier positive drift was unstable and cannot be used as a standalone edge.
 
-### Confirmed on the untouched period
+### Reaction-confirmed proxy
 
-v3 declared this split before any of it was measured, so testing it is a single
-pre-registered hypothesis, not a search - the family-wise correction below applies only
-to *my* hunt for the best individual code, not to this.
+The closer proxy also requires a 3%-30% reaction, elevated volume, a strong close,
+bounded volatility, no recent parabolic move and no offering inside 90 days. It still
+cannot reconstruct historical headlines, fundamentals, quotes or v3's two separated
+observations, so it is not labelled an exact live-rule backtest.
 
-| Set | Events | Gross | 95% CI |
-|---|---:|---:|---|
-| material (v3 buys) | 8,784 | **-0.949%** | [-1.461, -0.437] |
-| adverse (v3 rejects) | 419 | -0.159% | [-1.856, +1.539] |
+| Window | Material events | Gross basket | Gross 95% CI | Net after 0.50% |
+|---|---:|---:|---|---:|
+| Development through 2024 | 198 | +1.298% | [-0.575%, +3.182%] | +0.798% |
+| Post-2024, already viewed | 210 | -0.043% | [-1.772%, +2.010%] | -0.543% |
 
-The two worst offenders are both v3-declared bullish: **7.01** (Reg FD) at -1.107%
-[-1.723, -0.491] and **1.01** (material definitive agreement) at -1.282% [-2.073,
--0.490]. That has a plausible economic reading rather than being a bare data artifact:
-in a microcap, a "material definitive agreement" is very often a financing or a
-letter of intent promoted to retail, which is precisely the pattern the SEC's microcap
-guidance warns about.
-
-### What this does and does not license
-
-No individual code is a proven winner: the family-wise reality check over 23 codes gives
-p=0.280 under the ET timestamp reading and p=0.803 under the conservative one. The
-result is **not** a case for inverting the rule and buying delisting notices - the
-adverse set's interval spans zero, its sample is small, and everything here sits below
-a 1.5-2% round trip anyway.
-
-What it does establish is narrower and firmer: treating these codes as bullish is
-actively harmful, and v3's material gate should not be trusted. Every figure holds under
-both EDGAR timestamp conventions, so none of it is an artifact of reading
-`acceptanceDateTime` as Eastern rather than UTC.
+Neither window resolves a non-zero gross effect, and the exploratory search across 16
+individual codes fails its family-wise test (p=0.467). The defensible conclusion is
+`NO_STANDALONE_ITEM_CODE_EDGE`: use item codes for discovery and adverse-event safety,
+not for directional prediction. This matches the deployed implementation—v3 gives no
+bullish score merely because a filing carries a "material" code.

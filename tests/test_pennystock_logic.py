@@ -788,34 +788,91 @@ class TestSecFundamentalTiming(unittest.TestCase):
 
 
 class TestItemCodeAudit(unittest.TestCase):
-    """v3 sorts 8-K item codes into 'material' (buy) and 'adverse' (reject). Both
-    halves measured backwards out-of-sample, so the audit must keep saying so."""
+    """The marginal audit must match the deployed fail-closed item taxonomy."""
 
-    def test_v3_material_and_adverse_sets_do_not_overlap(self):
+    def test_material_and_adverse_sets_are_canonical(self):
         from research import penny_item_code_test as T
-        self.assertFalse(T.V3_MATERIAL & T.V3_ADVERSE)
+        from research import edgar_catalysts as ed
 
-    def test_entry_conventions_never_use_the_signal_bar_itself(self):
-        """The conservative reading must always enter strictly after the filing bar;
-        the ET reading may only take the same open when the filing predates it."""
+        self.assertFalse(T.MATERIAL_ITEMS & T.ADVERSE_ITEMS)
+        self.assertEqual(T.ADVERSE_ITEMS, ed.NEGATIVE_8K_ITEMS)
+        self.assertIn("3.02", T.ADVERSE_ITEMS)
+
+    def test_mixed_filing_is_adverse_before_material(self):
+        from research import penny_item_code_test as T
+
+        self.assertEqual(T.item_group("1.01|3.02|9.01"), "adverse")
+        self.assertEqual(T.item_group("2.02|9.01"), "material_direction_unknown")
+        self.assertEqual(T.item_group("5.07|9.01"), "neither")
+
+    def test_submissions_z_timestamp_is_converted_from_utc(self):
         import pandas as pd
-        idx = pd.bdate_range("2024-01-01", periods=10)
-        filing = idx[4]
-        pos = idx.searchsorted(filing, side="left")
-        self.assertEqual(idx[pos], filing)
-        safe_entry = pos + 1
-        self.assertGreater(safe_entry, pos)                  # never the filing bar
-        et_late = pos + 1 if not (12.0 < 9.5) else pos       # accepted midday
-        self.assertEqual(et_late, pos + 1)
-        et_early = pos if 8.0 < 9.5 else pos + 1             # accepted pre-open
-        self.assertEqual(et_early, pos)
+        from research.penny_event_drift import reaction_position
 
-    def test_verdict_reports_a_negative_material_set(self):
+        index = pd.bdate_range("2026-05-11", periods=4)
+        # The API's 11:07Z is 07:07 New York in May, so the May 12 close is the
+        # first observable reaction close.  Treating 11:07 as Eastern is wrong.
+        self.assertEqual(reaction_position(index, "2026-05-12T11:07:44Z"), 1)
+
+    def test_eligibility_excludes_non_penny_and_illiquid_rows(self):
+        import pandas as pd
         from research import penny_item_code_test as T
-        neg = {"held_out_v3_split": {"gross_et": {"material": {
-            "n": 8784, "gross_pct": -0.949, "ci_pct": [-1.46, -0.44]}}}}
-        mat = neg["held_out_v3_split"]["gross_et"]["material"]
-        self.assertLess(mat["ci_pct"][1], 0)
-        self.assertIn(mat["gross_pct"], (-0.949,))
-        # a set whose interval spans zero must not be called negative
-        self.assertFalse([-1.0, 0.5][1] < 0)
+
+        rows = pd.DataFrame({
+            "ticker": ["GOOD", "BIG", "THIN"],
+            "signal_date": pd.to_datetime(["2025-01-02"] * 3),
+            "items": ["2.02|9.01"] * 3,
+            "raw_close": [2.0, 20.0, 2.0],
+            "dollar_volume20": [2_000_000.0, 20_000_000.0, 100_000.0],
+            "gross_5": [0.01, 0.02, 0.03],
+            "reaction_pct": [5.0] * 3,
+            "volume_ratio": [2.0] * 3,
+            "close_location": [0.8] * 3,
+            "atr_pct": [0.1] * 3,
+            "max_ret20": [0.1] * 3,
+            "dilution_age_days": [100.0] * 3,
+        })
+        with mock.patch.object(T.event_drift, "build", return_value=rows):
+            selected = T.eligible_events()
+        self.assertEqual(selected["ticker"].tolist(), ["GOOD"])
+
+    def test_live_evidence_labels_item_result_as_a_reused_proxy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            live_path = os.path.join(directory, "live.json")
+            item_path = os.path.join(directory, "item.json")
+            catalyst_path = os.path.join(directory, "missing-catalyst.json")
+            with open(live_path, "w", encoding="utf-8") as handle:
+                json.dump({
+                    "strategy_id": "price-core", "trades": 10,
+                    "cost_decomposition": {"all": {}}, "splits": {"test": {}},
+                }, handle)
+            with open(item_path, "w", encoding="utf-8") as handle:
+                json.dump({
+                    "status": "NO_STANDALONE_ITEM_CODE_EDGE",
+                    "exact_live_rule_backtest": False,
+                    "verdict": "no standalone edge",
+                    "results": {"reaction_confirmed_proxy": {"post_2024_reused": {
+                        "material_direction_unknown": {
+                            "gross": {
+                                "applicable": True, "events": 210,
+                                "mean_signal_day_basket_net_pct": -0.0434,
+                                "bootstrap_95_pct": [-1.77, 2.01],
+                            },
+                            "net_after_0_5pct_cost": {
+                                "mean_signal_day_basket_net_pct": -0.5434,
+                            },
+                        }
+                    }}},
+                }, handle)
+            with (
+                mock.patch.object(research, "LIVE_AUDIT_PATH", live_path),
+                mock.patch.object(research, "ITEM_AUDIT_PATH", item_path),
+                mock.patch.object(research, "CATALYST_AUDIT_PATH", catalyst_path),
+                mock.patch.object(
+                    research, "_LIVE_AUDIT_CACHE", ((-1.0, -1.0, -1.0), {})
+                ),
+            ):
+                evidence = research.live_rule_evidence()["item_gate"]
+        self.assertFalse(evidence["exact_live_rule_backtest"])
+        self.assertEqual(evidence["window"], "post_2024_reused_not_holdout")
+        self.assertIn("not exact live rule", evidence["scope"])
