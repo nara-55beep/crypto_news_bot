@@ -1121,23 +1121,42 @@ class TestEvidenceClock(unittest.TestCase):
     """Filtering the signal log by engine version is correct, but each bump silently
     restarts collection. The cost should be visible before shipping another version."""
 
-    def test_clock_reports_what_a_version_bump_would_discard(self):
+    @staticmethod
+    def _production_row(day):
+        """A row shaped the way the writer actually emits one.
+
+        The first version of this test invented a "day" key while production wrote
+        "signal_day", so the clock counted zero and the test passed anyway. Fixtures
+        must use the same constant the writer uses, never a hand-typed key.
+        """
+        return {"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                paper.SIGNAL_DAY_FIELD: day, "ticker": "TEST"}
+
+    def test_clock_counts_rows_in_the_production_format(self):
         bot = paper.PennyStockPaperBot()
-        bot.signal_log = [
-            {"engine_version": paper.SIGNAL_ENGINE_VERSION, "day": "2026-08-05"},
-            {"engine_version": paper.SIGNAL_ENGINE_VERSION, "day": "2026-08-06"},
-            {"engine_version": paper.SIGNAL_ENGINE_VERSION, "day": "2026-08-06"},
-        ]
+        bot.signal_log = [self._production_row("2026-08-05"),
+                          self._production_row("2026-08-06"),
+                          self._production_row("2026-08-06")]
         clock = bot._evidence_clock()
-        self.assertEqual(clock["signal_days_collected"], 2)      # deduped by day
+        self.assertEqual(clock["signal_days_collected"], 2)      # deduped by session
         self.assertEqual(clock["discarded_by_next_version_bump"], 2)
         self.assertEqual(clock["signal_days_remaining"],
                          clock["signal_days_required"] - 2)
 
+    def test_a_renamed_session_key_cannot_pass_unnoticed(self):
+        """Regression for the actual bug: any other key must count as nothing, so a
+        future rename fails loudly instead of silently reading zero."""
+        bot = paper.PennyStockPaperBot()
+        for wrong in ("day", "signal_date", "session"):
+            bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
+                               wrong: "2026-08-05"}]
+            self.assertEqual(bot._evidence_clock()["signal_days_collected"], 0,
+                             f"{wrong!r} must not be mistaken for the session key")
+
     def test_prior_version_rows_do_not_count_as_evidence(self):
         bot = paper.PennyStockPaperBot()
         bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION - 1,
-                           "day": "2026-01-01"}]
+                           paper.SIGNAL_DAY_FIELD: "2026-01-01"}]
         self.assertEqual(bot._evidence_clock()["signal_days_collected"], 0)
 
     def test_clock_is_planning_not_evidence(self):

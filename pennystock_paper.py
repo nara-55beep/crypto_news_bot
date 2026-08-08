@@ -92,6 +92,12 @@ CONFIRM_MAX_CHASE_PCT = 5.0
 SETUP_TTL_SEC = 2 * 60 * 60
 OUTCOME_UPDATE_SEC = 60 * 60
 SIGNAL_HORIZONS = (1, 5, 10)
+# One name for the session key, used by both the writer and every reader. The first
+# evidence-clock attempt read "day" while signals were written as "signal_day", so the
+# count silently stayed at zero - and the test passed because its fixture invented the
+# same wrong key. A shared constant makes that class of drift impossible rather than
+# something a future test has to remember to catch.
+SIGNAL_DAY_FIELD = "signal_day"
 SIGNAL_ENGINE_VERSION = 6
 
 
@@ -560,7 +566,7 @@ class PennyStockPaperBot:
         visible is the point; it is a planning figure, never evidence of an edge.
         """
         days_live = max(0.0, (time.time() - self.engine_version_started_at) / 86400.0)
-        collected = len({str(x.get("day") or x.get("signal_date") or "")
+        collected = len({str(x.get(SIGNAL_DAY_FIELD) or "")
                          for x in self.signal_log if x.get("engine_version")
                          == SIGNAL_ENGINE_VERSION} - {""})
         required = 60
@@ -573,8 +579,11 @@ class PennyStockPaperBot:
             "signal_days_remaining": max(0, required - collected),
             "discarded_by_next_version_bump": collected,
             "note": ("a strategy change discards every row above and restarts this "
-                     "clock; at the historical proxy rate 60 signal days is about five "
-                     "years of an unchanged rule"),
+                     "clock. 60 signal days is only the minimum before a first verdict "
+                     "- which may well be REJECTED - not proof of profitability. No ETA "
+                     "is given here: this rule's own signal rate has never been "
+                     "measured, and the historical proxy's rate cannot be promoted to "
+                     "an estimate for it."),
         }
 
     def _manage(self, p: Position, d):
@@ -829,11 +838,11 @@ class PennyStockPaperBot:
             if candidate_action in ("BUY", "STRONG BUY") and confirmed and executable_snapshot:
                 # One observation per ticker/session. Repeated adaptive scans are
                 # correlated duplicates, not independent evidence of accuracy.
-                if any(x.get("ticker") == b["ticker"] and x.get("signal_day") == signal_day
+                if any(x.get("ticker") == b["ticker"] and x.get(SIGNAL_DAY_FIELD) == signal_day
                        for x in self.signal_log):
                     continue
                 self.signal_log.insert(0, {
-                    "id": uuid.uuid4().hex[:10], "t": now, "signal_day": signal_day,
+                    "id": uuid.uuid4().hex[:10], "t": now, SIGNAL_DAY_FIELD: signal_day,
                     "signal_at_utc": datetime.fromtimestamp(now, timezone.utc).isoformat(),
                     "engine_version": SIGNAL_ENGINE_VERSION,
                     "strategy_id": research.LIVE_STRATEGY_ID,
