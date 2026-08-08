@@ -239,10 +239,19 @@ class PennyStockLogicTests(unittest.TestCase):
                 }
                 return {"quotes": [{"symbol": x} for x in names[sortField]]}
 
-        with mock.patch.object(research, "yf", FakeYF):
+        with (
+            mock.patch.object(research, "yf", FakeYF),
+            mock.patch.object(
+                research, "_current_penny_universe",
+                return_value={"SEC1", "SEC2"},
+            ),
+            mock.patch.object(
+                research.sec_edgar, "current_8k_tickers", return_value=["SEC1", "SEC2"]
+            ),
+        ):
             self.assertEqual(
                 research.screen(6),
-                ["GAIN1", "VOL1", "SHORT1", "GAIN2", "VOL2", "SHORT2"],
+                ["SEC1", "GAIN1", "VOL1", "SHORT1", "SEC2", "GAIN2"],
             )
 
     def test_signal_log_deduplicates_same_ticker_and_session(self):
@@ -280,6 +289,56 @@ class PennyStockLogicTests(unittest.TestCase):
             })
         self.assertEqual(signal["action"], "WATCH")
         self.assertIn("no dated catalyst", signal["why"])
+
+    def test_future_earnings_date_is_risk_not_a_published_catalyst(self):
+        d = complete_dossier(
+            fresh_news_count=0, latest_news_age_hours=-1,
+            days_to_earnings=2, recent_filings=[], sec_8k_verified=False,
+        )
+        self.assertFalse(research.has_dated_catalyst(d))
+
+    def test_verified_material_sec_item_is_a_dated_catalyst(self):
+        d = complete_dossier(
+            fresh_news_count=0, latest_news_age_hours=-1,
+            sec_8k_verified=True, latest_sec_8k_age_hours=2,
+            recent_8k_items=["2.02", "9.01"], adverse_8k_items=[],
+        )
+        self.assertTrue(research.has_dated_catalyst(d))
+        score, reasons = research.catalyst_score(d)
+        self.assertEqual(score, 0)
+        self.assertTrue(any("direction not proven" in value for value in reasons))
+
+    def test_sec_discovery_cannot_spend_slots_on_non_penny_issuers(self):
+        class FakeYF:
+            class EquityQuery:
+                def __init__(self, *args):
+                    pass
+
+            @staticmethod
+            def screen(query, size=0, sortField="", sortAsc=False):
+                return {"quotes": [{"symbol": f"{sortField[:2].upper()}1"}]}
+
+        with (
+            mock.patch.object(research, "yf", FakeYF),
+            mock.patch.object(research, "_current_penny_universe", return_value={"PENNY"}),
+            mock.patch.object(
+                research.sec_edgar, "current_8k_tickers",
+                return_value=["BIGCAP", "PENNY", "FUND-WT"],
+            ),
+        ):
+            result = research.screen(4)
+        self.assertEqual(result[0], "PENNY")
+        self.assertNotIn("BIGCAP", result)
+        self.assertNotIn("FUND-WT", result)
+
+    def test_adverse_sec_item_is_a_hard_rejection(self):
+        d = complete_dossier(
+            fresh_news_count=0, latest_news_age_hours=-1,
+            sec_8k_verified=True, latest_sec_8k_age_hours=1,
+            recent_8k_items=["3.01", "8.01"], adverse_8k_items=["3.01"],
+        )
+        self.assertFalse(research.has_dated_catalyst(d))
+        self.assertIn("3.01", research.hard_risk_reason(d))
 
     def test_setup_requires_two_separated_observations_and_resets_a_chase(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
@@ -636,3 +695,93 @@ class TestEdgarCatalystTiming(unittest.TestCase):
         extended = self._cal(["2023-01-10", "2023-05-02", "2024-09-09", "2025-02-02"])
         for day in pd.bdate_range("2023-01-01", "2023-12-31", freq="7D"):
             self.assertEqual(ed.days_since(base, day), ed.days_since(extended, day))
+
+    def test_item_codes_are_normalized_and_adverse_items_are_classified(self):
+        from research import edgar_catalysts as ed
+        value = ed.classify_8k_items("2.02, 9.01;3.01,2.02")
+        self.assertEqual(value["items"], ["2.02", "3.01", "9.01"])
+        self.assertTrue(value["earnings"])
+        self.assertTrue(value["negative"])
+        self.assertEqual(value["negative_items"], ["3.01"])
+
+    def test_sec_column_arrays_remain_aligned(self):
+        from research import edgar_catalysts as ed
+        rows = ed._aligned_rows([{
+            "form": ["8-K", "10-Q"],
+            "filingDate": ["2026-01-02", "2026-01-03"],
+            "acceptanceDateTime": ["2026-01-02T21:00:00Z"],
+            "items": ["2.02,9.01", ""],
+        }])
+        self.assertEqual(rows[0]["items"], "2.02,9.01")
+        self.assertEqual(rows[1]["acceptanceDateTime"], "")
+        self.assertEqual(rows[1]["form"], "10-Q")
+
+    def test_after_close_filing_waits_for_next_reaction_session(self):
+        import pandas as pd
+        from research.penny_event_drift import reaction_position
+        index = pd.bdate_range("2026-01-05", periods=5)
+        # 20:30 UTC is 15:30 ET in January: that day's close is observable.
+        self.assertEqual(reaction_position(index, "2026-01-06T20:30:00Z"), 1)
+        # 22:00 UTC is 17:00 ET: the next session contains the first reaction close.
+        self.assertEqual(reaction_position(index, "2026-01-06T22:00:00Z"), 2)
+
+
+class TestSecFundamentalTiming(unittest.TestCase):
+    @staticmethod
+    def _fact(tag, unit, values):
+        return {tag: {"units": {unit: values}}}
+
+    @staticmethod
+    def _value(accession, start, end, value, filed):
+        return {
+            "accn": accession, "form": "10-Q", "start": start, "end": end,
+            "val": value, "filed": filed, "fy": int(end[:4]), "fp": "Q2",
+        }
+
+    def test_comparative_column_cannot_replace_the_current_quarter(self):
+        from research.sec_fundamentals import _standalone_quarters
+
+        concept = {"units": {"USD": [
+            self._value("NEW", "2023-04-01", "2023-06-30", 80, "2024-08-01"),
+            self._value("NEW", "2024-04-01", "2024-06-30", 100, "2024-08-01"),
+        ]}}
+        selected = _standalone_quarters(concept, "USD")
+        self.assertEqual(selected["NEW"]["end"], "2024-06-30")
+        self.assertEqual(selected["NEW"]["value"], 100.0)
+
+    def test_yoy_growth_uses_the_original_prior_accession(self):
+        from research.sec_fundamentals import extract_events
+
+        prior = self._value("OLD", "2023-04-01", "2023-06-30", 80, "2023-08-01")
+        current = self._value("NEW", "2024-04-01", "2024-06-30", 100, "2024-08-01")
+        comparative = self._value(
+            "NEW", "2023-04-01", "2023-06-30", 999, "2024-08-01"
+        )
+        prior_income = dict(prior, val=4)
+        current_income = dict(current, val=8)
+        comparative_income = dict(comparative, val=999)
+        facts = {"facts": {"us-gaap": {
+            **self._fact("Revenues", "USD", [prior, comparative, current]),
+            **self._fact("NetIncomeLoss", "USD", [
+                prior_income, comparative_income, current_income
+            ]),
+        }}}
+        filings = [
+            {"form": "10-Q", "accessionNumber": "OLD", "filingDate": "2023-08-01",
+             "acceptanceDateTime": "2023-08-01T20:00:00Z"},
+            {"form": "10-Q", "accessionNumber": "NEW", "filingDate": "2024-08-01",
+             "acceptanceDateTime": "2024-08-01T20:00:00Z"},
+        ]
+        events = extract_events(facts, filings)
+        newest = next(event for event in events if event["accessionNumber"] == "NEW")
+        self.assertEqual(newest["prior_revenue"], 80.0)
+        self.assertEqual(newest["revenue_growth_pct"], 25.0)
+        self.assertEqual(newest["prior_net_income"], 4.0)
+
+    def test_entry_waits_if_the_filing_misses_the_opening_cutoff(self):
+        import pandas as pd
+        from research.penny_fundamental_drift import entry_position
+
+        index = pd.bdate_range("2026-01-05", periods=5)
+        self.assertEqual(entry_position(index, "2026-01-06T14:20:00Z"), 1)
+        self.assertEqual(entry_position(index, "2026-01-06T14:30:00Z"), 2)

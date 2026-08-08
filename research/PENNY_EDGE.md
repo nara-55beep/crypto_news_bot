@@ -173,11 +173,11 @@ right instinct - the price/volume core alone has zero gross expectancy, so an ev
 is the only plausible source of one - but as shipped it was marked `COLLECTING` and
 would have needed years of forward signals before anyone could tell.
 
-`research/edgar_catalysts.py` makes it testable today. A SEC filing's `filingDate` is
-recorded when the document hits the wire and is never restated, which makes EDGAR the
-one genuinely point-in-time catalyst source available here for free. All 695 panel
-symbols mapped to a CIK, yielding **70,258 8-K events** and **24,102 offering
-filings** across ten years.
+`research/edgar_catalysts.py` makes it testable today. The refreshed schema retains
+the SEC's exact `acceptanceDateTime`, accession, primary document and 8-K item codes;
+the decision clock no longer pretends a date-only field says whether a filing arrived
+before or after the market close. All 695 panel symbols mapped to a CIK, yielding
+**70,278 8-K events** and **24,105 offering filings** across ten years.
 
 On train+validation the catalyst filter looked like a real discovery - gross return
 before costs, so the comparison is not contaminated by the cost model:
@@ -221,10 +221,72 @@ cost at all - but it matters for future work. Any conclusion of the form "the si
 is real but smaller than costs" drawn from this harness is partly a modelling
 assumption, and should be re-derived against measured spreads before being believed.
 
+## Item-aware 8-K drift: useful safety data, still no edge
+
+The date-only test above mixed fundamentally different events. Version
+`sec-item-drift-v1-2026-08-08` fixes that: it separates earnings (2.02), agreements
+and asset sales (1.01/2.01), Regulation FD/other material disclosures, and adverse
+items. Entry is causal: exact SEC acceptance, then the first fully observable reaction
+close, then the following session's open. Six rules and two holding periods were
+declared before inspecting their split results, with 0.50% base and 1.00% stress costs.
+
+| Predeclared rule | 2025+ trades | Mean net | Profit factor |
+|---|---:|---:|---:|
+| earnings drift, 5 sessions | 27 | **-3.639%** | 0.34 |
+| earnings drift, 10 sessions | 27 | **-7.321%** | 0.14 |
+| agreement drift, 3 sessions | 5 | -2.860% | 0.73 |
+| agreement drift, 5 sessions | 5 | -6.183% | 0.46 |
+| FD/other drift, 3 sessions | 22 | +0.627% | 1.17 |
+| strict material drift, 5 sessions | 5 | -4.442% | 0.45 |
+
+The small positive FD/other cell is not evidence of an edge: its 95% interval is
+[-3.20%, +4.77%], it has only 21 signal days, and the six-rule family-wise test gives
+p=0.393. The development winner, five-session earnings drift, reversed from +6.41%
+in train and +1.08% in validation to -3.64% in 2025+. Also, 2025+ had already been
+viewed by the broader catalyst study, so this is conservative evidence for rejection,
+not a new pristine holdout.
+
+The operational conclusion is still valuable. Item codes can identify and hard-block
+bankruptcy (1.03), covenant/default (2.04), impairment (2.06), delisting (3.01),
+unregistered equity sales (3.02), and non-reliance/restatement risk (4.02). But a code
+does not reveal whether an earnings release or agreement is economically good. The live
+bot therefore uses SEC items for immediate discovery and adverse-event rejection, not
+as unearned bullish score points.
+
+## Point-in-time quarterly fundamentals: promising numbers, no sample
+
+`research/sec_fundamentals.py` next reconstructs standalone 10-Q quarters from SEC
+Company Facts. Each value stays tied to its original accession, so a comparative column
+in next year's filing cannot rewrite an old signal. The audit covers 5,523 eligible
+quarterly events from 425 issuers and checks profitable revenue growth, faster growth,
+profit turnarounds and profit acceleration.
+
+The apparent 2025+ results are positive, but each rule has only **1-6 trades**. The
+selected profitable-growth rule has 4 train trades at -4.275%, 3 validation trades at
+-0.914%, and 6 later trades at +1.318%; its bootstrap interval is
+[-10.51%, +18.18%]. Other positive-looking variants reuse almost exactly those same
+few events. This is far below the predeclared 40/25/40 trade gates and cannot support
+an accuracy or profitability claim. Tuning thresholds around those outcomes would be
+test-set overfitting, so the audit stops here and reports `REJECTED`.
+
+## Continuous live discovery
+
+The scanner now polls the newest SEC 8-K feed page on every cache cycle and intersects
+it with the complete current Yahoo penny-stock eligibility query before allocating
+analysis slots. This catches a filing before its issuer has to become a top mover, while
+excluding large caps, funds and warrants. The current-universe result is cached for 15
+minutes and the SEC page for five; a measured cold scan fell from about 101 seconds for
+ten stale filing pages to 7.5 seconds for the continuously polled current page.
+
+Regular mover, volume and short-interest passes still run independently and are
+interleaved with the SEC candidates. The paper service continues around the clock using
+its market-state cadence; a hot setup increases scan frequency, but closed-market scans
+remain slower because there is no executable opportunity to miss.
+
 ## Exact-strategy execution contract
 
 Research approval no longer transfers between strategies. The live scanner identifies
-itself as `live_composite_v1`; the policy loader and the final fill path both require the
+itself as `live_sec_item_confirm_v3`; the policy loader and the final fill path both require the
 validated policy to name that exact implementation. A future validation of
 `profitable_earnings_beat`, for example, cannot unlock the unrelated composite/AI
 scanner. Mismatches fail closed as `STRATEGY_MISMATCH` while candidates continue to be
@@ -234,6 +296,8 @@ logged for forward measurement.
 
 ```powershell
 .\venv\Scripts\python.exe research\penny_edge_research.py
+.\venv\Scripts\python.exe research\penny_event_drift.py
+.\venv\Scripts\python.exe research\penny_fundamental_drift.py
 ```
 
 Refresh the current universe, price history, and reconstructed earnings events:
@@ -248,6 +312,8 @@ The machine-readable outputs are:
   limitations.
 - `data/pennystock_edge_policy.json` — small fail-closed policy consumed by the
   live bot.
+- `data/pennystock_event_drift_report.json` - item-aware 8-K audit.
+- `data/pennystock_fundamental_drift_report.json` - point-in-time 10-Q audit.
 
 The audit hash covers the methodology version, full candidate family, inference
 output, and data-snapshot metadata—not only the selected rule's split table. The live

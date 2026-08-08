@@ -39,6 +39,7 @@ except Exception:                                  # pragma: no cover
     yf = None
 
 import ai_client
+from research import edgar_catalysts as sec_edgar
 
 STATE_PATH = os.path.join(config.DATA_DIR, "pennystock_state.json")
 EDGE_POLICY_PATH = os.path.join(config.DATA_DIR, "pennystock_edge_policy.json")
@@ -47,12 +48,15 @@ LIVE_AUDIT_PATH = os.path.join(config.DATA_DIR, "pennystock_live_rule_audit.json
 CATALYST_AUDIT_PATH = os.path.join(config.DATA_DIR, "pennystock_catalyst_confirmation.json")
 _EDGE_POLICY_CACHE: tuple[float, dict] = (-1.0, {})
 _LIVE_AUDIT_CACHE: tuple[float, dict] = (-1.0, {})
+_PENNY_UNIVERSE_CACHE: tuple[float, set[str]] = (0.0, set())
+PENNY_UNIVERSE_TTL_SEC = 15 * 60
 
 # Research authorization belongs to an exact implementation, not to the broad idea of
-# "buying penny stocks".  Version 2 requires a dated catalyst as well as price/volume
-# confirmation; the old price-only composite was decisively negative out of sample.
-# Changing the identifier is intentional: evidence for v1 must never unlock v2.
-LIVE_STRATEGY_ID = "live_catalyst_confirm_v2"
+# "buying penny stocks".  Version 3 requires an item-aware, independently verified
+# SEC catalyst as well as price/volume confirmation; the old price-only composite was
+# decisively negative out of sample.  Changing the identifier is intentional: evidence
+# for an older implementation must never unlock this one.
+LIVE_STRATEGY_ID = "live_sec_item_confirm_v3"
 
 # The shared config.AI_TIMEOUT_SEC is deliberately tight (6s) because the news bots
 # must DROP a stale signal rather than trade it. Company analysis has no such decay -
@@ -295,6 +299,10 @@ class Dossier:
     fresh_news_count: int = 0
     latest_news_age_hours: float = -1.0
     recent_filings: list = field(default_factory=list)
+    sec_8k_verified: bool = False
+    latest_sec_8k_age_hours: float = -1.0
+    recent_8k_items: list = field(default_factory=list)
+    adverse_8k_items: list = field(default_factory=list)
     recent_offering: bool = False
     latest_offering_age_days: float = -1.0
     recent_reverse_split: bool = False
@@ -601,6 +609,67 @@ def build_dossier(ticker: str) -> Dossier:
         except Exception:
             pass
 
+        # Yahoo's filing list is useful as a fallback, but it drops the SEC's exact
+        # acceptance timestamp and 8-K item codes.  The official current-filings feed
+        # supplies both.  Item codes matter: an earnings release (2.02), a delisting
+        # notice (3.01), and bankruptcy (1.03) must never receive the same catalyst
+        # score merely because all three arrived on Form 8-K.
+        try:
+            official_events = sec_edgar.current_8k_for_symbol(
+                d.ticker, max_age_hours=FRESH_NEWS_HOURS
+            )
+            seen_accessions = {
+                str(x.get("accessionNumber") or "") for x in d.recent_filings
+                if x.get("accessionNumber")
+            }
+            item_codes: set[str] = set()
+            adverse_codes: set[str] = set()
+            for event in official_events:
+                age_hours = float(event.get("age_hours") or 0.0)
+                items = [str(x) for x in (event.get("items") or [])]
+                item_codes.update(items)
+                adverse_codes.update(str(x) for x in (event.get("negative_items") or []))
+                accession = str(event.get("accessionNumber") or "")
+                if accession and accession in seen_accessions:
+                    continue
+                d.recent_filings.append({
+                    "date": str(event.get("accepted_at") or "")[:10],
+                    "accepted_at": str(event.get("accepted_at") or ""),
+                    "type": "8-K",
+                    "title": str(event.get("company") or "")[:100],
+                    "url": str(event.get("url") or ""),
+                    "age_days": round(age_hours / 24.0, 2),
+                    "age_hours": round(age_hours, 2),
+                    "items": items,
+                    "accessionNumber": accession,
+                    "official_sec": True,
+                })
+            if official_events:
+                d.sec_8k_verified = True
+                d.latest_sec_8k_age_hours = min(
+                    float(x.get("age_hours") or 0.0) for x in official_events
+                )
+                d.recent_8k_items = sorted(item_codes)
+                d.adverse_8k_items = sorted(adverse_codes)
+                material = sorted(item_codes & (
+                    set(sec_edgar.EARNINGS_8K_ITEMS)
+                    | set(sec_edgar.AGREEMENT_8K_ITEMS)
+                    | {"1.05", "7.01", "8.01"}
+                ))
+                if material:
+                    d.catalysts.append(
+                        "SEC 8-K verified " + ", ".join(material)
+                        + f" ({d.latest_sec_8k_age_hours:.1f}h ago)"
+                    )
+            d.recent_filings.sort(
+                key=lambda x: float(x.get("age_days", 1e9))
+            )
+        except Exception:
+            # The SEC feed improves classification and discovery, but a transient
+            # outage must not erase the rest of the dossier.  It also cannot silently
+            # authorize a trade: ``sec_8k_verified`` remains false.
+            pass
+
         split_age_days = _age_hours(info.get("lastSplitDate")) / 24.0
         split_factor = str(info.get("lastSplitFactor") or "")
         try:
@@ -647,6 +716,11 @@ def risk_flags(d: Dossier) -> list[str]:
         f.append("NO REVENUE - story stock; value rests entirely on promises")
     if d.recent_offering:
         f.append(f"RECENT OFFERING FILING {d.latest_offering_age_days:.0f}d ago - dilution overhang")
+    if d.adverse_8k_items:
+        f.append(
+            "ADVERSE SEC 8-K ITEM(S) " + ", ".join(d.adverse_8k_items)
+            + " - bankruptcy/delisting/dilution/restatement risk"
+        )
     if d.recent_reverse_split:
         f.append("REVERSE SPLIT within 2 years - recurring listing/value-destruction risk")
     if d.float_shares and d.float_shares < 20_000_000 and d.volume_surge > 5:
@@ -874,11 +948,17 @@ def catalyst_score(d: "Dossier") -> tuple[float, list]:
     if d.fresh_news_count >= 3:
         pts += 10; why.append(f"{d.fresh_news_count} fresh headlines")
     if 0 <= d.days_to_earnings <= 7:
-        pts += 12; why.append(f"earnings in {d.days_to_earnings:.0f}d (binary)")
-    elif 7 < d.days_to_earnings <= 30:
-        pts += 6
-    if d.recent_filings and d.recent_filings[0].get("age_days", 999) <= 7:
-        pts += 8; why.append(f"fresh {d.recent_filings[0].get('type','filing')}")
+        why.append(f"earnings in {d.days_to_earnings:.0f}d (binary risk, not published news)")
+    items = set(d.recent_8k_items or [])
+    if d.sec_8k_verified and 0 <= d.latest_sec_8k_age_hours <= FRESH_NEWS_HOURS:
+        if items & set(sec_edgar.EARNINGS_8K_ITEMS):
+            why.append("SEC item 2.02 verified; direction not proven by item code")
+        if items & set(sec_edgar.AGREEMENT_8K_ITEMS):
+            why.append("SEC agreement/transaction verified; terms still need review")
+        if items & {"1.05", "7.01", "8.01"}:
+            why.append("SEC material/Regulation FD disclosure; direction unverified")
+    if d.adverse_8k_items:
+        pts -= 60; why.append("adverse SEC item " + ", ".join(d.adverse_8k_items))
     if d.recent_offering:
         pts -= 35; why.append("recent offering/prospectus")
     return max(0.0, min(100.0, pts)), why
@@ -892,13 +972,21 @@ def has_dated_catalyst(d: "Dossier") -> bool:
     after costs.  This gate keeps unexplained promotion/volume spikes in WATCH.
     """
     fresh_headline = 0 <= d.latest_news_age_hours <= FRESH_NEWS_HOURS
-    near_earnings = 0 <= d.days_to_earnings <= 7
-    try:
-        filing_age = float(d.recent_filings[0].get("age_days", -1))
-    except (IndexError, TypeError, ValueError, AttributeError):
-        filing_age = -1.0
-    fresh_filing = 0 <= filing_age <= 7
-    return bool(fresh_headline or near_earnings or fresh_filing)
+    items = set(d.recent_8k_items or [])
+    material_items = (
+        set(sec_edgar.EARNINGS_8K_ITEMS)
+        | set(sec_edgar.AGREEMENT_8K_ITEMS)
+        | {"1.05", "7.01", "8.01"}
+    )
+    verified_sec_event = bool(
+        d.sec_8k_verified
+        and 0 <= d.latest_sec_8k_age_hours <= FRESH_NEWS_HOURS
+        and items & material_items
+        and not d.adverse_8k_items
+    )
+    # A scheduled earnings date is future binary risk, not information explaining a
+    # move today.  Likewise an arbitrary fresh form is not bullish by definition.
+    return bool(fresh_headline or verified_sec_event)
 
 
 def hard_risk_reason(d: "Dossier") -> str:
@@ -907,6 +995,8 @@ def hard_risk_reason(d: "Dossier") -> str:
         return f"data error: {d.error}"
     if d.price <= 0:
         return "no valid price"
+    if not MIN_PRICE < d.price < MAX_PRICE:
+        return f"outside penny-stock price range (${d.price:.2f})"
     if d.quote_type and d.quote_type != "EQUITY":
         return f"unsupported security type {d.quote_type}"
     if d.exchange and d.exchange not in LISTED_EXCHANGES:
@@ -919,6 +1009,8 @@ def hard_risk_reason(d: "Dossier") -> str:
         return f"cash runway {d.runway_quarters:.1f}q"
     if d.shares_change_known and d.shares_change_pct > 40:
         return f"share dilution +{d.shares_change_pct:.0f}%"
+    if d.adverse_8k_items:
+        return "adverse SEC 8-K item(s): " + ", ".join(d.adverse_8k_items)
     spread, estimated = effective_spread(d)
     if not estimated and spread > 4:
         return f"live spread {spread:.1f}%"
@@ -1061,6 +1153,8 @@ genuinely attractive you must say so and explain why.
 Judge ONLY the supplied dossier. Never invent numbers, filings or catalysts.
 Missing data is UNKNOWN, never evidence that the company has no debt/dilution risk.
 Treat offering/prospectus filings as dilution risk, not as a bullish catalyst.
+An SEC 8-K item code proves the disclosure category, not whether its terms are bullish;
+do not infer direction unless the supplied headline or filing description supports it.
 Price targets and short interest may be stale; neither can justify a buy by itself.
 
 Weigh the catalyst honestly. A big short interest, an imminent earnings date or a
@@ -1210,6 +1304,34 @@ async def analyse(ticker: str) -> dict:
     return await analyse_dossier(build_dossier(ticker))
 
 
+def _current_penny_universe(query, force: bool = False) -> set[str]:
+    """Currently eligible listed names, cached for catalyst-first intersection.
+
+    The SEC feed is market-wide.  Intersecting it with the same price/liquidity query
+    used by the screener prevents large caps, funds and warrants from consuming the
+    limited analysis slots while still finding a filing before a stock becomes a mover.
+    """
+    global _PENNY_UNIVERSE_CACHE
+    created, symbols = _PENNY_UNIVERSE_CACHE
+    if not force and symbols and time.time() - created < PENNY_UNIVERSE_TTL_SEC:
+        return set(symbols)
+    found: set[str] = set()
+    for offset in range(0, 2_000, 250):
+        response = yf.screen(
+            query, offset=offset, size=250, sortField="ticker", sortAsc=True
+        )
+        quotes = (response or {}).get("quotes") or []
+        found.update(
+            str(quote.get("symbol") or "").strip().upper()
+            for quote in quotes if quote.get("symbol")
+        )
+        if len(quotes) < 250:
+            break
+    if found:
+        _PENNY_UNIVERSE_CACHE = (time.time(), set(found))
+    return found
+
+
 def screen(limit: int = SCAN_LIMIT) -> list[str]:
     """Find penny-stock candidates that are IN PLAY.
 
@@ -1233,10 +1355,21 @@ def screen(limit: int = SCAN_LIMIT) -> list[str]:
         ("dayvolume", False),       # heaviest volume
         ("short_percentage_of_float.value", False),  # squeeze candidates, not a buy signal
     ]
+    query = yf.EquityQuery("and", base)
     buckets, errors = [], []
+    try:
+        # Catalyst-first discovery catches an SEC event before it becomes a top mover.
+        # Filter the market-wide filing feed before it consumes an analysis slot.
+        eligible = _current_penny_universe(query)
+        buckets.append([
+            symbol for symbol in sec_edgar.current_8k_tickers(FRESH_NEWS_HOURS)
+            if symbol in eligible
+        ])
+    except Exception as e:
+        errors.append(f"SEC current 8-K feed: {type(e).__name__}")
     for field, asc in passes:
         try:
-            res = yf.screen(yf.EquityQuery("and", base), size=min(100, max(30, limit)),
+            res = yf.screen(query, size=min(100, max(30, limit)),
                             sortField=field, sortAsc=asc)
             bucket = [str(q.get("symbol") or "").upper()
                       for q in (res or {}).get("quotes", []) if q.get("symbol")]
