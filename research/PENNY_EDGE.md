@@ -330,3 +330,58 @@ unadjusted and adjusted OHLCV, actual delisting returns, and timestamped
 point-in-time fundamentals/earnings estimates. The free Yahoo panel is useful
 for rejecting strategies, but it is not sufficient to prove one because it
 contains current survivors and reconstructed event data.
+
+## v3's item gate is measured backwards
+
+`live_sec_item_confirm_v3` splits 8-K item codes into a **material** set it treats as
+tradeable (2.02 results, 1.01 agreements, 7.01 Reg FD, 8.01 other, 1.05 cyber) and an
+**adverse** set it hard-rejects (bankruptcy, delisting, default, impairment,
+restatement). Like v1 and the catalyst gate before it, both halves shipped as
+assumptions. `research/penny_item_code_test.py` measures them against 70,309
+point-in-time 8-K filings.
+
+Item codes were worth testing separately: the earlier catalyst work lumped every 8-K
+together, and a 2.02 earnings release is not a 5.07 shareholder vote. Averaging them
+is a good way to hide a real effect.
+
+### Development, gross return before costs
+
+| Set | Events | Gross | 95% CI |
+|---|---:|---:|---|
+| material (v3 **buys** these) | 42,935 | **-0.372%** | [-0.529, -0.215] |
+| adverse (v3 **rejects** these) | 1,718 | +0.541% | [-0.170, +1.252] |
+| neither | 14,603 | -0.366% | [-0.601, -0.132] |
+
+The set v3 trades is the *worst* of the three, and its interval excludes zero. Filtering
+for "material" 8-Ks is worse than not filtering at all.
+
+### Confirmed on the untouched period
+
+v3 declared this split before any of it was measured, so testing it is a single
+pre-registered hypothesis, not a search - the family-wise correction below applies only
+to *my* hunt for the best individual code, not to this.
+
+| Set | Events | Gross | 95% CI |
+|---|---:|---:|---|
+| material (v3 buys) | 8,784 | **-0.949%** | [-1.461, -0.437] |
+| adverse (v3 rejects) | 419 | -0.159% | [-1.856, +1.539] |
+
+The two worst offenders are both v3-declared bullish: **7.01** (Reg FD) at -1.107%
+[-1.723, -0.491] and **1.01** (material definitive agreement) at -1.282% [-2.073,
+-0.490]. That has a plausible economic reading rather than being a bare data artifact:
+in a microcap, a "material definitive agreement" is very often a financing or a
+letter of intent promoted to retail, which is precisely the pattern the SEC's microcap
+guidance warns about.
+
+### What this does and does not license
+
+No individual code is a proven winner: the family-wise reality check over 23 codes gives
+p=0.280 under the ET timestamp reading and p=0.803 under the conservative one. The
+result is **not** a case for inverting the rule and buying delisting notices - the
+adverse set's interval spans zero, its sample is small, and everything here sits below
+a 1.5-2% round trip anyway.
+
+What it does establish is narrower and firmer: treating these codes as bullish is
+actively harmful, and v3's material gate should not be trusted. Every figure holds under
+both EDGAR timestamp conventions, so none of it is an artifact of reading
+`acceptanceDateTime` as Eastern rather than UTC.

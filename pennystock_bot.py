@@ -46,6 +46,7 @@ EDGE_POLICY_PATH = os.path.join(config.DATA_DIR, "pennystock_edge_policy.json")
 EDGE_REPORT_PATH = os.path.join(config.DATA_DIR, "pennystock_edge_report.json")
 LIVE_AUDIT_PATH = os.path.join(config.DATA_DIR, "pennystock_live_rule_audit.json")
 CATALYST_AUDIT_PATH = os.path.join(config.DATA_DIR, "pennystock_catalyst_confirmation.json")
+ITEM_AUDIT_PATH = os.path.join(config.DATA_DIR, "pennystock_item_code_audit.json")
 _EDGE_POLICY_CACHE: tuple[float, dict] = (-1.0, {})
 _LIVE_AUDIT_CACHE: tuple[float, dict] = (-1.0, {})
 _PENNY_UNIVERSE_CACHE: tuple[float, set[str]] = (0.0, set())
@@ -180,6 +181,30 @@ def live_rule_evidence() -> dict:
                         v.get("confidently_profitable")
                         for v in (cat.get("net_at_cost") or {}).values()
                     ),
+                }
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            pass
+        # The item gate is what v3 actually trades on, so its measured sign belongs on
+        # the desk. Display only - edge_policy already blocks fills either way.
+        try:
+            with open(ITEM_AUDIT_PATH, encoding="utf-8") as f:
+                item = json.load(f)
+            mat = (((item.get("held_out_v3_split") or {}).get("gross_et") or {})
+                   .get("material") or {})
+            if mat.get("n"):
+                value["item_gate"] = {
+                    "tested": True,
+                    "events": mat.get("n"),
+                    "material_gross_pct": mat.get("gross_pct"),
+                    "material_ci_pct": mat.get("ci_pct"),
+                    "material_is_negative": bool((mat.get("ci_pct") or [0, 0])[1] < 0),
+                    "verdict": item.get("verdict"),
+                    "worst_codes": sorted(
+                        ((c, v.get("gross_pct"))
+                         for c, v in (item.get("held_out_material_codes") or {}).items()
+                         if v.get("gross_pct") is not None),
+                        key=lambda kv: kv[1],
+                    )[:3],
                 }
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             pass

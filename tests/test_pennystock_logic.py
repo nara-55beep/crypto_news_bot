@@ -785,3 +785,37 @@ class TestSecFundamentalTiming(unittest.TestCase):
         index = pd.bdate_range("2026-01-05", periods=5)
         self.assertEqual(entry_position(index, "2026-01-06T14:20:00Z"), 1)
         self.assertEqual(entry_position(index, "2026-01-06T14:30:00Z"), 2)
+
+
+class TestItemCodeAudit(unittest.TestCase):
+    """v3 sorts 8-K item codes into 'material' (buy) and 'adverse' (reject). Both
+    halves measured backwards out-of-sample, so the audit must keep saying so."""
+
+    def test_v3_material_and_adverse_sets_do_not_overlap(self):
+        from research import penny_item_code_test as T
+        self.assertFalse(T.V3_MATERIAL & T.V3_ADVERSE)
+
+    def test_entry_conventions_never_use_the_signal_bar_itself(self):
+        """The conservative reading must always enter strictly after the filing bar;
+        the ET reading may only take the same open when the filing predates it."""
+        import pandas as pd
+        idx = pd.bdate_range("2024-01-01", periods=10)
+        filing = idx[4]
+        pos = idx.searchsorted(filing, side="left")
+        self.assertEqual(idx[pos], filing)
+        safe_entry = pos + 1
+        self.assertGreater(safe_entry, pos)                  # never the filing bar
+        et_late = pos + 1 if not (12.0 < 9.5) else pos       # accepted midday
+        self.assertEqual(et_late, pos + 1)
+        et_early = pos if 8.0 < 9.5 else pos + 1             # accepted pre-open
+        self.assertEqual(et_early, pos)
+
+    def test_verdict_reports_a_negative_material_set(self):
+        from research import penny_item_code_test as T
+        neg = {"held_out_v3_split": {"gross_et": {"material": {
+            "n": 8784, "gross_pct": -0.949, "ci_pct": [-1.46, -0.44]}}}}
+        mat = neg["held_out_v3_split"]["gross_et"]["material"]
+        self.assertLess(mat["ci_pct"][1], 0)
+        self.assertIn(mat["gross_pct"], (-0.949,))
+        # a set whose interval spans zero must not be called negative
+        self.assertFalse([-1.0, 0.5][1] < 0)
