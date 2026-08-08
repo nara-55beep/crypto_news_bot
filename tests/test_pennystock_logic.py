@@ -1408,7 +1408,7 @@ class TestBoundIsDependenceRobust(unittest.TestCase):
                           for i in range(60)]
         bot.signal_log.append({"engine_version": paper.SIGNAL_ENGINE_VERSION,
                                paper.SIGNAL_DAY_FIELD: "2026-03-20",
-                               "ticker": "HALTED", "cost_pct": 1.0})
+                               "ticker": "HALTED", paper.SIGNAL_COST_FIELD: 1.0})
         bound = bot.missing_outcome_bound()
         self.assertGreater(bound["bounded_mean_net_pct"], 0)          # mean is positive
         self.assertLess(bound["bounded_net_hac_95_pct"][0], 0)        # interval is not
@@ -1421,7 +1421,7 @@ class TestBoundIsDependenceRobust(unittest.TestCase):
         bot.signal_log = [self._done("2026-01-01", ticker=f"T{i}") for i in range(9)]
         bot.signal_log += [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
                             paper.SIGNAL_DAY_FIELD: "2026-01-02", "ticker": "HALTED",
-                            "cost_pct": 1.0}]
+                            paper.SIGNAL_COST_FIELD: 1.0}]
         bound = bot.missing_outcome_bound()
         self.assertEqual(bound["signal_days_included"], 2)            # days, not rows
         # one clean day at +2 and one day bounded to -101 -> about -49.5, not -8.3
@@ -1440,7 +1440,7 @@ class TestBoundIsDependenceRobust(unittest.TestCase):
         bot = isolated_bot(tempfile.mkdtemp())
         bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION,
                            paper.SIGNAL_DAY_FIELD: f"2026-01-{d:02d}", "ticker": "H",
-                           "cost_pct": 1.0} for d in range(1, 26)]
+                           paper.SIGNAL_COST_FIELD: 1.0} for d in range(1, 26)]
         book = bot.daily_baskets()
         self.assertEqual(len(book["stale_all"]), 25)
         self.assertEqual(len(book["stale_detail"]), 20)               # display cap only
@@ -1568,3 +1568,93 @@ class TestEvidenceIntegrity(unittest.TestCase):
             bot = paper.PennyStockPaperBot()
         self.assertEqual(len(bot.signal_log), 1)
         self.assertIn("10", bot.signal_log[0]["outcomes"])   # cache-only outcome kept
+
+
+class TestEvidenceStoreIsAuthoritative(unittest.TestCase):
+    """Assertions go through the analytics surface, not signal_log: the reconciliation
+    was correct at load and then discarded by a second replay."""
+
+    @staticmethod
+    def _write(path, rows):
+        with open(path, "w", encoding="utf-8") as f:
+            for r in rows:
+                f.write((r if isinstance(r, str) else json.dumps(r)) + "\n")
+
+    def test_a_cache_only_outcome_survives_into_the_analytics(self):
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        self._write(ap, [{"event": "signal", "id": "s1",
+                          paper.SIGNAL_DAY_FIELD: "2026-01-02", "ticker": "A",
+                          "engine_version": paper.SIGNAL_ENGINE_VERSION}])
+        with open(sp, "w", encoding="utf-8") as f:
+            json.dump({"signal_log": [{"id": "s1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                       "engine_version": paper.SIGNAL_ENGINE_VERSION,
+                                       "outcomes": {"5": {"net_return_pct": 7.0}}}]}, f)
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        rows = bot.evidence_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertIn("5", rows[0].get("outcomes") or {})       # not just signal_log
+        self.assertEqual(bot.daily_baskets()["logged_rows"], 1)
+
+    def test_the_outbox_survives_a_restart(self):
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            bot._archive_event("outcome", {"id": "s1", "horizon": "5",
+                                           "outcome": {"net_return_pct": 4.0}})
+        bot._persist_outbox()                       # the failed write left a queue
+        restarted = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        self.assertEqual(len(restarted._archive_outbox), 1)
+        self.assertIn("awaiting retry", restarted.archive_error)
+        self.assertEqual(restarted.forward_validation()["status"], "DATA_INCOMPLETE")
+        restarted._archive_event("signal", {"id": "s2"})        # writes recover
+        self.assertEqual(restarted._archive_outbox, [])
+
+    def test_the_outbox_is_never_truncated(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            for i in range(600):
+                bot._archive_event("outcome", {"id": f"s{i}", "horizon": "5"})
+        self.assertEqual(len(bot._archive_outbox), 600)     # was capped at 500
+
+    def test_a_newline_terminated_corrupt_final_record_is_not_a_tear(self):
+        tmp = tempfile.mkdtemp()
+        ap = os.path.join(tmp, "a.jsonl")
+        self._write(ap, [{"event": "signal", "id": "a",
+                          paper.SIGNAL_DAY_FIELD: "2026-01-01",
+                          "engine_version": paper.SIGNAL_ENGINE_VERSION},
+                         "{corrupt but newline terminated"])
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertIn("corrupt", bot.archive_error)
+
+    def test_an_unterminated_final_line_is_still_tolerated(self):
+        tmp = tempfile.mkdtemp()
+        ap = os.path.join(tmp, "a.jsonl")
+        self._write(ap, [{"event": "signal", "id": "a",
+                          paper.SIGNAL_DAY_FIELD: "2026-01-01",
+                          "engine_version": paper.SIGNAL_ENGINE_VERSION}])
+        with open(ap, "a", encoding="utf-8") as f:
+            f.write('{"event": "signal", "id": "torn"')     # no trailing newline
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertEqual(bot.archive_error, "")
+
+    def test_both_benchmark_paths_agree(self):
+        """The two anchors disagreed 36.4% vs 50.0% on the same event."""
+        dates = ["2026-01-01", "2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07"]
+        closes = [100.0, 110.0, 120.0, 130.0, 140.0]
+        item = {paper.SIGNAL_DAY_FIELD: "2026-01-01", "benchmark_price": 100.0}
+        leg = paper.PennyStockPaperBot._benchmark_leg(item, 3, dates, closes)
+        self.assertAlmostEqual(leg, 30.0, places=3)   # 130/100 - 1, from the snapshot
+
+    def test_derived_metrics_use_the_evidence_population(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot._evidence = {"s1": {"id": "s1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                "ticker": "ONLY_IN_EVIDENCE",
+                                "engine_version": paper.SIGNAL_ENGINE_VERSION,
+                                "outcomes": {"5": {"net_return_pct": 1.0,
+                                                   "net_excess_return_pct": 0.5}}}}
+        bot.signal_log = []                            # the UI cache is empty
+        self.assertEqual(bot.forward_validation()["unique_tickers"], 1)

@@ -185,8 +185,10 @@ class PennyStockPaperBot:
         self.state_save_error = ""
         self.archive_error = ""
         self._archive_outbox: list[dict] = []
+        self._evidence: dict[str, dict] = {}
         self._was_market_open = False
         self._scan_lock = asyncio.Lock()
+        self._load_outbox()
         self._load()
 
     # ---------------- persistence ----------------
@@ -220,7 +222,9 @@ class PennyStockPaperBot:
             if not os.path.exists(self.state_path):
                 # The archive outlives the state file, so evidence is restored even when
                 # only the cache is missing.
-                self.signal_log = [x for x in self._replay_archive()
+                self._evidence = {str(r.get("id") or ""): r
+                                  for r in self._replay_archive() if r.get("id")}
+                self.signal_log = [x for x in self._evidence.values()
                                    if x.get("engine_version") == SIGNAL_ENGINE_VERSION]
                 return
             with open(self.state_path, encoding="utf-8") as f:      # was leaking the handle
@@ -281,6 +285,7 @@ class PennyStockPaperBot:
                 merged[sid] = {**base, **row, "outcomes": outcomes,
                                "resolved": bool(base.get("resolved")
                                                 or row.get("resolved"))}
+            self._evidence = merged
             self.signal_log = sorted(
                 (x for x in merged.values()
                  if x.get("engine_version") == SIGNAL_ENGINE_VERSION),
@@ -630,6 +635,69 @@ class PennyStockPaperBot:
         kept = [row for day in keep_days for row in by_day[day]]
         return kept + undated[:20]
 
+    @staticmethod
+    def _benchmark_leg(item: dict, horizon: int,
+                       bench_dates: list, bench_close: list) -> float | None:
+        """IWM's return over the horizon, anchored the same way for every caller.
+
+        The two paths disagreed: the resolved path measured from the signal-time
+        benchmark_price while this one measured from the first FUTURE close, which on a
+        rising benchmark reported 36.4% where the other reported 50.0%. Same event, two
+        answers, and the bounded excess inherited whichever happened to run. The anchor
+        is the signal-time snapshot, falling back to the last close on or before the
+        signal day.
+        """
+        day = str(item.get(SIGNAL_DAY_FIELD) or "")
+        future = [i for i, d in enumerate(bench_dates) if d > day]
+        if len(future) < horizon:
+            return None
+        start = float(item.get("benchmark_price") or 0.0)
+        if start <= 0:
+            prior = [i for i, d in enumerate(bench_dates) if d <= day]
+            if not prior:
+                return None
+            start = bench_close[prior[-1]]
+        if start <= 0:
+            return None
+        return round((bench_close[future[horizon - 1]] / start - 1) * 100, 4)
+
+    def _persist_outbox(self) -> None:
+        """Write the pending queue atomically so an outage cannot lose it on restart.
+
+        Best effort: if this also fails, the in-memory queue still holds and
+        archive_error still blocks evidentiary verdicts.
+        """
+        path = self.archive_path + ".outbox"
+        try:
+            if not self._archive_outbox:
+                if os.path.exists(path):
+                    os.remove(path)
+                return
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                for row in self._archive_outbox:
+                    f.write(json.dumps(row, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+        except OSError:
+            pass
+
+    def _load_outbox(self) -> None:
+        """Restore any queue left behind by a failed write in a previous run."""
+        path = self.archive_path + ".outbox"
+        try:
+            if not os.path.exists(path):
+                return
+            with open(path, encoding="utf-8") as f:
+                self._archive_outbox = [json.loads(x) for x in f.read().splitlines()
+                                        if x.strip()]
+            if self._archive_outbox:
+                self.archive_error = (f"{len(self._archive_outbox)} archived event(s) "
+                                      f"awaiting retry from a previous run")
+        except (OSError, ValueError):
+            pass
+
     def _archive_event(self, kind: str, payload: dict) -> bool:
         """Append one immutable event. The archive is the record; the log is a cache.
 
@@ -648,12 +716,17 @@ class PennyStockPaperBot:
                 f.flush()
                 os.fsync(f.fileno())
             self._archive_outbox = []
+            self._persist_outbox()
             self.archive_error = ""
             return True
         except OSError as e:
             # Hold it rather than drop it. A failed final-horizon event would otherwise
-            # leave the pending queue marked resolved and never be recorded anywhere.
-            self._archive_outbox = pending[-500:]
+            # leave the pending queue marked resolved and be recorded nowhere. The queue
+            # is written to disk so a restart mid-outage does not lose it, and it is
+            # never truncated: discarding evidence to bound memory is the same bug in a
+            # smaller coat.
+            self._archive_outbox = pending
+            self._persist_outbox()
             self.archive_error = (f"signal archive write failed: {type(e).__name__}; "
                                   f"{len(self._archive_outbox)} event(s) awaiting retry")
             return False
@@ -674,7 +747,12 @@ class PennyStockPaperBot:
             if not os.path.exists(self.archive_path):
                 return []
             with open(self.archive_path, encoding="utf-8") as f:
-                lines = f.read().splitlines()
+                raw = f.read()
+            lines = raw.splitlines()
+            # A crash tears the last write mid-line, leaving no trailing newline. A
+            # malformed record that IS newline-terminated was written whole and is
+            # corruption, not a tear.
+            tolerate_last = bool(raw) and not raw.endswith("\n")
         except OSError as e:
             self.archive_error = f"signal archive read failed: {type(e).__name__}"
             return []
@@ -687,7 +765,7 @@ class PennyStockPaperBot:
             try:
                 event = json.loads(line)
             except ValueError:
-                if number < len(lines) - 1:
+                if not (tolerate_last and number == len(lines) - 1):
                     bad_before_end += 1
                 continue
             sid = str(event.get("id") or "")
@@ -695,6 +773,9 @@ class PennyStockPaperBot:
                 continue
             if event.get("event") == "signal":
                 rows.setdefault(sid, {k: v for k, v in event.items() if k != "event"})
+            elif event.get("event") == "benchmark" and sid in rows:
+                rows[sid].setdefault(SIGNAL_BENCHMARK_FIELD, {}).update(
+                    event.get("legs") or {})
             elif event.get("event") == "outcome" and sid in rows:
                 rows[sid].setdefault("outcomes", {})[
                     str(event.get("horizon"))] = event.get("outcome") or {}
@@ -713,9 +794,10 @@ class PennyStockPaperBot:
         180, so a statistic changed as soon as one more signal arrived. Analytics now
         read the archive and the trimmed list is only what the dashboard renders.
         """
-        rows = self._replay_archive()
-        if not rows:
-            rows = list(self.signal_log)
+        # Re-replaying here discarded the reconciliation done at load: an outcome that
+        # reached the state cache but never reached the archive vanished from every
+        # statistic after a restart. There is one store, and this is it.
+        rows = list(self._evidence.values()) if self._evidence else list(self.signal_log)
         return [x for x in rows
                 if x.get("engine_version") == SIGNAL_ENGINE_VERSION
                 and x.get(SIGNAL_DAY_FIELD)]
@@ -726,7 +808,7 @@ class PennyStockPaperBot:
         Scoped to the sessions that actually entered the mean, so it describes the
         sample being reported rather than every row ever logged.
         """
-        rows = [x for x in self.signal_log
+        rows = [x for x in self.evidence_rows()
                 if str(x.get(SIGNAL_DAY_FIELD) or "") in admitted_days]
         if not rows:
             return 0.0
@@ -1258,6 +1340,7 @@ class PennyStockPaperBot:
                     "ai_conviction": (b.get("ai") or {}).get("conviction"),
                     "outcomes": {}, "resolved": False,
                 })
+                self._evidence[str(self.signal_log[0].get("id"))] = self.signal_log[0]
                 self._archive_signal(self.signal_log[0])
         # Session-based, matching what _save persists, so analytics cannot change across
         # a restart. The append-only archive keeps everything regardless.
@@ -1296,16 +1379,20 @@ class PennyStockPaperBot:
             bench_close = [float(x) for x in benchmark["Close"]]
             for item in pending:
                 legs = item.setdefault(SIGNAL_BENCHMARK_FIELD, {})
-                idx = [i for i, day in enumerate(bench_dates)
-                       if day > item[SIGNAL_DAY_FIELD]]
+                changed = False
                 for horizon in SIGNAL_HORIZONS:
                     key = str(horizon)
-                    if key in legs or len(idx) < horizon:
+                    if key in legs:
                         continue
-                    start = bench_close[idx[0]]
-                    if start > 0:
-                        legs[key] = round(
-                            (bench_close[idx[horizon - 1]] / start - 1) * 100, 4)
+                    value = self._benchmark_leg(item, horizon, bench_dates, bench_close)
+                    if value is not None:
+                        legs[key] = value
+                        changed = True
+                if changed:
+                    # persist it: computed only in memory, it vanished on an
+                    # archive-only restart and took the excess leg with it
+                    self._archive_event("benchmark", {"id": item.get("id"),
+                                                      "legs": dict(legs)})
 
         for ticker, items in by_ticker.items():
             try:
@@ -1509,7 +1596,7 @@ class PennyStockPaperBot:
             "completed_signals": sum(b["members"] for b in book["baskets"]),
             "signal_days": len(daily_net), "benchmarked_days": len(daily_excess),
             "unique_tickers": len({
-                x.get("ticker") for x in self.signal_log
+                x.get("ticker") for x in self.evidence_rows()
                 if str(x.get(SIGNAL_DAY_FIELD) or "") in set(daily_dates)}),
             "incomplete_signal_days": book["incomplete_days"],
             "unresolved_rows": book["unresolved_rows"],
