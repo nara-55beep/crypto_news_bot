@@ -290,6 +290,7 @@ function render(s){
   const pnl = Number(s.total_pnl)||0;
   const s5 = (s.signal_stats||{})['5']||{};
   const fv = s.forward_validation||{};
+  const fp = fv.feasibility||{};
   $('stats').innerHTML =
     stat('Equity', money(s.equity), 'gold') +
     stat('Net P&L', signed(pnl), pnl>=0?'g':'r') +
@@ -303,7 +304,10 @@ function render(s){
     stat('Next scan', s.scan_in_progress ? 'running' : (s.next_scan_in_sec||0)+'s') +
     stat('Hot setups', s.hot_setups||0) +
     stat('Forward edge', (fv.status||'collecting').toLowerCase(),
-         fv.status==='PROMISING_NOT_VALIDATED'?'g':fv.status==='REJECTED'?'r':'');
+         fv.status==='PROMISING_NOT_VALIDATED'?'g':fv.status==='REJECTED'?'r':'') +
+    stat('Validation power', (fp.status||'not assessable').toLowerCase(),
+         fp.status==='RESOLVABLE_NOW'?'g':
+         fp.status==='INFEASIBLE_WITHIN_HORIZON'?'r':'');
 
   // positions
   const P = s.positions||[];

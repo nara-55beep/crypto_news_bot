@@ -926,8 +926,7 @@ class TestExitStructure(unittest.TestCase):
 
 
 class TestFeasibilityGate(unittest.TestCase):
-    """Ask whether a rule can ever be validated BEFORE deploying it. v1, the catalyst
-    gate and v3 each shipped as COLLECTING without anyone checking."""
+    """Estimate whether a verdict is practical without calling a proxy exact."""
 
     @staticmethod
     def _stream(n, sd, years, seed=3):
@@ -938,17 +937,19 @@ class TestFeasibilityGate(unittest.TestCase):
                                     freq=pd.Timedelta(days=max(1, int(365.25*years/n))))))
         return pd.Series(rng.normal(0, sd, n)), dates
 
-    def test_a_selective_rule_is_flagged_unprovable(self):
+    def test_a_selective_rule_is_infeasible_within_the_horizon(self):
         from research import penny_feasibility as feas
         r, d = self._stream(112, 0.126, 9.5)          # the desk's own entry rate
-        f = feas.feasibility(r, d, target_effect_pct=2.0)
+        f = feas.feasibility(r, d, target_effect_pct=2.0, n_boot=600)
         self.assertFalse(f["verdict_reachable_within_patience"])
-        self.assertIn("UNPROVABLE", feas.verdict_line(f))
+        self.assertEqual(f["status"], "INFEASIBLE_WITHIN_HORIZON")
+        self.assertIn("INFEASIBLE WITHIN", feas.verdict_line(f))
+        self.assertNotIn("UNPROVABLE", feas.verdict_line(f))
 
     def test_a_broad_rule_is_resolvable(self):
         from research import penny_feasibility as feas
         r, d = self._stream(4000, 0.126, 9.5)
-        f = feas.feasibility(r, d, target_effect_pct=2.0)
+        f = feas.feasibility(r, d, target_effect_pct=2.0, n_boot=600)
         self.assertTrue(f["already_resolvable"])
 
     def test_same_day_events_do_not_inflate_power(self):
@@ -958,13 +959,49 @@ class TestFeasibilityGate(unittest.TestCase):
         r = pd.Series([0.01, -0.02, 0.03] * 40)
         clustered = pd.Series(pd.to_datetime(["2020-01-06", "2020-01-06", "2020-01-06"] * 40))
         spread = pd.Series(pd.date_range("2020-01-06", periods=120, freq="B"))
-        self.assertLess(feas.feasibility(r, clustered).get("independent_signal_days", 99),
-                        feas.feasibility(r, spread)["independent_signal_days"])
+        clustered_result = feas.feasibility(r, clustered, n_boot=300)
+        spread_result = feas.feasibility(r, spread, n_boot=300,
+                                         min_history_years=0.1)
+        self.assertFalse(clustered_result["applicable"])
+        self.assertIn("distinct signal days", clustered_result["reason"])
+        self.assertEqual(spread_result["independent_signal_days"], 120)
+
+    def test_time_remaining_is_not_total_history(self):
+        from research import penny_feasibility as feas
+        r, d = self._stream(112, 0.126, 9.5)
+        f = feas.feasibility(r, d, target_effect_pct=2.0, n_boot=600)
+        self.assertAlmostEqual(
+            f["total_years_required"] - f["history_years"],
+            f["additional_years_required"],
+            delta=0.2,
+        )
 
     def test_feasibility_is_not_evidence(self):
         """A resolvable rule is not thereby a profitable one."""
         from research import penny_feasibility as feas
         r, d = self._stream(4000, 0.126, 9.5)
-        f = feas.feasibility(r, d)
+        f = feas.feasibility(r, d, n_boot=600)
         self.assertNotIn("profitable", feas.verdict_line(f).lower())
         self.assertNotIn("edge", feas.verdict_line(f).lower())
+
+    def test_proxy_scope_cannot_be_mislabeled_exact(self):
+        from research import penny_feasibility as feas
+        r, d = self._stream(120, 0.126, 9.5)
+        result = feas.compare({"proxy": {
+            "returns": r, "dates": d, "exact_live_rule": False,
+            "scope": "historical proxy; not exact v3",
+        }}, n_boot=300)["proxy"]
+        self.assertFalse(result["exact_live_rule"])
+        self.assertIn("not exact", result["scope"])
+
+    def test_forward_tracker_exposes_feasibility_without_unlocking_trades(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            paper, "STATE_PATH", os.path.join(tmp, "state.json")
+        ):
+            bot = paper.PennyStockPaperBot()
+        bot.signal_log = []
+        result = bot.forward_validation()
+        self.assertIn("feasibility", result)
+        self.assertFalse(result["feasibility"]["applicable"])
+        self.assertIn("not assessable", result["feasibility"]["summary"])
+        self.assertFalse(result["auto_trade_allowed"])

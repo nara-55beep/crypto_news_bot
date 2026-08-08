@@ -3924,6 +3924,9 @@ PAPER_HTML = r"""<!doctype html>
       '<div class="sub" style="padding:0 14px 6px">forward edge: '+
         esc((s.forward_validation||{}).status||'COLLECTING')+' - '+
         esc((s.forward_validation||{}).reason||'waiting for evidence')+'</div>'+
+      '<div class="sub" style="padding:0 14px 6px">validation power: '+
+        esc((((s.forward_validation||{}).feasibility||{}).summary)||
+            'not assessable: no exact prospective outcomes')+'</div>'+
       '<div class="sub" style="padding:0 14px 8px;color:#fbbf24">'+esc(s.rules||'')+'</div>'+
       (s.last_error?'<div class="sub" style="padding:0 14px 8px;color:var(--red)">'+esc(s.last_error)+'</div>':'')+
       '<div class="sub" style="padding:0 14px 10px;color:#9ca3af">'+esc(s.note||'')+'</div>'+

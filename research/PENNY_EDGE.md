@@ -429,49 +429,39 @@ harm score rose monotonically from +0.94% to +17.7%, and family-wise p=0.999. Th
 select for volatility, and in a right-skewed tape volatility raises the mean without
 improving the median. Selecting on variance is not selecting on edge.
 
-## The desk cannot validate itself, and that is a design fact
+## Feasibility is a planning constraint, not an edge verdict
 
-The exit audit above was corrected for a real scope error: it treated broad 8-K events as
-the desk's entries. Re-running the same paired comparison on each population shows why
-that mattered so much - removing the fixed target measures **+1.861%** CI [+1.256,
-+2.512] on broad 8-K events and **-1.728%** CI [-3.754, +0.443] on the desk's own
-reaction-confirmed entries. Opposite signs. The fixed target is correctly restored.
+The exit scope error exposed a useful design question: before collecting a new rule, can
+its event rate and variance plausibly resolve an economically relevant effect? The first
+feasibility implementation answered that question too strongly. It called the
+reaction-confirmed 8-K proxy “the desk's own entries,” ignored serial dependence from
+overlapping returns, described total required history as additional time, and translated
+“longer than a chosen five-year horizon” into “unprovable.”
 
-But the reason the second interval proves nothing is the more important result:
+Version 2 uses equal-weight signal-day baskets and the same circular market-calendar
+block bootstrap as the other audits. It distinguishes total history from additional
+history and reports `INFEASIBLE_WITHIN_HORIZON`, not an impossibility claim. Its current
+2% effect / 95% confidence / 80% power calculation is:
 
-| The desk's own entry population | |
-|---|---:|
-| events in 9.5 years | **112** |
-| events per year | 11.8 |
-| per-event standard deviation | 12.6% |
-| smallest effect the full history resolves | **3.33%/event** |
-| years to resolve a +2%/event edge | **26** |
-| years to resolve a +1%/event edge | **105** |
+| Stream | Events | Signal days | History | Block-adjusted MDE | Additional years for 2% |
+|---|---:|---:|---:|---:|---:|
+| Broad 8-K proxy | 11,204 | 1,909 | 9.5y | 1.08% | 0.0 |
+| Reaction-confirmed 8-K proxy | 112 | 104 | 8.5y | 3.52% | 17.8 |
+| Exact prospective v3 | 0 completed | 0 | — | not assessable | not assessable |
 
-The rule is not unproven. It is **unprovable at its current selectivity**. No amount of
-forward collection reaches a verdict, because a realistic 1-2% edge would take decades to
-separate from noise at twelve events a year. That is why every audit in this document has
-had to choose between a population broad enough to measure and a population narrow enough
-to be the actual strategy.
+The reaction-confirmed stream is still only a closer historical proxy. It lacks
+point-in-time headlines, fundamentals, AI vetoes, two-scan persistence, executable
+quotes, regime state and delisted names. Therefore its 17.8-year estimate cannot be
+promoted to a claim about the exact v3 rule. It says that this proxy is impractical to
+evaluate within five more years if its signal rate and dependence-adjusted dispersion
+remain stationary.
 
-`research/penny_feasibility.py` turns this into a gate to run *before* deploying a rule
-rather than years after. Given an event stream and a target effect it reports the minimum
-detectable effect, the events required and the calendar time implied:
+`research/penny_feasibility.py` now exposes those assumptions and is also connected to
+the paper bot's prospective `forward_validation` output. The prospective tracker still
+cannot authorize trades; the reproducible edge policy remains `REJECTED`. Until exact v3
+outcomes accumulate over enough calendar history, its own rate and power are correctly
+reported as `not assessable` rather than guessed from a proxy.
 
-```
-broad 8-K eligible          11,204 events, 201.9/yr -> resolves 0.83%/event: resolvable now
-reaction-confirmed entries     112 events,  12.3/yr -> UNPROVABLE: ~25 years for 2%/event
-```
-
-Feasibility is not evidence. Passing only means a verdict is reachable in principle; the
-strategy still has to earn one. But failing means the COLLECTING label is a promise that
-cannot be kept, and v1, the catalyst gate and v3 were all deployed under exactly that
-promise.
-
-The choice this forces is a design decision, not a research one:
-
-* **loosen the entry filter** until events per year support a verdict - at which point it
-  is a different strategy that must be validated on its own terms; or
-* **keep the selectivity** and accept the desk is a discovery and risk-screening tool
-  that will never be statistically validated, which is a legitimate thing to be as long
-  as it is not mistaken for an edge.
+Feasibility passing means only that a specified effect size can be measured with the
+chosen confidence and power. It says nothing about whether the effect exists, whether it
+is positive, or whether it survives execution costs.

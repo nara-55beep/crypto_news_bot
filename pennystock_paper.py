@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 
 import config
 import pennystock_bot as research
+from research import penny_feasibility as feasibility
 
 NY = ZoneInfo("America/New_York")
 NAME = "AI Penny Stock (paper)"
@@ -137,6 +138,7 @@ class PennyStockPaperBot:
         self.day_pnl = 0.0
         self.scan_count = 0
         self.signal_log: list[dict] = []
+        self._forward_feasibility_cache: tuple[object, dict] = (None, {})
         self.last_outcome_update = 0.0
         self.last_full_scan = 0.0
         self.last_scan_duration = 0.0
@@ -891,7 +893,7 @@ class PennyStockPaperBot:
         for item, outcome in completed:
             by_day.setdefault(str(item.get("signal_day") or "unknown"), []).append((item, outcome))
 
-        daily_net, daily_excess = [], []
+        daily_net, daily_excess, daily_dates = [], [], []
         for day in sorted(by_day):
             rows = by_day[day]
             nets = [float(outcome["net_return_pct"]) for _, outcome in rows]
@@ -899,11 +901,29 @@ class PennyStockPaperBot:
                       if outcome.get("net_excess_return_pct") is not None]
             if nets:
                 daily_net.append(sum(nets) / len(nets))
+                daily_dates.append(day)
             if excess:
                 daily_excess.append(sum(excess) / len(excess))
 
         mean, lo, hi = self._hac_mean_ci(daily_net)
         ex_mean, ex_lo, ex_hi = self._hac_mean_ci(daily_excess)
+        feasibility_key = (
+            str(horizon), tuple(daily_dates), tuple(round(value, 8) for value in daily_net)
+        )
+        if self._forward_feasibility_cache[0] != feasibility_key:
+            planning = feasibility.feasibility(
+                [value / 100.0 for value in daily_net],
+                daily_dates,
+                target_effect_pct=2.0,
+                patience_years=5.0,
+                n_boot=800,
+                block=5,
+                min_history_years=1.0,
+            )
+            planning["summary"] = feasibility.verdict_line(planning)
+            self._forward_feasibility_cache = (feasibility_key, planning)
+        else:
+            planning = dict(self._forward_feasibility_cache[1])
         required_days = 60
         enough_excess = len(daily_excess) >= math.ceil(0.8 * required_days)
         if len(daily_net) < required_days or not enough_excess:
@@ -933,6 +953,7 @@ class PennyStockPaperBot:
                                                      for item, _ in completed) / len(completed), 1)
                                       if completed else 0.0),
             "minimum_signal_days": required_days,
+            "feasibility": planning,
             "grouping": "equal-weight basket per signal day",
             "uncertainty": "Newey-West HAC, 5-lag, 95% interval",
         }
