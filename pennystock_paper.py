@@ -149,6 +149,7 @@ class PennyStockPaperBot:
         self._ai_cache: dict[str, dict] = {}
         self._scan_task: asyncio.Task | None = None
         self._last_mark = 0.0
+        self.engine_version_started_at = time.time()
         self._was_market_open = False
         self._scan_lock = asyncio.Lock()
         self._load()
@@ -169,6 +170,8 @@ class PennyStockPaperBot:
                     "signal_log": self.signal_log[:400],
                     "last_full_scan": self.last_full_scan,
                     "setup_states": self.setup_states,
+                    "engine_version": SIGNAL_ENGINE_VERSION,
+                    "engine_version_started_at": self.engine_version_started_at,
                 }, f)
             os.replace(tmp, STATE_PATH)
         except Exception:
@@ -180,6 +183,15 @@ class PennyStockPaperBot:
                 return
             with open(STATE_PATH, encoding="utf-8") as f:      # was leaking the handle
                 d = json.load(f)
+            # Discarding prior-version outcomes below is correct - old-rule signals would
+            # contaminate forward accuracy. But it has an unpriced cost: every strategy
+            # bump restarts the evidence clock at zero. Record when the current version
+            # began collecting so that cost is visible instead of silent.
+            if int(d.get("engine_version", -1)) == SIGNAL_ENGINE_VERSION:
+                self.engine_version_started_at = float(
+                    d.get("engine_version_started_at") or time.time())
+            else:
+                self.engine_version_started_at = time.time()
             self.enabled = bool(d.get("enabled", False))
             self.balance = float(d.get("balance", START_BALANCE))
             self.pos = {k: Position(**v) for k, v in (d.get("positions") or {}).items()}
@@ -535,6 +547,35 @@ class PennyStockPaperBot:
                    f"(spread cost ${p.spread_cost + exit_spread:.2f})",
                    "win" if pnl >= 0 else "loss")
         self.pos.pop(ticker, None)
+
+    def _evidence_clock(self) -> dict:
+        """How much forward evidence exists, and what a version bump would discard.
+
+        Filtering the signal log to the current engine version is right: prior-rule
+        outcomes would contaminate forward accuracy. The unpriced side is that each bump
+        restarts collection at zero, and the desk needs 60 completed signal days before
+        it can even leave COLLECTING. At the historical proxy's ~12 signal days a year
+        that is roughly five years of an unchanged rule - so a strategy revised every few
+        days can never accumulate a verdict, whatever its event rate. Making the cost
+        visible is the point; it is a planning figure, never evidence of an edge.
+        """
+        days_live = max(0.0, (time.time() - self.engine_version_started_at) / 86400.0)
+        collected = len({str(x.get("day") or x.get("signal_date") or "")
+                         for x in self.signal_log if x.get("engine_version")
+                         == SIGNAL_ENGINE_VERSION} - {""})
+        required = 60
+        return {
+            "strategy_id": research.LIVE_STRATEGY_ID,
+            "engine_version": SIGNAL_ENGINE_VERSION,
+            "days_since_version_change": round(days_live, 2),
+            "signal_days_collected": collected,
+            "signal_days_required": required,
+            "signal_days_remaining": max(0, required - collected),
+            "discarded_by_next_version_bump": collected,
+            "note": ("a strategy change discards every row above and restarts this "
+                     "clock; at the historical proxy rate 60 signal days is about five "
+                     "years of an unchanged rule"),
+        }
 
     def _manage(self, p: Position, d):
         p.last_price = d.price
@@ -1172,6 +1213,7 @@ class PennyStockPaperBot:
             "max_portfolio_risk_pct": MAX_PORTFOLIO_RISK_PCT,
             "open_count": len(self.pos), "max_open": MAX_OPEN,
             "scan_count": self.scan_count,
+            "evidence_clock": self._evidence_clock(),
             "last_scan": self.last_scan,
             "last_scan_started": self.last_scan_started,
             "last_full_scan": self.last_full_scan,

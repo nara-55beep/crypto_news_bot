@@ -57,11 +57,28 @@ async def call_ai(system_prompt: str, user_prompt: str) -> str:
 # pip install openai   (already in requirements.txt)
 from openai import AsyncOpenAI
 
-_oai = AsyncOpenAI(
-    api_key=config.AI_API_KEY,
-    base_url=config.AI_BASE_URL,
-    timeout=config.AI_TIMEOUT_SEC,
-)
+# Built on first use, not at import. Constructing it eagerly meant a missing key raised
+# while this module was being imported, which took down every importer with it - the bot
+# could not start and the test suite could not even be collected. A credential problem
+# belongs at the call that needs the credential, in a message that names the fix.
+_oai: AsyncOpenAI | None = None
+
+
+def _client() -> AsyncOpenAI:
+    global _oai
+    if _oai is None:
+        if not config.AI_API_KEY:
+            raise RuntimeError(
+                'No AI key configured. Set the GROQ_API_KEY environment variable '
+                '(setx GROQ_API_KEY "...") or populate AI_API_KEY in config.py. '
+                'Scanning and the risk gates run without it; only AI review is lost.'
+            )
+        _oai = AsyncOpenAI(
+            api_key=config.AI_API_KEY,
+            base_url=config.AI_BASE_URL,
+            timeout=config.AI_TIMEOUT_SEC,
+        )
+    return _oai
 
 
 async def _call_openai_compatible(system_prompt: str, user_prompt: str) -> str:
@@ -72,13 +89,13 @@ async def _call_openai_compatible(system_prompt: str, user_prompt: str) -> str:
     # Try forcing JSON output (supported by OpenAI + many others). Some providers
     # / local models reject this param, so fall back to a plain call if it errors.
     try:
-        resp = await _oai.chat.completions.create(
+        resp = await _client().chat.completions.create(
             model=config.AI_MODEL, messages=messages,
             temperature=0.2, max_tokens=1200,
             response_format={"type": "json_object"},
         )
     except Exception:
-        resp = await _oai.chat.completions.create(
+        resp = await _client().chat.completions.create(
             model=config.AI_MODEL, messages=messages,
             temperature=0.2, max_tokens=1200,
         )

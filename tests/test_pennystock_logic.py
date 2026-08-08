@@ -1115,3 +1115,34 @@ class TestFeasibilityGate(unittest.TestCase):
         self.assertFalse(result["feasibility"]["applicable"])
         self.assertIn("not assessable", result["feasibility"]["summary"])
         self.assertFalse(result["auto_trade_allowed"])
+
+
+class TestEvidenceClock(unittest.TestCase):
+    """Filtering the signal log by engine version is correct, but each bump silently
+    restarts collection. The cost should be visible before shipping another version."""
+
+    def test_clock_reports_what_a_version_bump_would_discard(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [
+            {"engine_version": paper.SIGNAL_ENGINE_VERSION, "day": "2026-08-05"},
+            {"engine_version": paper.SIGNAL_ENGINE_VERSION, "day": "2026-08-06"},
+            {"engine_version": paper.SIGNAL_ENGINE_VERSION, "day": "2026-08-06"},
+        ]
+        clock = bot._evidence_clock()
+        self.assertEqual(clock["signal_days_collected"], 2)      # deduped by day
+        self.assertEqual(clock["discarded_by_next_version_bump"], 2)
+        self.assertEqual(clock["signal_days_remaining"],
+                         clock["signal_days_required"] - 2)
+
+    def test_prior_version_rows_do_not_count_as_evidence(self):
+        bot = paper.PennyStockPaperBot()
+        bot.signal_log = [{"engine_version": paper.SIGNAL_ENGINE_VERSION - 1,
+                           "day": "2026-01-01"}]
+        self.assertEqual(bot._evidence_clock()["signal_days_collected"], 0)
+
+    def test_clock_is_planning_not_evidence(self):
+        bot = paper.PennyStockPaperBot()
+        clock = bot._evidence_clock()
+        self.assertNotIn("edge", json.dumps(clock).lower())
+        self.assertNotIn("profitable", json.dumps(clock).lower())
+        self.assertIn("strategy_id", clock)
