@@ -923,3 +923,48 @@ class TestExitStructure(unittest.TestCase):
             pd.DataFrame([first, second])
         )
         self.assertEqual(set(selected["ticker"]), {"AAA", "BBB"})
+
+
+class TestFeasibilityGate(unittest.TestCase):
+    """Ask whether a rule can ever be validated BEFORE deploying it. v1, the catalyst
+    gate and v3 each shipped as COLLECTING without anyone checking."""
+
+    @staticmethod
+    def _stream(n, sd, years, seed=3):
+        import numpy as np, pandas as pd
+        rng = np.random.default_rng(seed)
+        dates = pd.to_datetime(
+            pd.Series(pd.date_range("2017-01-01", periods=n,
+                                    freq=pd.Timedelta(days=max(1, int(365.25*years/n))))))
+        return pd.Series(rng.normal(0, sd, n)), dates
+
+    def test_a_selective_rule_is_flagged_unprovable(self):
+        from research import penny_feasibility as feas
+        r, d = self._stream(112, 0.126, 9.5)          # the desk's own entry rate
+        f = feas.feasibility(r, d, target_effect_pct=2.0)
+        self.assertFalse(f["verdict_reachable_within_patience"])
+        self.assertIn("UNPROVABLE", feas.verdict_line(f))
+
+    def test_a_broad_rule_is_resolvable(self):
+        from research import penny_feasibility as feas
+        r, d = self._stream(4000, 0.126, 9.5)
+        f = feas.feasibility(r, d, target_effect_pct=2.0)
+        self.assertTrue(f["already_resolvable"])
+
+    def test_same_day_events_do_not_inflate_power(self):
+        """Ten events on one day are one observation, not ten."""
+        import pandas as pd
+        from research import penny_feasibility as feas
+        r = pd.Series([0.01, -0.02, 0.03] * 40)
+        clustered = pd.Series(pd.to_datetime(["2020-01-06", "2020-01-06", "2020-01-06"] * 40))
+        spread = pd.Series(pd.date_range("2020-01-06", periods=120, freq="B"))
+        self.assertLess(feas.feasibility(r, clustered).get("independent_signal_days", 99),
+                        feas.feasibility(r, spread)["independent_signal_days"])
+
+    def test_feasibility_is_not_evidence(self):
+        """A resolvable rule is not thereby a profitable one."""
+        from research import penny_feasibility as feas
+        r, d = self._stream(4000, 0.126, 9.5)
+        f = feas.feasibility(r, d)
+        self.assertNotIn("profitable", feas.verdict_line(f).lower())
+        self.assertNotIn("edge", feas.verdict_line(f).lower())
