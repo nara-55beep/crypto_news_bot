@@ -342,6 +342,11 @@ def rank(protocols: list[dict], bankroll_usd: float = 100.0,
     # promote a thinly-evidenced protocol above a well-audited one for the sake of a
     # number that cannot be verified. Expected value breaks ties within a band.
     rows.sort(key=lambda row: (-row["score"], -row["expected"]["expected_usd"]))
+    # Every row is priced at the same per-farm deposit, so the expected-value column
+    # sums to far more than this bankroll can actually fund. Tag the rows the money
+    # really covers, so the list cannot be read as an affordable shopping basket.
+    for index, row in enumerate(rows):
+        row["funded"] = index < wallets
     return rows[:limit]
 
 
