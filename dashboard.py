@@ -47,6 +47,7 @@ import news_sniper_bot
 import cross_arb_paper
 import cryptal_maker_paper
 import airdrop_scanner
+import confirmed_airdrops
 import fv_track_paper
 import trend_breakout_paper
 import ainews_paper
@@ -1774,6 +1775,20 @@ AIRDROPS_HTML = r"""<!doctype html>
         word-break:break-word}
   ol.steps{margin:6px 0 0 20px;padding:0}
   ol.steps li{margin:8px 0;color:#c9b58a;font-size:12.5px;line-height:1.65}
+  .st{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;letter-spacing:.06em}
+  .st-OPEN{background:#052e16;color:#4ade80;border:1px solid #166534}
+  .st-PENDING{background:#1c1917;color:#fbbf24;border:1px solid #78350f}
+  .st-DISTRIBUTED{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d}
+  .conf{border-bottom:1px solid var(--line);padding:13px 16px}
+  .conf.gone{opacity:.5}
+  .conf .top{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .conf .nm{color:var(--gold);font-weight:700;font-size:14px}
+  .conf .win{font-family:ui-monospace,monospace;font-size:11.5px;color:#e5d5b0}
+  .conf .src{font-size:11px;color:var(--dim);margin-top:5px}
+  .conf ol{margin:8px 0 0 20px;padding:0}
+  .conf li{margin:5px 0;color:#c9b58a;font-size:12px;line-height:1.6}
+  .lesson{background:#101418;border:1px solid #1e2a38;color:#9fb8c8;padding:12px 16px;
+          font-size:12.5px;line-height:1.65}
   .empty{padding:40px;text-align:center;color:var(--dim)}
   table{width:100%;border-collapse:collapse}
   th{background:#120d05;color:#b3873f;font-size:10px;text-transform:uppercase;
@@ -1845,7 +1860,32 @@ async function load(){
     return;
   }
 
-  let html='<div class="card"><h2>Your plan</h2><div class="kpis">'+
+  const cf=s.confirmed||{};
+  let html='';
+  if(cf.open||cf.distributed){
+    const card=function(e,gone){
+      return '<div class="conf'+(gone?' gone':'')+'"><div class="top">'+
+        '<span class="nm">'+esc(e.name)+'</span>'+
+        '<span class="st st-'+esc(e.status)+'">'+esc(e.status)+'</span>'+
+        '<span class="win">'+esc(e.token)+' · '+esc(e.tge_window)+'</span></div>'+
+        '<div class="src">Confirmed by: '+esc(e.confirmed_by)+
+        ' — <a href="'+esc(e.source_url)+'" target="_blank" rel="noopener noreferrer">source</a></div>'+
+        '<div class="src">'+esc(e.why_it_matters||'')+'</div>'+
+        ((e.qualify||[]).length?'<ol>'+e.qualify.map(function(q){return '<li>'+esc(q)+'</li>';}).join('')+'</ol>':'')+
+        '<div class="src" style="color:#f87171">Risk: '+esc(e.risk||'')+'</div></div>';
+    };
+    html+='<div class="card"><h2>Confirmed by the team — '+(cf.farmable_count||0)+
+      ' still open</h2><div class="lesson">'+esc(cf.lesson||'')+'</div>'+
+      (cf.open||[]).map(function(e){return card(e,false);}).join('')+
+      (cf.pending||[]).map(function(e){return card(e,false);}).join('')+
+      (cf.distributed||[]).map(function(e){return card(e,true);}).join('')+
+      '<div class="warn">'+esc(cf.caveat||'')+'</div>'+
+      '<div class="note">'+esc((cf.verified||{}).note||'')+' Verified '+
+      esc((cf.verified||{}).verified_on||'')+', '+Number((cf.verified||{}).days_old||0).toFixed(0)+
+      ' days ago.'+((cf.verified||{}).stale?' <b style="color:#f87171">This check is stale — re-verify each source.</b>':'')+
+      '</div></div>';
+  }
+  html+='<div class="card"><h2>Speculative candidates — your plan</h2><div class="kpis">'+
     '<div class="kpi"><span class="k">airdrops you can farm</span><span class="v">'+plan.farms+'</span></div>'+
     '<div class="kpi"><span class="k">deposit in each</span><span class="v">'+usd(plan.deposit_each_usd)+'</span></div>'+
     '<div class="kpi"><span class="k">gas (actually spent)</span><span class="v bad">'+usd(plan.gas_total_usd)+'</span></div>'+
@@ -1962,7 +2002,8 @@ async def _airdrops_page(request: web.Request):
 
 # ---- AIRDROP RADAR (read-only DeFiLlama scan, no wallet or key involved) ----
 async def _airdrops_state(request: web.Request):
-    return web.json_response(AIRDROPS.state())
+    return web.json_response({**AIRDROPS.state(),
+                              "confirmed": confirmed_airdrops.overview()})
 
 
 async def _airdrops_bankroll(request: web.Request):
