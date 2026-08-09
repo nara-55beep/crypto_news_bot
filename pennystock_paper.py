@@ -134,7 +134,7 @@ EVIDENCE_ROLE_FIELD = "evidence_role"
 PRIMARY_EVIDENCE_ROLE = "live_ai_approved"
 CONTROL_EVIDENCE_ROLE = "mechanical_ai_control"
 AI_SELECTION_FIELD = "ai_selection"
-AI_VALUE_MIN_PAIRED_DAYS = 60
+AI_VALUE_MIN_COMPARISON_DAYS = 60
 AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT = 80.0
 # A model/prompt selector is part of the tested rule.  Keep this separate from both the
 # mechanical engine and price-measurement schema so an AI-policy edit cannot pool its
@@ -2301,6 +2301,10 @@ class PennyStockPaperBot:
                     "ai_model": b.get("ai_model") or "",
                     "ai_verdict": ai.get("verdict"),
                     "ai_conviction": ai.get("conviction"),
+                    # Preserve the ordinal signal for later calibration. It does not
+                    # affect the live rule, but discarding it would force any future
+                    # score audit to start collecting from zero.
+                    "ai_score": ai.get("score"),
                     "outcomes": {}, "resolved": False,
                 })
                 self._evidence[str(self.signal_log[0].get("id"))] = self.signal_log[0]
@@ -2965,14 +2969,16 @@ class PennyStockPaperBot:
         }
 
     def ai_value_audit(self, horizon: str = "5") -> dict:
-        """Does the AI improve the same mechanical setups it reviews?
+        """Economic value of the AI selector against the full mechanical portfolio.
 
-        The unit is a paired signal day: at least one mechanically eligible name was
-        approved and at least one was rejected, every member resolved, and every round
-        trip used observed entry/exit books.  Pairing removes the day's common market
-        move before estimating the AI lift.  This audit can reject or flag a promising
-        AI filter; it can never authorize trading or prove the underlying strategy is
-        profitable.
+        ``mean(approved) - mean(rejected)`` is not the capital policy: it gives the two
+        labels equal weight regardless of group size and drops all-approved/all-skipped
+        days. Instead, every eligible day compares the equal-weight AI-selected
+        portfolio (0% cash when it selects nothing) with the equal-weight portfolio of
+        every pre-AI mechanical name. Every member must resolve with observed costs.
+
+        This can reject or flag a promising selector; it can never authorize trading
+        or prove that the selected portfolio itself is profitable.
         """
         horizon = str(horizon)
         policy_id = ai_decision_policy_id()
@@ -2992,7 +2998,10 @@ class PennyStockPaperBot:
             model = str(row.get("ai_model") or "unknown")
             model_counts[model] = model_counts.get(model, 0) + 1
         by_day: dict[str, list[dict]] = {}
-        for row in rows:
+        # An unavailable model fails closed in production, but its name still existed
+        # in the mechanical opportunity set. Keep it in the economic baseline so API
+        # outages cannot silently select the comparison sample.
+        for row in eligible_rows:
             by_day.setdefault(str(row[SIGNAL_DAY_FIELD]), []).append(row)
 
         today = datetime.now(NY).date()
@@ -3009,17 +3018,17 @@ class PennyStockPaperBot:
                 return sum(1 for session in sessions if session > parsed) >= need
             return (today - parsed).days >= fallback_days
 
-        pairs: list[dict] = []
-        pending_days = stale_days = modeled_days = unpaired_days = 0
+        comparisons: list[dict] = []
+        pending_days = stale_days = modeled_days = 0
+        mixed_days = all_approved_days = all_skipped_days = 0
         for day in sorted(by_day):
             members = by_day[day]
             approved = [r for r in members
                         if r.get(AI_SELECTION_FIELD) == "approved"]
             rejected = [r for r in members
                         if r.get(AI_SELECTION_FIELD) == "rejected"]
-            if not approved or not rejected:
-                unpaired_days += 1
-                continue
+            unavailable = [r for r in members
+                           if r.get(AI_SELECTION_FIELD) == "unavailable"]
             outcomes = [(r.get("outcomes") or {}).get(horizon) for r in members]
             if not all(isinstance(out, dict)
                        and out.get("net_return_pct") is not None for out in outcomes):
@@ -3039,34 +3048,70 @@ class PennyStockPaperBot:
                     return None
                 return sum(float(value) for value in values) / len(values)
 
+            mechanical_net = group_mean(members, "net_return_pct")
+            mechanical_excess = group_mean(members, "net_excess_return_pct")
             approved_net = group_mean(approved, "net_return_pct")
             rejected_net = group_mean(rejected, "net_return_pct")
             approved_excess = group_mean(approved, "net_excess_return_pct")
-            rejected_excess = group_mean(rejected, "net_excess_return_pct")
-            if approved_net is None or rejected_net is None:
+            if mechanical_net is None:
                 continue
-            pairs.append({
+
+            # When the selector approves nothing the deployed policy holds cash. Net
+            # cash return is conservatively 0%. For the excess leg, infer the day's
+            # benchmark from each observed net-minus-excess pair and measure cash
+            # against that benchmark.
+            if approved:
+                ai_net = approved_net
+                ai_excess = approved_excess
+            else:
+                ai_net = 0.0
+                implied_benchmarks = []
+                for outcome in outcomes:
+                    net = outcome.get("net_return_pct")
+                    excess = outcome.get("net_excess_return_pct")
+                    if net is None or excess is None:
+                        implied_benchmarks = []
+                        break
+                    implied_benchmarks.append(float(net) - float(excess))
+                ai_excess = (-sum(implied_benchmarks) / len(implied_benchmarks)
+                             if implied_benchmarks else None)
+
+            if len(approved) == len(members):
+                all_approved_days += 1
+            elif not approved:
+                all_skipped_days += 1
+            else:
+                mixed_days += 1
+
+            comparisons.append({
                 "day": day,
+                "mechanical_members": len(members),
                 "approved_members": len(approved),
                 "rejected_members": len(rejected),
-                "approved_net_pct": approved_net,
+                "unavailable_members": len(unavailable),
+                "ai_portfolio_net_pct": ai_net,
+                "mechanical_net_pct": mechanical_net,
                 "rejected_net_pct": rejected_net,
-                "net_lift_pct": approved_net - rejected_net,
+                "net_lift_pct": ai_net - mechanical_net,
                 "excess_lift_pct": (
-                    approved_excess - rejected_excess
-                    if approved_excess is not None and rejected_excess is not None
+                    ai_excess - mechanical_excess
+                    if ai_excess is not None and mechanical_excess is not None
                     else None),
             })
 
-        net_lifts = [pair["net_lift_pct"] for pair in pairs]
-        excess_lifts = [pair["excess_lift_pct"] for pair in pairs
-                        if pair["excess_lift_pct"] is not None]
+        net_lifts = [item["net_lift_pct"] for item in comparisons]
+        excess_lifts = [item["excess_lift_pct"] for item in comparisons
+                        if item["excess_lift_pct"] is not None]
         net_mean, net_lo, net_hi = self._hac_mean_ci(net_lifts)
         ex_mean, ex_lo, ex_hi = self._hac_mean_ci(excess_lifts)
-        approved_mean = (sum(pair["approved_net_pct"] for pair in pairs) / len(pairs)
-                         if pairs else 0.0)
-        rejected_mean = (sum(pair["rejected_net_pct"] for pair in pairs) / len(pairs)
-                         if pairs else 0.0)
+        ai_mean = (sum(item["ai_portfolio_net_pct"] for item in comparisons)
+                   / len(comparisons) if comparisons else 0.0)
+        mechanical_mean = (sum(item["mechanical_net_pct"] for item in comparisons)
+                           / len(comparisons) if comparisons else 0.0)
+        rejected_values = [item["rejected_net_pct"] for item in comparisons
+                           if item["rejected_net_pct"] is not None]
+        rejected_mean = (sum(rejected_values) / len(rejected_values)
+                         if rejected_values else 0.0)
 
         if self.archive_error:
             status = "DATA_INCOMPLETE"
@@ -3083,27 +3128,29 @@ class PennyStockPaperBot:
         elif stale_days or modeled_days:
             status = "DATA_INCOMPLETE"
             reason = (
-                f"{stale_days} matured paired day(s) have missing outcomes and "
-                f"{modeled_days} paired day(s) lack observed execution costs"
+                f"{stale_days} matured comparison day(s) have missing outcomes and "
+                f"{modeled_days} comparison day(s) lack observed execution costs"
             )
-        elif (len(pairs) < AI_VALUE_MIN_PAIRED_DAYS
-              or len(excess_lifts) < AI_VALUE_MIN_PAIRED_DAYS):
+        elif (len(comparisons) < AI_VALUE_MIN_COMPARISON_DAYS
+              or len(excess_lifts) < AI_VALUE_MIN_COMPARISON_DAYS):
             status = "COLLECTING"
             reason = (
-                f"need {AI_VALUE_MIN_PAIRED_DAYS} completed paired AI-control days; "
-                f"have {len(pairs)} net / {len(excess_lifts)} IWM-relative"
+                f"need {AI_VALUE_MIN_COMPARISON_DAYS} completed AI-versus-mechanical "
+                f"days; have {len(comparisons)} net / "
+                f"{len(excess_lifts)} IWM-relative"
             )
         elif net_lo > 0 and ex_lo > 0:
             status = "AI_LIFT_PROMISING_NOT_VALIDATED"
             reason = (
-                "AI-approved setups beat same-day AI-rejected mechanical controls "
-                "after observed costs; an independent frozen-rule audit is still required"
+                "the actual AI-selected portfolio beat the full same-day mechanical "
+                "portfolio after observed costs; an independent frozen-rule audit is "
+                "still required"
             )
         else:
             status = "NO_MEASURED_AI_EDGE"
             reason = (
-                "the paired after-cost AI lift is non-positive or its dependence-robust "
-                "95% interval crosses zero"
+                "the capital-aware after-cost AI lift is non-positive or its "
+                "dependence-robust 95% interval crosses zero"
             )
 
         return {
@@ -3111,13 +3158,16 @@ class PennyStockPaperBot:
             "auto_trade_allowed": False,
             "reason": reason,
             "horizon_sessions": int(horizon),
-            "paired_days": len(pairs),
-            "minimum_paired_days": AI_VALUE_MIN_PAIRED_DAYS,
-            "paired_days_remaining": max(0, AI_VALUE_MIN_PAIRED_DAYS - len(pairs)),
-            "pending_paired_days": pending_days,
-            "stale_paired_days": stale_days,
-            "modeled_cost_paired_days": modeled_days,
-            "unpaired_days": unpaired_days,
+            "comparison_days": len(comparisons),
+            "minimum_comparison_days": AI_VALUE_MIN_COMPARISON_DAYS,
+            "comparison_days_remaining": max(
+                0, AI_VALUE_MIN_COMPARISON_DAYS - len(comparisons)),
+            "pending_comparison_days": pending_days,
+            "stale_comparison_days": stale_days,
+            "modeled_cost_comparison_days": modeled_days,
+            "mixed_selection_days": mixed_days,
+            "all_approved_days": all_approved_days,
+            "all_skipped_days": all_skipped_days,
             "classified_rows": len(rows),
             "unavailable_rows": len(unavailable_rows),
             "classification_coverage_pct": round(classification_coverage, 1),
@@ -3126,17 +3176,24 @@ class PennyStockPaperBot:
             "ai_policy_version": AI_DECISION_POLICY_VERSION,
             "ai_policy_id": policy_id,
             "model_counts": model_counts,
-            "approved_mean_net_pct": round(approved_mean, 3) if pairs else None,
-            "rejected_mean_net_pct": round(rejected_mean, 3) if pairs else None,
-            "mean_ai_lift_pct": round(net_mean, 3) if pairs else None,
+            "ai_portfolio_mean_net_pct": round(ai_mean, 3) if comparisons else None,
+            "mechanical_mean_net_pct": (round(mechanical_mean, 3)
+                                         if comparisons else None),
+            "rejected_diagnostic_mean_net_pct": (
+                round(rejected_mean, 3) if rejected_values else None),
+            "mean_ai_lift_pct": round(net_mean, 3) if comparisons else None,
             "ai_lift_hac_95_pct": ([round(net_lo, 3), round(net_hi, 3)]
-                                    if pairs else None),
+                                    if comparisons else None),
             "mean_ai_excess_lift_pct": (round(ex_mean, 3) if excess_lifts else None),
             "ai_excess_lift_hac_95_pct": (
                 [round(ex_lo, 3), round(ex_hi, 3)] if excess_lifts else None),
-            "grouping": "paired equal-weight approved-vs-rejected baskets per signal day",
-            "note": ("This tests the AI filter's incremental value. It does not prove "
-                     "the mechanical strategy itself is profitable and never unlocks trading."),
+            "grouping": ("equal-weight AI-selected portfolio versus the full "
+                         "equal-weight mechanical basket per signal day; 0% cash when "
+                         "AI selects nothing"),
+            "note": ("This tests the deployed AI filter's incremental economic value, "
+                     "including all-approved, all-skipped, and API-failure days. It does "
+                     "not prove the selected portfolio is profitable and never unlocks "
+                     "trading."),
         }
 
     async def manage_loop(self):

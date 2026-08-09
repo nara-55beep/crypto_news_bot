@@ -3241,6 +3241,7 @@ class TestAIIncrementalValueAudit(unittest.TestCase):
             self.assertEqual(row[paper.EVIDENCE_ROLE_FIELD],
                              paper.CONTROL_EVIDENCE_ROLE)
             self.assertEqual(row[paper.AI_SELECTION_FIELD], "rejected")
+            self.assertEqual(row["ai_score"], 10)
             self.assertEqual(bot.evidence_rows(), [])
             self.assertEqual(len(bot.mechanical_evidence_rows()), 1)
 
@@ -3256,14 +3257,14 @@ class TestAIIncrementalValueAudit(unittest.TestCase):
         self.assertEqual(book["baskets"][0]["members"], 1)
         self.assertEqual(book["baskets"][0]["net_pct"], 2.0)
 
-    def test_paired_forward_audit_can_measure_ai_lift_without_unlocking_trading(self):
+    def test_capital_aware_forward_audit_never_unlocks_trading(self):
         from datetime import date, timedelta
 
         with tempfile.TemporaryDirectory() as tmp:
             bot = isolated_bot(tmp)
             rows = []
             start = date(2026, 1, 1)
-            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+            for index in range(paper.AI_VALUE_MIN_COMPARISON_DAYS):
                 day = (start + timedelta(days=index)).isoformat()
                 rows.extend((
                     self._row(day, f"A{index}", "approved", 2.0, 1.5),
@@ -3273,8 +3274,77 @@ class TestAIIncrementalValueAudit(unittest.TestCase):
             bot.signal_log = rows
             audit = bot.ai_value_audit("5")
         self.assertEqual(audit["status"], "AI_LIFT_PROMISING_NOT_VALIDATED")
-        self.assertEqual(audit["paired_days"], paper.AI_VALUE_MIN_PAIRED_DAYS)
-        self.assertEqual(audit["mean_ai_lift_pct"], 3.0)
+        self.assertEqual(audit["comparison_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        # approved=+2, full mechanical basket=(+2-1)/2=+0.5: real lift +1.5,
+        # not the old approved-minus-rejected headline of +3.0.
+        self.assertEqual(audit["mean_ai_lift_pct"], 1.5)
+        self.assertFalse(audit["auto_trade_allowed"])
+
+    def test_group_sizes_cannot_exaggerate_ai_lift(self):
+        """Nine approvals and one rejection are not two equal-sized portfolios.
+
+        Old estimand: +1 - (-1) = +2. Correct capital effect: +1 versus the
+        full mechanical basket at +0.8, only +0.2.
+        """
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_COMPARISON_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.extend(
+                    self._row(day, f"A{index}-{member}", "approved", 1.0, 0.5)
+                    for member in range(9)
+                )
+                rows.append(self._row(day, f"R{index}", "rejected", -1.0, -1.5))
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["mean_ai_lift_pct"], 0.2)
+        self.assertEqual(audit["ai_portfolio_mean_net_pct"], 1.0)
+        self.assertEqual(audit["mechanical_mean_net_pct"], 0.8)
+
+    def test_all_approved_days_are_zero_lift_not_discarded(self):
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_COMPARISON_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.append(self._row(day, f"A{index}", "approved", 2.0, 1.5))
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["comparison_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        self.assertEqual(audit["all_approved_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        self.assertEqual(audit["mean_ai_lift_pct"], 0.0)
+        self.assertEqual(audit["status"], "NO_MEASURED_AI_EDGE")
+
+    def test_all_skipped_days_measure_cash_against_the_mechanical_loss(self):
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_COMPARISON_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.append(self._row(day, f"R{index}", "rejected", -1.0, -1.5))
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["all_skipped_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        self.assertEqual(audit["ai_portfolio_mean_net_pct"], 0.0)
+        self.assertEqual(audit["mechanical_mean_net_pct"], -1.0)
+        self.assertEqual(audit["mean_ai_lift_pct"], 1.0)
         self.assertFalse(audit["auto_trade_allowed"])
 
     def test_mature_missing_control_blocks_a_positive_ai_claim(self):
@@ -3284,7 +3354,7 @@ class TestAIIncrementalValueAudit(unittest.TestCase):
             bot = isolated_bot(tmp)
             rows = []
             start = date(2026, 1, 1)
-            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+            for index in range(paper.AI_VALUE_MIN_COMPARISON_DAYS):
                 day = (start + timedelta(days=index)).isoformat()
                 rows.extend((
                     self._row(day, f"A{index}", "approved", 2.0, 1.5),
@@ -3304,7 +3374,7 @@ class TestAIIncrementalValueAudit(unittest.TestCase):
                                    return_value=later_sessions):
                 audit = bot.ai_value_audit("5")
         self.assertEqual(audit["status"], "DATA_INCOMPLETE")
-        self.assertEqual(audit["stale_paired_days"], 1)
+        self.assertEqual(audit["stale_comparison_days"], 1)
         self.assertFalse(audit["auto_trade_allowed"])
 
     def test_ai_failures_cannot_select_a_pretty_available_sample(self):
@@ -3314,7 +3384,7 @@ class TestAIIncrementalValueAudit(unittest.TestCase):
             bot = isolated_bot(tmp)
             rows = []
             start = date(2026, 1, 1)
-            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+            for index in range(paper.AI_VALUE_MIN_COMPARISON_DAYS):
                 day = (start + timedelta(days=index)).isoformat()
                 rows.extend((
                     self._row(day, f"A{index}", "approved", 2.0, 1.5),
