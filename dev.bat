@@ -44,8 +44,9 @@ echo.
 
 start "" powershell -WindowStyle Hidden -Command "Start-Sleep -Seconds 10; $p='8000'; if (Test-Path 'data\dashboard_port.txt') { $p=(Get-Content 'data\dashboard_port.txt' -Raw).Trim() }; Start-Process ('http://127.0.0.1:'+$p)"
 
-REM  the watcher runs main.py and restarts it whenever a .py file is saved
-python dev_reload.py
+REM  Use the venv interpreter explicitly. This avoids PATH/activation ambiguity and
+REM  guarantees the watcher and main.py use the dependencies installed in this project.
+venv\Scripts\python.exe dev_reload.py
 
 echo.
 echo Bot stopped. Press any key to close this window.

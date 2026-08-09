@@ -23,8 +23,18 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 
-from watchfiles import watch, PythonFilter
+try:
+    from watchfiles import watch, PythonFilter
+    WATCHFILES_IMPORT_ERROR = ""
+except ImportError as exc:
+    # Development mode should not become unusable just because this optional native
+    # dependency is missing or an interrupted install left only an empty package folder.
+    # A small stdlib poller below provides the same save-and-restart behaviour.
+    watch = None
+    PythonFilter = None
+    WATCHFILES_IMPORT_ERROR = f"{type(exc).__name__}: {exc}"
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 IGNORE = (
@@ -32,6 +42,40 @@ IGNORE = (
     os.path.join(ROOT, "data"),
     os.path.join(ROOT, "__pycache__"),
 )
+IGNORE_DIR_NAMES = {"venv", "data", "__pycache__", ".git", ".pytest_cache"}
+
+
+def _python_snapshot() -> dict[str, tuple[int, int]]:
+    """Return timestamps/sizes for project Python files, excluding generated trees."""
+    files: dict[str, tuple[int, int]] = {}
+    for current, dirs, names in os.walk(ROOT):
+        dirs[:] = [name for name in dirs if name not in IGNORE_DIR_NAMES]
+        for name in names:
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(current, name)
+            try:
+                stat = os.stat(path)
+            except OSError:
+                continue
+            files[path] = (stat.st_mtime_ns, stat.st_size)
+    return files
+
+
+def _stdlib_watch(interval_sec: float = 1.0):
+    """Yield changed Python paths using only the standard library."""
+    previous = _python_snapshot()
+    while True:
+        time.sleep(interval_sec)
+        current = _python_snapshot()
+        changed = {
+            path for path in previous.keys() | current.keys()
+            if previous.get(path) != current.get(path)
+        }
+        previous = current
+        if changed:
+            # Match the tuple shape returned by watchfiles; callers only need the path.
+            yield [(None, path) for path in sorted(changed)]
 
 
 def _start() -> subprocess.Popen:
@@ -69,12 +113,20 @@ if __name__ == "__main__":
     print("[dev] (Ctrl-C to stop.)\n", flush=True)
     proc = _start()
     try:
-        # force_polling=True: OneDrive (and other synced/network folders) do NOT emit reliable
-        # file-change events, so the default event watcher silently MISSES your saves. Polling
-        # stats the files every second instead — slower to notice, but it ACTUALLY fires on
-        # OneDrive. poll_delay_ms is how often it checks.
-        for changes in watch(ROOT, watch_filter=PythonFilter(ignore_paths=IGNORE),
-                             force_polling=True, poll_delay_ms=1000):
+        if watch is None:
+            print("[dev] watchfiles is unavailable; using the built-in 1-second poller.")
+            print(f"[dev] dependency detail: {WATCHFILES_IMPORT_ERROR}\n", flush=True)
+            changes_iter = _stdlib_watch()
+        else:
+            # Polling is reliable for synced/network folders where filesystem events can
+            # be missed. poll_delay_ms controls how often watchfiles checks for edits.
+            changes_iter = watch(
+                ROOT,
+                watch_filter=PythonFilter(ignore_paths=IGNORE),
+                force_polling=True,
+                poll_delay_ms=1000,
+            )
+        for changes in changes_iter:
             files = ", ".join(sorted({os.path.basename(p) for _kind, p in changes}))
             print(f"\n[dev] change detected ({files}) -> restarting the bot...",
                   flush=True)

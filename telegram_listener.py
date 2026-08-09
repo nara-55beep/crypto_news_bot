@@ -100,6 +100,25 @@ def build_client() -> TelegramClient:
     )
 
 
+async def _connect_authorized(client) -> bool:
+    """Connect without ever starting Telethon's interactive login flow.
+
+    ``client.start()`` asks for a phone number whenever the session is missing, expired,
+    or unauthorized. That is appropriate for a one-time setup command, but not for a
+    long-running bot: a reconnect loop otherwise keeps prompting forever and makes the
+    whole application look stuck. Normal startup is deliberately non-interactive.
+    """
+    await client.connect()
+    if await client.is_user_authorized():
+        return True
+    print(
+        "[telegram] disabled: the saved Telegram session is not authorized. "
+        "Close dev.bat and run: venv\\Scripts\\python.exe telegram_login.py"
+    )
+    await client.disconnect()
+    return False
+
+
 async def _resolve_channels(client):
     """Resolve each configured channel; skip + log failures so one bad handle
     can't break the whole feed. Returns the entities that worked."""
@@ -207,7 +226,8 @@ async def run_listener_forever(client, on_news):
     registered = False
     while True:
         try:
-            await client.start()        # connect + ensure logged in (prompts only if session dead)
+            if not await _connect_authorized(client):
+                return                  # never prompt from a background/service process
             if not registered:
                 channels = await _resolve_channels(client)
                 if channels:
@@ -228,7 +248,8 @@ async def run_listener_forever(client, on_news):
 
 # legacy thin wrapper (kept for compatibility); prefer run_listener_forever
 async def start_listener(client, on_news):
-    await client.start()
+    if not await _connect_authorized(client):
+        return
     channels = await _resolve_channels(client)
     _register(client, channels, on_news)
     asyncio.create_task(_poll_loop(client, channels, on_news))
