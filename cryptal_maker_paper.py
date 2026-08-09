@@ -374,6 +374,24 @@ class CryptalMakerPaperBot:
         return price, qty, projected_bps
 
     @staticmethod
+    def _exchange_watermark(snapshot: dict) -> float:
+        """Cryptal-clock instant at or after which a new quote may be considered live.
+
+        Fill eligibility must be decided entirely in exchange time. Comparing a
+        Cryptal trade timestamp against a local clock lets any skew widen the
+        acceptance window: with Cryptal reading d seconds ahead, a print that truly
+        happened up to (tolerance + d) seconds before placement still passes and
+        books a fill for an order that did not exist yet. The book timestamp and the
+        newest visible print are both stamped by Cryptal, so the later of the two is
+        a conservative activation point on a single clock.
+        """
+        watermark = _number(snapshot.get("cryptal_at"))
+        for row in snapshot.get("trades") or []:
+            if isinstance(row, dict):
+                watermark = max(watermark, _number(row.get("timestamp")) / 1000.0)
+        return watermark
+
+    @staticmethod
     def _queue_ahead(snapshot: dict, side: str, price: float) -> float:
         levels = snapshot["bids"] if side == "BID" else snapshot["asks"]
         if side == "BID":
@@ -383,12 +401,17 @@ class CryptalMakerPaperBot:
     def _place_or_reprice(self, side: str, price: float, qty: float,
                           expected_bps: float, snapshot: dict) -> bool:
         metric = "discount_to_fair" if side == "BID" else "projected_cycle_net"
+        watermark = self._exchange_watermark(snapshot)
         current = self.quote
         if current and current.get("side") == side and _number(current.get("price")) > 0:
             change_bps = abs(price / _number(current["price"]) - 1.0) * 1e4
             if change_bps < REPRICE_BPS and abs(qty - _number(current.get("qty"))) < 1e-9:
                 current["edge_metric"] = metric
                 current["edge_metric_bps"] = round(expected_bps, 2)
+                # A quote restored from state predates this field. Activate it from
+                # the current exchange watermark rather than letting it stay unfillable.
+                if _number(current.get("activation_exchange_at")) <= 0:
+                    current["activation_exchange_at"] = watermark
                 return False
         queue = self._queue_ahead(snapshot, side, price)
         self.quote = {
@@ -398,6 +421,7 @@ class CryptalMakerPaperBot:
             "remaining_qty": qty,
             "queue_ahead_btc": queue,
             "placed_at": time.time(),
+            "activation_exchange_at": watermark,
             "edge_metric": metric,
             "edge_metric_bps": round(expected_bps, 2),
         }
@@ -443,10 +467,13 @@ class CryptalMakerPaperBot:
             return False
         price = _number(trade.get("price"))
         quote_price = _number(self.quote.get("price"))
-        trade_at = _number(trade.get("timestamp")) / 1000.0
         # A print that happened before this virtual order existed cannot fill it even
-        # if pagination makes its id appear for the first time on a later poll.
-        if trade_at > 0 and trade_at < _number(self.quote.get("placed_at")) - 0.5:
+        # if pagination makes its id appear for the first time on a later poll. Both
+        # sides of this comparison are Cryptal timestamps, so venue/host clock skew
+        # cannot widen the window; an unverifiable print fails closed.
+        activation_at = _number(self.quote.get("activation_exchange_at"))
+        trade_at = _number(trade.get("timestamp")) / 1000.0
+        if activation_at <= 0 or trade_at <= 0 or trade_at < activation_at:
             return False
         if self.quote.get("side") == "BID":
             return price <= quote_price + 1e-9

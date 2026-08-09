@@ -428,6 +428,52 @@ class TestFillDiscipline(unittest.TestCase):
                         bot.spot_qty, 0.0,
                         f"filled after only {consumed} of {queue0} BTC queue")
 
+    def test_activation_watermark_is_recorded_in_exchange_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = _bot(tmp)
+            stamp = time.time() + 0.36
+            bot._tick(_snapshot([], stamp=stamp))
+            self.assertAlmostEqual(
+                bot.quote["activation_exchange_at"], stamp, places=6)
+            # It tracks the venue clock, not the host clock.
+            self.assertNotAlmostEqual(
+                bot.quote["activation_exchange_at"], bot.quote["placed_at"], places=2)
+
+    def test_a_print_with_no_timestamp_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = _bot(tmp)
+            bot._tick(_snapshot([]))
+            quote = dict(bot.quote)
+            for stamp in (None, 0, ""):
+                with self.subTest(stamp=stamp):
+                    trade = {"id": f"nots-{stamp}", "side": "ASK",
+                             "price": quote["price"], "volume": quote["qty"],
+                             "timestamp": stamp}
+                    bot._tick(_snapshot([trade]))
+                    self.assertEqual(bot.spot_qty, 0.0)
+
+    def test_a_resumed_quote_cannot_fill_until_it_is_reactivated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "cryptal-maker.json")
+            first = maker.CryptalMakerPaperBot(state_path=path)
+            first._tick(_snapshot([]))
+            quote = dict(first.quote)
+            # Simulate state written before the watermark existed.
+            first.quote.pop("activation_exchange_at")
+            first._save()
+
+            resumed = maker.CryptalMakerPaperBot(state_path=path)
+            self.assertIsNone(resumed.quote.get("activation_exchange_at"))
+            stale = {"id": "resume-stale", "side": "ASK", "price": quote["price"],
+                     "volume": quote["qty"],
+                     "timestamp": int((time.time() - 30) * 1000)}
+            resumed._tick(_snapshot([stale]))
+
+            self.assertEqual(resumed.spot_qty, 0.0)
+            # The tick reactivates it so the collector keeps working afterwards.
+            self.assertGreater(
+                maker._number(resumed.quote.get("activation_exchange_at")), 0.0)
+
     def test_a_price_that_does_not_reach_the_bid_cannot_fill(self):
         with tempfile.TemporaryDirectory() as tmp:
             bot = _bot(tmp)
@@ -438,6 +484,86 @@ class TestFillDiscipline(unittest.TestCase):
                      "timestamp": int(time.time() * 1000) + 500}
             bot._tick(_snapshot([above]))
             self.assertEqual(bot.spot_qty, 0.0)
+
+
+# --------------------------------------------------------------------------
+# 5b. Fill eligibility must not depend on the host clock
+# --------------------------------------------------------------------------
+class TestClockSkewCannotManufactureFills(unittest.TestCase):
+    """Regression for a phantom-fill window under venue/host clock skew.
+
+    The eligibility test once compared a Cryptal trade timestamp against a local
+    `placed_at` with a 0.5s tolerance. With Cryptal reading d seconds ahead of the
+    host, a print that truly occurred up to (0.5 + d) seconds *before* placement
+    still passed and booked a fill for an order that did not exist yet. At the
+    +0.36s skew measured against the live venue that window was 0.86s.
+    """
+
+    # Every skew here survives the +/-2s..12s staleness gate, so a quote is placed.
+    SKEWS = (0.0, 0.36, 1.0, 1.9, -1.0, -5.0)
+    LEADS = (0.1, 0.3, 0.6, 0.8, 1.0, 1.5)
+
+    def _place(self, bot, skew, **kwargs):
+        bot._tick(_snapshot([], stamp=time.time() + skew, **kwargs))
+        return dict(bot.quote)
+
+    def _cross(self, bot, quote, skew, offset, volume=None, **kwargs):
+        """Print stamped `offset` seconds from placement, on the Cryptal clock."""
+        exchange_at = (quote["placed_at"] + offset) + skew
+        trade = {"id": f"x{offset}", "side": "ASK", "price": quote["price"],
+                 "volume": volume if volume is not None else quote["qty"],
+                 "timestamp": int(exchange_at * 1000)}
+        bot._tick(_snapshot([trade], stamp=time.time() + skew, **kwargs))
+
+    def test_pre_placement_print_never_fills_at_any_skew(self):
+        for skew in self.SKEWS:
+            for lead in self.LEADS:
+                with self.subTest(skew=skew, lead=lead), \
+                        tempfile.TemporaryDirectory() as tmp:
+                    bot = _bot(tmp)
+                    quote = self._place(bot, skew)
+                    self._cross(bot, quote, skew, -lead)
+                    self.assertEqual(
+                        bot.spot_qty, 0.0,
+                        f"print {lead}s before placement filled at skew {skew}")
+                    self.assertEqual(bot.short_qty, 0.0)
+
+    def test_pre_reprice_print_never_fills_the_replacement_order(self):
+        for skew in self.SKEWS:
+            with self.subTest(skew=skew), tempfile.TemporaryDirectory() as tmp:
+                bot = _bot(tmp)
+                self._place(bot, skew, bid=64_000.0)
+                second = self._place(bot, skew, bid=64_400.0)   # >8bps, so repriced
+                self.assertGreater(second["price"], 64_000.0)
+                # Enough volume to clear the queue, so only timing can block it.
+                self._cross(bot, second, skew, -0.6,
+                            volume=second["queue_ahead_btc"] + second["qty"],
+                            bid=64_400.0)
+                self.assertEqual(bot.spot_qty, 0.0)
+
+    def test_genuine_post_placement_print_still_fills_at_any_skew(self):
+        for skew in self.SKEWS:
+            with self.subTest(skew=skew), tempfile.TemporaryDirectory() as tmp:
+                bot = _bot(tmp)
+                quote = self._place(bot, skew)
+                self._cross(bot, quote, skew, +0.4)
+                self.assertGreater(
+                    bot.spot_qty, 0.0, f"genuine fill lost at skew {skew}")
+                self.assertEqual(bot.spot_qty, bot.short_qty)
+
+    def test_fill_outcome_is_invariant_to_the_host_clock(self):
+        """Identical exchange-side data must yield identical fills at every skew."""
+        for offset in (-0.6, +0.4):
+            outcomes = []
+            for skew in self.SKEWS:
+                with tempfile.TemporaryDirectory() as tmp:
+                    bot = _bot(tmp)
+                    quote = self._place(bot, skew)
+                    self._cross(bot, quote, skew, offset)
+                    outcomes.append(bot.spot_qty > 0)
+            self.assertEqual(len(set(outcomes)), 1,
+                             f"offset {offset} gave skew-dependent fills: {outcomes}")
+            self.assertEqual(outcomes[0], offset > 0)
 
 
 # --------------------------------------------------------------------------
