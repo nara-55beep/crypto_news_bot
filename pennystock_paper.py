@@ -82,6 +82,13 @@ CLOSED_SCAN_SEC = 30 * 60
 FULL_SCAN_SEC = 15 * 60
 MARK_EVERY_SEC = 20         # protective exits must not wait for a long market scan
 LOOP_TICK_SEC = 5
+# The cheap all-symbol pass is independent of deep Yahoo/SEC/AI work. One pass takes
+# about 53 Alpaca snapshot requests for the current ~13k listed universe; a 30-second
+# target leaves ample headroom under the standard request limit while staying live.
+UNIVERSE_TARGET_CYCLE_SEC = 30
+# Free real-time data is IEX-only. Refresh delayed consolidated SIP periodically as the
+# completeness baseline, and use IEX between those passes for timely mover discovery.
+UNIVERSE_FULL_TAPE_SEC = 15 * 60
 TOP_N = 20                 # leaderboard size
 SCREEN_POOL = 60           # how many raw candidates to score before ranking
 PULSE_SCREEN_POOL = 24
@@ -489,6 +496,13 @@ class PennyStockPaperBot:
         self.log: list[dict] = []
         self.watchlist: list[dict] = []      # latest AI verdicts, incl. the rejects
         self.universe_coverage: dict = {}
+        self._universe_rows: list[dict] = []
+        self._universe_rows_by_feed: dict[str, list[dict]] = {}
+        self._universe_task: asyncio.Task | None = None
+        self._universe_ready = asyncio.Event()
+        self._universe_pass_in_progress = False
+        self._last_delayed_universe_scan = 0.0
+        self._next_universe_scan_at = 0.0
         self.status = "idle"
         self.last_scan = 0.0
         self.last_scan_started = 0.0
@@ -2134,12 +2148,99 @@ class PennyStockPaperBot:
         async with self._scan_lock:
             await self._scan_locked(mode)
 
-    async def _scan_locked(self, mode: str = "full"):
-        """Snapshot every listed asset -> deep-score candidates -> rank -> AI review.
+    def _combined_universe_rows(self) -> list[dict]:
+        """Consolidated baseline, updated by any fresher IEX observations."""
+        combined: dict[str, dict] = {}
+        for feed in ("delayed_sip", "iex"):
+            for row in self._universe_rows_by_feed.get(feed, []):
+                symbol = str(row.get("ticker") or "").upper()
+                if symbol:
+                    combined[symbol] = dict(row)
+        return list(combined.values())
 
-        Every active listed/tradable symbol gets the cheap first-stage snapshot on a
-        full scan. Only the interleaved SEC/mover/volume/spread candidates get expensive
-        Yahoo fundamentals and mechanical scoring, and only mechanically eligible names
+    async def _refresh_universe_once(self, feed: str) -> None:
+        """Run one exhaustive cheap pass and publish it atomically to deep scans."""
+        started = time.time()
+        self._universe_pass_in_progress = True
+        try:
+            rows, coverage, error = await penny_quotes.market_wide_penny_scan(
+                research.MIN_PRICE, research.MAX_PRICE, force=True, feed=feed)
+            if rows:
+                self._universe_rows_by_feed[feed] = [dict(row) for row in rows]
+                self._universe_rows = self._combined_universe_rows()
+            previous = dict(self.universe_coverage or {})
+            passes = int(previous.get("continuous_passes") or 0) + 1
+            current = dict(coverage or {})
+            current.update({
+                "continuous_passes": passes,
+                "continuous_target_sec": UNIVERSE_TARGET_CYCLE_SEC,
+                "last_pass_started_at": started,
+                "last_pass_feed": feed,
+                "combined_penny_price_matches": len(self._universe_rows),
+                "strategy_id": research.LIVE_STRATEGY_ID,
+                "engine_version": SIGNAL_ENGINE_VERSION,
+            })
+            # A universe refresh must not erase the separately completed deep-stage
+            # telemetry. Both loops publish into this object, so explicitly retain the
+            # latest deep result until the next deep scan replaces it.
+            for key in (
+                "deep_score_cap", "deep_score_target", "deep_scored",
+                "leaderboard_count", "last_deep_scan_completed_at",
+                "yahoo_in_play_candidates", "market_wide_candidates",
+                "fresh_sec_catalyst_symbols",
+            ):
+                if key in previous:
+                    current[key] = previous[key]
+            if feed == "delayed_sip" and current.get("last_completed_at"):
+                self._last_delayed_universe_scan = float(current["last_completed_at"])
+                current.update({
+                    "full_tape_last_completed_at": current["last_completed_at"],
+                    "full_tape_snapshots_returned": current.get("snapshots_returned", 0),
+                    "full_tape_symbols_requested": current.get("symbols_requested", 0),
+                })
+            else:
+                for key in (
+                    "full_tape_last_completed_at", "full_tape_snapshots_returned",
+                    "full_tape_symbols_requested",
+                ):
+                    if key in previous:
+                        current[key] = previous[key]
+            if error and not current.get("error"):
+                current["error"] = str(error)
+            self.universe_coverage = current
+        except Exception as e:
+            self.universe_coverage.update({
+                "status": "FAILED",
+                "error": f"continuous universe {type(e).__name__}: {str(e)[:120]}",
+                "last_attempt_at": started,
+                "continuous_target_sec": UNIVERSE_TARGET_CYCLE_SEC,
+            })
+        finally:
+            self._universe_pass_in_progress = False
+            self._universe_ready.set()
+
+    async def _continuous_universe_loop(self):
+        """Start immediately and keep sweeping every supported listed symbol."""
+        while True:
+            started = time.time()
+            feed = (
+                "delayed_sip"
+                if self._last_delayed_universe_scan <= 0
+                or started - self._last_delayed_universe_scan >= UNIVERSE_FULL_TAPE_SEC
+                else "iex"
+            )
+            await self._refresh_universe_once(feed)
+            elapsed = time.time() - started
+            wait_for = max(0.0, UNIVERSE_TARGET_CYCLE_SEC - elapsed)
+            self._next_universe_scan_at = time.time() + wait_for
+            await asyncio.sleep(wait_for)
+
+    async def _scan_locked(self, mode: str = "full"):
+        """Consume the nonstop listed-asset sweep -> rank candidates -> AI review.
+
+        A separate task gives every active listed/tradable symbol the cheap first-stage
+        snapshot every 30 seconds. Only interleaved SEC/mover/volume/spread candidates
+        get expensive Yahoo fundamentals and mechanical scoring, and only mechanically eligible names
         get an AI call. The separate coverage telemetry keeps those stages explicit.
         """
         mode = "pulse" if mode == "pulse" else "full"
@@ -2150,29 +2251,25 @@ class PennyStockPaperBot:
         try:
             pool = SCREEN_POOL if mode == "full" else PULSE_SCREEN_POOL
             if mode == "full":
-                # The old "wide" scan only deep-scored 60 names returned by three
-                # Yahoo sorts. Now every active listed/tradable asset gets a cheap
-                # consolidated snapshot first. Expensive fundamentals/SEC/AI work is
-                # still reserved for an interleaved candidate set; doing thousands of
-                # Yahoo dossiers every two minutes would be slower than the market and
-                # would immediately trip provider limits.
-                self.status = "requesting a snapshot for every active listed US equity..."
-                market_result, yahoo_result, catalyst_result = await asyncio.gather(
-                    penny_quotes.market_wide_penny_scan(
-                        research.MIN_PRICE, research.MAX_PRICE),
+                # The exhaustive network pass has its own 30-second loop. Deep scans
+                # consume the newest completed pass instead of waiting 15 minutes and
+                # then blocking on the same network work again.
+                if not self._universe_rows:
+                    self.status = "waiting for the first immediate all-symbol pass..."
+                    try:
+                        await asyncio.wait_for(self._universe_ready.wait(), timeout=45)
+                    except asyncio.TimeoutError:
+                        pass
+                market_rows = list(self._universe_rows)
+                coverage = dict(self.universe_coverage or {})
+                market_error = str(coverage.get("error") or "")
+                yahoo_result, catalyst_result = await asyncio.gather(
                     asyncio.to_thread(research.screen, pool),
                     asyncio.to_thread(
                         research.sec_edgar.current_8k_tickers,
                         research.FRESH_NEWS_HOURS),
                     return_exceptions=True,
                 )
-                if isinstance(market_result, Exception):
-                    market_rows, coverage, market_error = [], {
-                        "status": "FAILED",
-                        "error": f"{type(market_result).__name__}: {str(market_result)[:120]}",
-                    }, str(market_result)
-                else:
-                    market_rows, coverage, market_error = market_result
                 yahoo_fresh = ([] if isinstance(yahoo_result, Exception)
                                else list(yahoo_result or []))
                 catalyst_symbols = ([] if isinstance(catalyst_result, Exception)
@@ -3688,6 +3785,11 @@ class PennyStockPaperBot:
         }
 
     async def manage_loop(self):
+        # The all-symbol pass begins immediately. Deep scans retain a short startup
+        # delay so the rest of the dashboard can initialise, but no penny-stock
+        # universe scan waits for that delay or for the 15-minute full-scan clock.
+        if self._universe_task is None or self._universe_task.done():
+            self._universe_task = asyncio.create_task(self._continuous_universe_loop())
         await asyncio.sleep(12)
         while True:
             try:
@@ -3835,6 +3937,12 @@ class PennyStockPaperBot:
                 "trailing": p.trailing, "catalyst": p.catalyst,
                 "held_days": round((time.time() - p.opened_at) / 86400, 1),
             })
+        coverage = dict(self.universe_coverage or {})
+        coverage.update({
+            "scan_in_progress": self._universe_pass_in_progress,
+            "next_pass_in_sec": max(0, int(self._next_universe_scan_at - now)),
+            "combined_penny_price_matches": len(self._universe_rows),
+        })
         return {
             "running": True, "enabled": self.enabled, "name": self.NAME,
             "scanner_always_on": True,
@@ -3854,7 +3962,7 @@ class PennyStockPaperBot:
             "max_portfolio_risk_pct": MAX_PORTFOLIO_RISK_PCT,
             "open_count": len(self.pos), "max_open": MAX_OPEN,
             "scan_count": self.scan_count,
-            "universe_coverage": self.universe_coverage,
+            "universe_coverage": coverage,
             "evidence_clock": self._evidence_clock(),
             "persistence_error": "; ".join(x for x in (self.state_save_error, self.archive_error) if x),
             "state_save_error": self.state_save_error,
@@ -3892,8 +4000,9 @@ class PennyStockPaperBot:
             "history": self.history[:40],
             "log": self.log[:25],
             "last_error": self.last_error,
-            "rules": (f"market-wide listed-universe pass every {FULL_SCAN_SEC // 60}m in active "
-                      f"sessions ({CLOSED_SCAN_SEC // 60}m while closed), plus "
+            "rules": (f"every supported listed symbol swept every {UNIVERSE_TARGET_CYCLE_SEC}s "
+                      f"from startup (real-time IEX between {UNIVERSE_FULL_TAPE_SEC // 60}m "
+                      f"delayed-consolidated baselines), plus "
                       f"adaptive deep scans ({HOT_SCAN_SEC}s hot / {REGULAR_SCAN_SEC}s regular / "
                       f"{EXTENDED_SCAN_SEC}s extended / {CLOSED_SCAN_SEC}s closed); "
                       f"official non-adverse 8-K + headline aligned within "
