@@ -325,8 +325,11 @@ def rank(protocols: list[dict], bankroll_usd: float = 100.0,
             "expected": payoff,
             "instructions": instructions(protocol, bankroll_usd),
         })
-    # Rank by modelled expectation, then by evidence quality to break ties.
-    rows.sort(key=lambda row: (-row["expected"]["expected_usd"], -row["score"]))
+    # Most reliable first. Legitimacy leads because the modelled payoff rests on
+    # assumptions while the score rests on checkable facts; ordering by dollars would
+    # promote a thinly-evidenced protocol above a well-audited one for the sake of a
+    # number that cannot be verified. Expected value breaks ties within a band.
+    rows.sort(key=lambda row: (-row["score"], -row["expected"]["expected_usd"]))
     return rows[:limit]
 
 
