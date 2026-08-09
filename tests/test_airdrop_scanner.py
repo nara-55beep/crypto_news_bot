@@ -149,12 +149,31 @@ class TestRankingAndPortfolio(unittest.TestCase):
             bankroll_usd=100.0, now=NOW)
         self.assertEqual(len(rows), 1)
 
-    def test_rows_are_ordered_by_expected_value(self):
+    def test_rows_are_ordered_most_reliable_first(self):
         rows = radar.rank(
-            [_protocol(name="small", tvl=3_000_000.0),
-             _protocol(name="large", tvl=400_000_000.0)],
+            [_protocol(name="shaky", tvl=400_000_000.0, audits="0",
+                       listedAt=NOW - 5 * 24 * 3600, url="", twitter="",
+                       chains=["Base"]),
+             _protocol(name="solid", tvl=20_000_000.0)],
             bankroll_usd=100.0, now=NOW)
-        self.assertEqual(rows[0]["name"], "large")
+        # The shaky protocol is 20x larger, but evidence quality leads the ranking.
+        self.assertEqual([r["name"] for r in rows], ["solid", "shaky"])
+        self.assertGreater(rows[0]["score"], rows[1]["score"])
+
+    def test_scores_descend_across_the_whole_ranking(self):
+        universe = [_protocol(name=f"p{i}", tvl=2_000_000.0 * (i + 1),
+                              audits=str(i % 3), listedAt=NOW - i * 30 * 24 * 3600)
+                    for i in range(12)]
+        scores = [r["score"] for r in radar.rank(universe, 100.0, now=NOW)]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_expected_value_breaks_ties_within_a_band(self):
+        rows = radar.rank([_protocol(name="a", tvl=10_000_000.0),
+                           _protocol(name="b", tvl=10_000_000.0)],
+                          bankroll_usd=100.0, now=NOW)
+        self.assertEqual(rows[0]["score"], rows[1]["score"])
+        self.assertGreaterEqual(rows[0]["expected"]["expected_usd"],
+                                rows[1]["expected"]["expected_usd"])
 
     def test_portfolio_treats_the_bankroll_as_deposited_not_spent(self):
         rows = radar.rank([_protocol()], bankroll_usd=100.0, now=NOW)
@@ -232,45 +251,80 @@ class TestRadarCache(unittest.TestCase):
 
 
 class TestDashboardIntegration(unittest.TestCase):
-    DASHBOARD = (REPO / "dashboard.py").read_text(encoding="utf-8")
+    """Assert against the specific page constant, never the whole file.
+
+    An earlier revision searched dashboard.py as one blob and passed while the button
+    CSS had actually been inserted into the Tree of Alpha page, because
+    'PAGE_HTML = r\"\"\"<!doctype html>' is a substring of 'TOA_PAGE_HTML = ...'.
+    Extracting each literal by name is what makes these tests able to fail.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        source = (REPO / "dashboard.py").read_text(encoding="utf-8")
+        cls.SOURCE = source
+        cls.PAGES = {}
+        for node in ast.parse(source).body:
+            if (isinstance(node, ast.Assign)
+                    and isinstance(node.value, ast.Constant)
+                    and isinstance(node.value.value, str)):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        cls.PAGES[target.id] = node.value.value
 
     def test_radar_is_constructed_and_looped(self):
-        self.assertIn("import airdrop_scanner", self.DASHBOARD)
-        self.assertIn("AIRDROPS = airdrop_scanner.AirdropRadar", self.DASHBOARD)
-        self.assertIn("asyncio.create_task(AIRDROPS.manage_loop())", self.DASHBOARD)
+        self.assertIn("import airdrop_scanner", self.SOURCE)
+        self.assertIn("AIRDROPS = airdrop_scanner.AirdropRadar", self.SOURCE)
+        self.assertIn("asyncio.create_task(AIRDROPS.manage_loop())", self.SOURCE)
 
-    def test_endpoints_are_registered(self):
-        for route in ('web.get("/api/airdrops/state"',
+    def test_endpoints_and_page_route_are_registered(self):
+        for route in ('web.get("/airdrops", _airdrops_page)',
+                      'web.get("/api/airdrops/state"',
                       'web.post("/api/airdrops/bankroll"',
                       'web.post("/api/airdrops/refresh"'):
-            self.assertIn(route, self.DASHBOARD)
+            self.assertIn(route, self.SOURCE)
 
-    def test_golden_animated_button_exists_on_the_page(self):
-        self.assertIn('class="airdrop-btn"', self.DASHBOARD)
-        self.assertIn("Airdrops</button>", self.DASHBOARD)
-        self.assertIn("onclick=\"showAirdrops()\"", self.DASHBOARD)
-        # Gold palette plus motion, and a guard for users who disable motion.
+    def test_golden_button_is_on_the_main_page_and_links_to_airdrops(self):
+        main = self.PAGES["PAGE_HTML"]
+        self.assertIn('class="airdrop-btn" href="/airdrops"', main)
+        self.assertIn("Airdrops</a>", main)
+
+    def test_the_main_page_carries_the_gold_animation_css_itself(self):
+        main = self.PAGES["PAGE_HTML"]
         for token in ("#fde68a", "#f59e0b", "@keyframes airdropSweep",
                       "@keyframes airdropGlow", "@keyframes airdropSheen",
                       "prefers-reduced-motion"):
-            self.assertIn(token, self.DASHBOARD)
+            self.assertIn(token, main, f"{token} missing from the main page")
 
-    def test_panel_renders_above_the_other_bots(self):
-        self.assertIn('id="airdrops-panel"', self.DASHBOARD)
-        self.assertLess(self.DASHBOARD.index('id="airdrops-panel"'),
-                        self.DASHBOARD.index('id="cryptalmaker-panel"'))
-        self.assertIn("loadAll(){ loadAirdrops()", self.DASHBOARD)
+    def test_the_paper_page_no_longer_carries_any_airdrop_ui(self):
+        paper = self.PAGES["PAPER_HTML"]
+        for token in ("airdrop-btn", "airdrops-panel", "loadAirdrops",
+                      "airdropSweep", "airdrop-featured"):
+            self.assertNotIn(token, paper, f"{token} still on the paper page")
 
-    def test_the_page_shows_the_risk_disclosure_not_just_the_upside(self):
-        self.assertIn("Read this before depositing anything", self.DASHBOARD)
-        self.assertIn("chance of nothing", self.DASHBOARD)
-        self.assertIn("ranked candidates, not confirmed airdrops", self.DASHBOARD)
+    def test_the_css_did_not_leak_into_another_page(self):
+        for name, html in self.PAGES.items():
+            if name in ("PAGE_HTML", "AIRDROPS_HTML"):
+                continue
+            self.assertNotIn("airdropSweep", html,
+                             f"airdrop CSS leaked into {name}")
 
-    def test_outbound_protocol_links_cannot_hijack_the_opener(self):
-        marker = 'class="ad-name" href="'
-        self.assertIn(marker, self.DASHBOARD)
-        tail = self.DASHBOARD[self.DASHBOARD.index(marker):][:260]
-        self.assertIn('rel="noopener noreferrer"', tail)
+    def test_the_airdrops_page_ranks_by_reliability_and_discloses_risk(self):
+        page = self.PAGES["AIRDROPS_HTML"]
+        self.assertIn("Ranked most reliable", page)
+        self.assertIn("candidates, not confirmed airdrops", page)
+        self.assertIn("chance of nothing", page)
+        self.assertIn("How these numbers are built", page)
+        self.assertIn("/api/airdrops/state", page)
+
+    def test_the_airdrops_page_links_back_and_cannot_hijack_the_opener(self):
+        page = self.PAGES["AIRDROPS_HTML"]
+        self.assertIn('href="/"', page)
+        marker = 'class="pname" href="'
+        self.assertIn(marker, page)
+        self.assertIn('rel="noopener noreferrer"',
+                      page[page.index(marker):][:240])
 
 
 class TestNoTradingCapability(unittest.TestCase):

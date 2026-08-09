@@ -1703,6 +1703,176 @@ async def _cryptal_maker_reset(request: web.Request):
     return web.json_response(CRYPTALMAKER.reset())
 
 
+AIRDROPS_HTML = r"""<!doctype html>
+<html><head><meta charset="utf-8"><title>Airdrop Radar</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{--bg:#070a0f;--card:#0b0906;--line:#1a1408;--gold:#fcd34d;--dim:#8b7a5a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:#d8cdb4;
+       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  a{color:var(--gold)}
+  #top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 18px;
+       background:linear-gradient(90deg,#120d05,#0a0805);border-bottom:1px solid var(--line);
+       position:sticky;top:0;z-index:5}
+  .nav{color:#8fa3bd;text-decoration:none;border:1px solid #223;border-radius:8px;
+       padding:4px 12px;font-size:12px}
+  .nav:hover{background:#111a26}
+  h1{margin:0;font-size:17px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;
+     background:linear-gradient(100deg,#b45309,#fde68a 50%,#b45309);
+     -webkit-background-clip:text;background-clip:text;color:transparent}
+  .spacer{flex:1}
+  .wrap{max-width:1240px;margin:0 auto;padding:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+        margin-bottom:16px;overflow:hidden}
+  .card h2{margin:0;padding:11px 16px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+           color:#b3873f;background:#100c06;border-bottom:1px solid var(--line)}
+  .plan{display:flex;flex-wrap:wrap;gap:22px;align-items:center;padding:14px 16px}
+  .plan .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.07em;display:block}
+  .plan .v{font-size:19px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+  .v.good{color:#4ade80}.v.bad{color:#f87171}
+  input[type=number]{background:#0a0805;border:1px solid #78350f;color:var(--gold);
+                     padding:6px 10px;border-radius:8px;width:100px;font:inherit}
+  button{background:#78350f;color:#fde68a;border:1px solid #a16207;border-radius:8px;
+         padding:6px 14px;font:inherit;cursor:pointer}
+  button:hover{filter:brightness(1.2)}
+  .warn{background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;padding:12px 16px;
+        font-size:12.5px;line-height:1.6}
+  .warn b{color:#fecaca}
+  table{width:100%;border-collapse:collapse}
+  th{position:sticky;top:56px;background:#120d05;color:#b3873f;font-size:10px;
+     text-transform:uppercase;letter-spacing:.08em;text-align:left;padding:9px 12px;
+     border-bottom:1px solid var(--line);z-index:2}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:top}
+  tbody tr:hover{background:#120d06}
+  .rank{color:#6b5c40;font-variant-numeric:tabular-nums;width:34px}
+  .pname{color:var(--gold);font-weight:600;text-decoration:none;font-size:13px}
+  .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+  .band{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;
+        letter-spacing:.06em;white-space:nowrap}
+  .b-STRONG{background:#052e16;color:#4ade80;border:1px solid #166534}
+  .b-MODERATE{background:#1c1917;color:#fbbf24;border:1px solid #78350f}
+  .b-SPECULATIVE{background:#2a1207;color:#fb923c;border:1px solid #7c2d12}
+  .b-HIGHRISK{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d}
+  .bar{height:5px;background:#231a09;border-radius:3px;overflow:hidden;margin-top:5px;width:96px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#b45309,#fde68a)}
+  .sig{color:var(--dim);font-size:11px;margin-top:4px}
+  .steps{background:#080604;padding:0 16px 14px 16px}
+  .steps ol{margin:8px 0 0 18px;padding:0}
+  .steps li{margin:7px 0;color:#c9b58a;font-size:12px;line-height:1.6}
+  .toggle{cursor:pointer;color:#a16207;font-size:11px;margin-top:5px;display:inline-block}
+  .toggle:hover{color:var(--gold)}
+  .empty{padding:34px;text-align:center;color:var(--dim)}
+  .foot{color:var(--dim);font-size:11.5px;line-height:1.7;padding:14px 16px}
+</style></head><body>
+<div id="top">
+  <a class="nav" href="/">&larr; Chart</a>
+  <a class="nav" href="/paper">Paper Trading</a>
+  <h1>&#10022; Airdrop Radar</h1>
+  <span class="spacer"></span>
+  <span id="meta" style="color:#8b7a5a;font-size:11.5px"></span>
+</div>
+<div class="wrap">
+  <div class="card"><h2>Your plan</h2><div id="plan" class="plan"></div>
+    <div id="capnote" class="foot"></div></div>
+  <div id="warn"></div>
+  <div class="card"><h2>Ranked most reliable &rarr; least</h2>
+    <div id="list"><div class="empty">loading the first scan&hellip;</div></div></div>
+  <div class="card"><h2>How these numbers are built</h2><div id="assume" class="foot"></div></div>
+</div>
+<script>
+const $=i=>document.getElementById(i);
+const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=v=>'$'+Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0});
+const pct=v=>Math.round((v||0)*100)+'%';
+
+async function load(){
+  let s; try{ s=await(await fetch('/api/airdrops/state')).json(); }catch(e){ return; }
+  const rows=s.rows||[], p=s.portfolio||{}, a=s.assumptions||{};
+  $('meta').textContent = s.error ? ('scan error: '+s.error)
+    : (rows.length+' candidates from '+Number(s.universe||0).toLocaleString()
+       +' protocols \u00b7 scanned in '+Number(s.scan_seconds||0).toFixed(2)+'s');
+
+  $('plan').innerHTML =
+    '<div><span class="k">bankroll</span><span class="v">'+money(p.bankroll_usd)+'</span></div>'+
+    '<div><span class="k">split across</span><span class="v">'+(p.farms||0)+' farms</span></div>'+
+    '<div><span class="k">expected total</span><span class="v good">'+money(p.expected_total_usd)+
+      ' <small style="font-size:12px">('+Number(p.expected_multiple||0).toFixed(2)+'x)</small></span></div>'+
+    '<div><span class="k">if all land</span><span class="v good">'+money(p.upside_total_usd)+'</span></div>'+
+    '<div><span class="k">chance of nothing</span><span class="v bad">'+pct(p.probability_of_nothing)+'</span></div>'+
+    '<div style="flex:1"></div>'+
+    '<div><span class="k">bankroll ($)</span>'+
+      '<input id="bank" type="number" min="10" step="10" value="'+Number(p.bankroll_usd||100)+'"></div>'+
+    '<button onclick="reprice()">Re-price</button><button onclick="rescan()">Rescan</button>';
+  $('capnote').innerHTML = esc(p.capital_note||'')+' <b>Horizon:</b> '+esc(p.horizon||'');
+
+  $('warn').innerHTML='<div class="card"><div class="warn"><b>Read this before depositing anything.</b> '+
+    'These are ranked <b>candidates, not confirmed airdrops</b> \u2014 a high score means the protocol looks '+
+    'real, not that a token is coming. The dollar figures are a model, not a measurement: '+esc(a.caveat||'')+
+    ' Sorting is by reliability first, because the score rests on checkable facts while the payoff rests '+
+    'on assumptions.</div></div>';
+
+  if(!rows.length){
+    $('list').innerHTML='<div class="empty">'+(s.error?esc(s.error):'first scan running\u2026')+'</div>';
+    return;
+  }
+
+  $('list').innerHTML='<table><thead><tr><th></th><th>protocol</th><th>reliability</th>'+
+    '<th class="num">score</th><th class="num">TVL</th><th class="num">audits</th><th class="num">age</th>'+
+    '<th class="num">if it lands</th><th class="num">expected</th></tr></thead><tbody>'+
+    rows.map(function(r,i){
+      var e=r.expected||{}, band=(r.risk_band||'').replace(' ','');
+      var link=r.url?'<a class="pname" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.name)+'</a>'
+                    :'<span class="pname">'+esc(r.name)+'</span>';
+      return '<tr><td class="rank">'+(i+1)+'</td>'+
+        '<td>'+link+'<div class="sig">'+esc(r.category||'')+' \u00b7 '+esc(r.chain||'')+'</div>'+
+        '<span class="toggle" onclick="tog('+i+')">\u25b8 how to farm it</span></td>'+
+        '<td><span class="band b-'+esc(band)+'">'+esc(r.risk_band||'')+'</span>'+
+        '<div class="bar"><i style="width:'+Math.max(2,Math.min(100,r.score||0))+'%"></i></div></td>'+
+        '<td class="num">'+Number(r.score||0).toFixed(0)+'</td>'+
+        '<td class="num">'+money(r.tvl_usd)+'</td>'+
+        '<td class="num">'+(r.audits||0)+'</td>'+
+        '<td class="num">'+Number(r.age_months||0).toFixed(0)+'mo</td>'+
+        '<td class="num">$'+Number(e.realistic_if_it_lands_usd||0).toFixed(2)+
+          '<div class="sig">'+pct(e.probability)+' chance</div></td>'+
+        '<td class="num" style="color:#4ade80;font-weight:600">$'+Number(e.expected_usd||0).toFixed(2)+'</td></tr>'+
+        '<tr id="s'+i+'" style="display:none"><td></td><td colspan="8" class="steps">'+
+        '<div class="sig">'+esc((r.signals||[]).join(' \u00b7 '))+'</div>'+
+        '<ol>'+(r.instructions||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ol></td></tr>';
+    }).join('')+'</tbody></table>';
+
+  $('assume').innerHTML=
+    'Candidates are DeFiLlama protocols holding real TVL in a user-facing category with <b>no token yet</b>. '+
+    'Ranked by a legitimacy score built from published audits, TVL at risk, age, disclosure and chain spread, '+
+    'minus a penalty for mercenary TVL spikes.<br><br>'+
+    'The payoff model assumes an airdrop probability of '+pct(a.p_airdrop_range?a.p_airdrop_range[1]:0)+
+    ' at best, that only '+pct(a.value_retention)+' of any allocation keeps its value ('+
+    esc(a.value_retention_basis||'')+'), and that '+pct(1-(a.qualification_rate||0))+
+    ' of small wallets are filtered out ('+esc(a.qualification_basis||'')+'). '+
+    'Allocation is discounted by deposit size, so a small wallet is not priced like a large one \u2014 '+
+    'though because allocation is logarithmic, a small bankroll still earns a better <i>multiple</i> '+
+    'than a large one.';
+}
+function tog(i){var r=$('s'+i); if(r) r.style.display = r.style.display==='none'?'table-row':'none';}
+async function reprice(){
+  await fetch('/api/airdrops/bankroll',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({bankroll_usd:Number(($('bank')||{}).value||100)})});
+  load();
+}
+async function rescan(){
+  await fetch('/api/airdrops/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  load();
+}
+load(); setInterval(load,30000);
+</script></body></html>
+"""
+
+
+async def _airdrops_page(request: web.Request):
+    return web.Response(text=AIRDROPS_HTML, content_type="text/html",
+                        headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+
 # ---- AIRDROP RADAR (read-only DeFiLlama scan, no wallet or key involved) ----
 async def _airdrops_state(request: web.Request):
     return web.json_response(AIRDROPS.state())
@@ -3104,77 +3274,6 @@ PAPER_HTML = r"""<!doctype html>
   .poly-row:hover{background:#0d131d}
   .poly-title{color:#8793a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .poly-num{font-variant-numeric:tabular-nums}
-
-  /* ---- Airdrop Radar: golden call-to-action + featured panel ---- */
-  .airdrop-btn{
-    position:relative;overflow:hidden;cursor:pointer;border:1px solid #fcd34d;
-    border-radius:999px;padding:6px 18px;margin-left:6px;
-    font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.14em;
-    text-transform:uppercase;color:#3b2503;
-    background:linear-gradient(100deg,#b45309,#f59e0b 22%,#fde68a 46%,#f59e0b 70%,#b45309);
-    background-size:220% 100%;
-    animation:airdropSweep 3.4s linear infinite,airdropGlow 1.9s ease-in-out infinite alternate;
-    box-shadow:0 0 14px rgba(245,158,11,.55),0 2px 10px rgba(0,0,0,.35)
-  }
-  .airdrop-btn:hover{filter:brightness(1.12)}
-  .airdrop-btn::after{
-    content:"";position:absolute;top:0;left:-60%;width:38%;height:100%;
-    background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);
-    transform:skewX(-20deg);animation:airdropSheen 3.4s ease-in-out infinite
-  }
-  @keyframes airdropSweep{0%{background-position:0% 0}100%{background-position:220% 0}}
-  @keyframes airdropGlow{
-    from{box-shadow:0 0 10px rgba(245,158,11,.42),0 2px 10px rgba(0,0,0,.35)}
-    to{box-shadow:0 0 26px rgba(253,224,71,.85),0 2px 10px rgba(0,0,0,.35)}
-  }
-  @keyframes airdropSheen{0%,62%{left:-60%}100%{left:130%}}
-  .airdrop-featured{
-    grid-column:1/-1!important;border:3px solid transparent!important;
-    background:
-      linear-gradient(#0b0906,#0b0906) padding-box,
-      linear-gradient(110deg,#b45309,#f59e0b,#fde68a,#f59e0b,#b45309) border-box!important;
-    background-size:100% 100%,300% 300%!important;
-    animation:airdropBorderFlow 5s linear infinite;
-    box-shadow:0 0 22px rgba(245,158,11,.34),0 14px 34px rgba(0,0,0,.34)!important;
-    scroll-margin-top:70px
-  }
-  .airdrop-featured .bhead{
-    background:linear-gradient(90deg,rgba(120,63,4,.62),#0d0a06 48%,rgba(146,64,14,.42));
-    border-bottom-color:#a16207
-  }
-  @keyframes airdropBorderFlow{
-    0%{background-position:0 0,0% 50%}
-    50%{background-position:0 0,100% 50%}
-    100%{background-position:0 0,0% 50%}
-  }
-  .airdrop-flash{animation:airdropFlash 1.1s ease-out 2}
-  @keyframes airdropFlash{
-    0%{box-shadow:0 0 0 0 rgba(253,224,71,.85)}
-    100%{box-shadow:0 0 0 22px rgba(253,224,71,0)}
-  }
-  .ad-row{
-    display:grid;grid-template-columns:minmax(140px,1.5fr) 96px 84px 96px 92px minmax(150px,1fr);
-    gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid #1a1408;
-    font-family:var(--bin);font-size:11px
-  }
-  .ad-head{
-    position:sticky;top:0;z-index:1;background:#120d05;color:#b3873f;
-    text-transform:uppercase;letter-spacing:.08em;font-size:9px
-  }
-  .ad-row:hover{background:#140f06}
-  .ad-name{color:#fcd34d;font-weight:600;text-decoration:none}
-  .ad-name:hover{text-decoration:underline}
-  .ad-band{font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;letter-spacing:.06em}
-  .ad-STRONG{background:#052e16;color:#4ade80;border:1px solid #166534}
-  .ad-MODERATE{background:#1c1917;color:#fbbf24;border:1px solid #78350f}
-  .ad-SPECULATIVE{background:#2a1207;color:#fb923c;border:1px solid #7c2d12}
-  .ad-HIGHRISK{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d}
-  .ad-steps{padding:10px 14px;background:#0a0805;border-bottom:1px solid #1a1408}
-  .ad-steps li{margin:5px 0;color:#c9b58a;font-size:11px;line-height:1.5}
-  .ad-warn{background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;padding:8px 12px;font-size:11px;line-height:1.5}
-  @media (prefers-reduced-motion:reduce){
-    .airdrop-btn,.airdrop-btn::after,.airdrop-featured,.airdrop-flash{animation:none}
-  }
 </style>
 </head>
 <body>
@@ -3184,13 +3283,11 @@ PAPER_HTML = r"""<!doctype html>
     <a class="nav" href="/ict">ICT Lab →</a>
     <a class="nav" href="/funding">Funding Bot →</a>
     <a class="nav" href="http://127.0.0.1:8100" target="_blank" rel="noopener">Research Bot ↗</a>
-    <button class="airdrop-btn" id="airdrop-btn" onclick="showAirdrops()" title="Airdrop Radar - tokenless protocols ranked for a small bankroll">✦ Airdrops</button>
     <span class="sub">multiple paper strategies, one page · simulated fills on real Lighter data · no real money</span>
     <span class="spacer"></span>
     <span class="sub" id="px">BTC —</span>
   </div>
   <div id="wrap">
-    <div class="bot airdrop-featured" id="airdrops-panel"></div>
     <div class="bot cryptal-featured" id="cryptalmaker-panel"></div>
     <div class="bot pinned" id="lucidcont-panel" style="grid-column:1/-1;border:3px solid #22c55e;box-shadow:0 0 18px rgba(34,197,94,.55)"></div>
     <div class="bot pinned" id="lucidpass-panel" style="grid-column:1/-1;border:3px solid #facc15;box-shadow:0 0 18px rgba(250,204,21,.6)"></div>
@@ -3510,91 +3607,6 @@ PAPER_HTML = r"""<!doctype html>
     return s.history.map(t=>'<div class="posrow" style="padding:6px 14px"><div class="top">'+
       '<span class="src">Cryptal maker cycle</span><span style="color:'+(t.pnl>=0?'var(--green)':'var(--red)')+';font-weight:600">'+fmt(t.pnl)+'</span></div>'+
       '<div class="det"><span>spot '+px1(t.buy)+' -> '+px1(t.sell)+'</span><span>hedge close '+px1(t.hedge_close)+'</span><span>'+fmt(t.return_bps)+' bps</span></div></div>').join('');
-  }
-  async function loadAirdrops(){
-    let s; try{ s=await(await fetch('/api/airdrops/state')).json(); }catch(e){ return; }
-    const el=$('airdrops-panel'); if(!el) return;
-    const rows=s.rows||[], p=s.portfolio||{}, a=s.assumptions||{};
-    if(s.error && !rows.length){
-      el.innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">Airdrop Radar</span></div>'+
-        '<div class="empty">scan failed: '+esc(s.error)+'</div>'; return;
-    }
-    if(!rows.length){
-      el.innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">Airdrop Radar</span></div>'+
-        '<div class="empty">first scan running...</div>'; return;
-    }
-    const money=v=>'$'+Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0});
-    const head='<div class="bhead"><span class="dot on"></span><span class="bname">Airdrop Radar</span>'+
-      '<span class="badge" style="background:#78350f;color:#fde68a;border-color:#a16207">GOLD</span>'+
-      '<span class="badge">READ ONLY</span>'+
-      '<span class="badge">'+rows.length+' / '+Number(s.universe||0).toLocaleString()+' protocols</span>'+
-      '<span class="spacer"></span><span class="sub">scanned in '+Number(s.scan_seconds||0).toFixed(2)+'s</span></div>';
-
-    const plan='<div style="padding:10px 14px;background:#0d0a05;border-bottom:1px solid #1a1408">'+
-      '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center">'+
-      '<span class="sub">bankroll</span><b style="color:#fcd34d">'+money(p.bankroll_usd)+'</b>'+
-      '<span class="sub">split across</span><b style="color:#fcd34d">'+(p.farms||0)+' farms</b>'+
-      '<span class="sub">expected total</span><b style="color:#4ade80">'+money(p.expected_total_usd)+
-        ' ('+Number(p.expected_multiple||0).toFixed(2)+'x)</b>'+
-      '<span class="sub">if all land</span><b style="color:#4ade80">'+money(p.upside_total_usd)+'</b>'+
-      '<span class="sub">chance of nothing</span><b style="color:#f87171">'+
-        Math.round((p.probability_of_nothing||0)*100)+'%</b>'+
-      '<span class="spacer"></span>'+
-      '<input id="ad-bank" type="number" min="10" step="10" value="'+Number(p.bankroll_usd||100)+
-        '" style="width:90px;background:#0a0805;border:1px solid #78350f;color:#fcd34d;padding:4px 8px;border-radius:6px">'+
-      '<button class="btn" onclick="setAirdropBankroll()">Re-price</button>'+
-      '<button class="btn reset" onclick="refreshAirdrops()">Rescan</button></div>'+
-      '<div class="sub" style="margin-top:7px">'+esc(p.capital_note||'')+' Horizon: '+esc(p.horizon||'')+'</div></div>';
-
-    const warn='<div class="ad-warn"><b>Read this before depositing anything.</b> '+
-      'These are ranked candidates, not confirmed airdrops - a high score means the protocol looks real, '+
-      'not that a token is coming. The projection is a model, not a measurement: '+esc(a.caveat||'')+' '+
-      'It assumes only '+Math.round((a.value_retention||0)*100)+'% of any allocation keeps its value ('+
-      esc(a.value_retention_basis||'')+') and that '+Math.round((1-(a.qualification_rate||0))*100)+
-      '% of small wallets are filtered out ('+esc(a.qualification_basis||'')+').</div>';
-
-    const th='<div class="ad-row ad-head"><span>protocol</span><span>risk</span><span>score</span>'+
-      '<span>TVL</span><span>expected</span><span>category / chain</span></div>';
-
-    const body=rows.slice(0,14).map((r,i)=>{
-      const e=r.expected||{};
-      const band=(r.risk_band||'').replace(' ','');
-      const link=r.url?'<a class="ad-name" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.name)+'</a>'
-                      :'<span class="ad-name">'+esc(r.name)+'</span>';
-      return '<div class="ad-row" onclick="toggleAirdropSteps('+i+')" style="cursor:pointer">'+
-        link+
-        '<span><span class="ad-band ad-'+esc(band)+'">'+esc(r.risk_band||'')+'</span></span>'+
-        '<span class="poly-num">'+Number(r.score||0).toFixed(0)+'</span>'+
-        '<span class="poly-num">'+money(r.tvl_usd)+'</span>'+
-        '<span class="poly-num" style="color:#4ade80">$'+Number(e.expected_usd||0).toFixed(2)+'</span>'+
-        '<span class="poly-title">'+esc(r.category||'')+' &middot; '+esc(r.chain||'')+'</span></div>'+
-        '<div class="ad-steps" id="ad-steps-'+i+'" style="display:none">'+
-        '<div class="sub" style="margin-bottom:6px">'+esc((r.signals||[]).join(' &middot; '))+'</div>'+
-        '<div class="sub" style="margin-bottom:6px">If it lands: <b style="color:#4ade80">$'+
-          Number(e.realistic_if_it_lands_usd||0).toFixed(2)+'</b> on a $'+Number(e.deposit_usd||0).toFixed(0)+
-          ' deposit &middot; modelled chance '+Math.round((e.probability||0)*100)+'%</div>'+
-        '<ol class="ad-steps">'+(r.instructions||[]).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol></div>';
-    }).join('');
-
-    el.innerHTML=head+plan+warn+th+body;
-  }
-  function toggleAirdropSteps(i){
-    const d=$('ad-steps-'+i); if(d) d.style.display = d.style.display==='none' ? 'block' : 'none';
-  }
-  function showAirdrops(){
-    const el=$('airdrops-panel'); if(!el) return;
-    el.scrollIntoView({behavior:'smooth',block:'start'});
-    el.classList.remove('airdrop-flash'); void el.offsetWidth; el.classList.add('airdrop-flash');
-  }
-  async function setAirdropBankroll(){
-    const v=Number(($('ad-bank')||{}).value||100);
-    await fetch('/api/airdrops/bankroll',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({bankroll_usd:v})});
-    loadAirdrops();
-  }
-  async function refreshAirdrops(){
-    await fetch('/api/airdrops/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    loadAirdrops();
   }
   async function loadCryptalMaker(){
     let s; try{ s=await(await fetch('/api/cryptalmaker/state')).json(); }catch(e){ return; }
@@ -4820,7 +4832,7 @@ PAPER_HTML = r"""<!doctype html>
   async function toggleCOT(){ let s; try{s=await(await fetch('/api/cotbot/state')).json();}catch(e){return;} await fetch('/api/cotbot/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadCOT(); }
   async function resetCOT(){ if(!confirm('Reset the COT paper account?'))return; await fetch('/api/cotbot/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadCOT(); }
 
-  function loadAll(){ loadAirdrops(); loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
+  function loadAll(){ loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
   loadAll(); setInterval(loadAll, 2000);
 </script>
 </body>
@@ -4912,6 +4924,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.post("/api/arb/toggle", _arb_toggle),
         web.post("/api/arb/reset", _arb_reset),
         web.post("/api/arb/lev", _arb_lev),
+        web.get("/airdrops", _airdrops_page),
         web.get("/api/airdrops/state", _airdrops_state),
         web.post("/api/airdrops/bankroll", _airdrops_bankroll),
         web.post("/api/airdrops/refresh", _airdrops_refresh),
@@ -5332,6 +5345,32 @@ PAGE_HTML = r"""<!doctype html>
   #popup{border-radius:6px;background:#080c12f2;border-color:#263244;border-left-color:var(--amber)}
   #mktdrop{background:#080c12;border-color:#263244;border-radius:6px}
   .mktrow{border-top:1px solid #121a26}.mktrow:hover{background:#0d131d}
+  /* ---- Airdrop Radar: golden entry point to /airdrops ---- */
+  .airdrop-btn{
+    position:relative;overflow:hidden;display:inline-block;text-decoration:none;
+    border:1px solid #fcd34d;border-radius:999px;padding:5px 18px;margin-left:6px;
+    font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+    color:#3b2503!important;vertical-align:middle;
+    background:linear-gradient(100deg,#b45309,#f59e0b 22%,#fde68a 46%,#f59e0b 70%,#b45309);
+    background-size:220% 100%;
+    animation:airdropSweep 3.4s linear infinite,airdropGlow 1.9s ease-in-out infinite alternate;
+    box-shadow:0 0 14px rgba(245,158,11,.55),0 2px 10px rgba(0,0,0,.35)
+  }
+  .airdrop-btn:hover{filter:brightness(1.12)}
+  .airdrop-btn::after{
+    content:"";position:absolute;top:0;left:-60%;width:38%;height:100%;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);
+    transform:skewX(-20deg);animation:airdropSheen 3.4s ease-in-out infinite
+  }
+  @keyframes airdropSweep{0%{background-position:0% 0}100%{background-position:220% 0}}
+  @keyframes airdropGlow{
+    from{box-shadow:0 0 10px rgba(245,158,11,.42),0 2px 10px rgba(0,0,0,.35)}
+    to{box-shadow:0 0 26px rgba(253,224,71,.85),0 2px 10px rgba(0,0,0,.35)}
+  }
+  @keyframes airdropSheen{0%,62%{left:-60%}100%{left:130%}}
+  @media (prefers-reduced-motion:reduce){
+    .airdrop-btn,.airdrop-btn::after{animation:none}
+  }
 </style>
 </head>
 <body>
@@ -5342,6 +5381,7 @@ PAGE_HTML = r"""<!doctype html>
       <input id="mktq" placeholder="Search market…" autocomplete="off" oninput="renderMktDrop()">
       <div id="mktlist"></div>
     </div>
+    <a class="airdrop-btn" href="/airdrops">✦ Airdrops</a>
     <a class="nav" href="/treeofalpha" style="color:#58c1ff;border-color:#235">📰 Tree of Alpha →</a>
     <a class="nav" href="/orderbook">Order Book + Trades →</a>
     <a class="navgold" href="/penny"><span class="ng-i">◆</span>AI Penny Stock Desk<span class="ng-a">→</span></a>
