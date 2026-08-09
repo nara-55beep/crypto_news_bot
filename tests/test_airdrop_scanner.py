@@ -119,10 +119,48 @@ class TestPayoffModel(unittest.TestCase):
     def test_expected_value_is_discounted_below_the_headline_allocation(self):
         score, _ = radar.legitimacy_score(_protocol(), NOW)
         payoff = radar.expected_value(_protocol(), score, 33.0)
-        self.assertLess(payoff["realistic_if_it_lands_usd"],
+        self.assertLess(payoff["value_if_paid_usd"],
                         payoff["gross_if_it_lands_usd"])
         self.assertLess(payoff["expected_usd"],
-                        payoff["realistic_if_it_lands_usd"])
+                        payoff["value_if_paid_usd"])
+
+    def test_the_reported_outcomes_form_a_coherent_distribution(self):
+        """Regression: the odds and the payout must describe the same world.
+
+        Qualification was once applied twice - shrinking the payout AND the odds -
+        so the page showed a 34% chance of something beside a 78% chance of nothing,
+        summing to 112%. Expected value was right; the numbers a reader would act on
+        were not. Qualification is a probability (a filtered wallet gets nothing at
+        all), depreciation is a value effect, and each belongs in exactly one place.
+        """
+        score, _ = radar.legitimacy_score(_protocol(), NOW)
+        payoff = radar.expected_value(_protocol(), score, 33.0)
+        self.assertAlmostEqual(payoff["p_paid"] + payoff["p_nothing"], 1.0, places=12)
+        self.assertAlmostEqual(
+            payoff["p_paid"],
+            payoff["p_protocol_airdrops"] * radar.QUALIFICATION_RATE, places=12)
+        # Payout carries the depreciation haircut and nothing else.
+        self.assertAlmostEqual(
+            payoff["value_if_paid_usd"],
+            payoff["gross_if_it_lands_usd"] * radar.VALUE_RETENTION, places=9)
+        # Expected value is the product of the two coherent halves.
+        self.assertAlmostEqual(
+            payoff["expected_usd"],
+            payoff["p_paid"] * payoff["value_if_paid_usd"], places=12)
+
+    def test_qualification_is_not_double_counted(self):
+        score, _ = radar.legitimacy_score(_protocol(), NOW)
+        payoff = radar.expected_value(_protocol(), score, 33.0)
+        naive_double = (payoff["p_protocol_airdrops"]
+                        * payoff["gross_if_it_lands_usd"]
+                        * radar.VALUE_RETENTION
+                        * radar.QUALIFICATION_RATE)
+        # The old and new decompositions agree on EV...
+        self.assertAlmostEqual(payoff["expected_usd"], naive_double, places=9)
+        # ...but the payout itself must NOT carry the qualification haircut.
+        self.assertGreater(payoff["value_if_paid_usd"],
+                           payoff["gross_if_it_lands_usd"]
+                           * radar.VALUE_RETENTION * radar.QUALIFICATION_RATE)
 
     def test_the_most_likely_single_outcome_is_nothing(self):
         score, _ = radar.legitimacy_score(_protocol(), NOW)

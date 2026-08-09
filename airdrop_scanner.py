@@ -236,19 +236,31 @@ def deposit_factor(deposit_usd: float) -> float:
 
 
 def expected_value(protocol: dict, score: float, deposit_usd: float) -> dict:
-    """Modelled payoff for one wallet at this deposit. Assumptions, not forecasts."""
+    """Modelled payoff for one wallet at this deposit. Assumptions, not forecasts.
+
+    The two haircuts describe different things and must be applied to different
+    quantities exactly once each. Qualification is a *probability* - a filtered wallet
+    receives nothing at all, not a smaller amount - so it belongs in the odds.
+    Depreciation is a *value* effect on tokens that were actually received, so it
+    belongs in the payout. An earlier version applied qualification to both, which
+    left the reported odds and payout describing no coherent outcome (a 34% chance of
+    something alongside a 78% chance of nothing sums to 112%). Expected value was
+    unaffected, but the numbers a reader would act on were not.
+    """
     tvl = _number(protocol.get("tvl"))
     gross = base_allocation_usd(tvl) * deposit_factor(deposit_usd)
-    probability = airdrop_probability(score)
-    realistic = gross * VALUE_RETENTION * QUALIFICATION_RATE
+    drops = airdrop_probability(score)
+    p_paid = drops * QUALIFICATION_RATE
+    value_if_paid = gross * VALUE_RETENTION
     return {
-        "probability": probability,
+        "p_protocol_airdrops": drops,
+        "p_paid": p_paid,
+        "p_nothing": 1.0 - p_paid,
         "deposit_usd": deposit_usd,
         "deposit_factor": deposit_factor(deposit_usd),
         "gross_if_it_lands_usd": gross,
-        "realistic_if_it_lands_usd": realistic,
-        "expected_usd": probability * realistic,
-        "p_nothing": 1.0 - probability * QUALIFICATION_RATE,
+        "value_if_paid_usd": value_if_paid,
+        "expected_usd": p_paid * value_if_paid,
     }
 
 
@@ -338,7 +350,7 @@ def portfolio_view(rows: list[dict], bankroll_usd: float,
     """What the whole plan is worth if the top `wallets` farms are actually worked."""
     chosen = rows[:max(0, wallets)]
     expected = sum(row["expected"]["expected_usd"] for row in chosen)
-    upside = sum(row["expected"]["realistic_if_it_lands_usd"] for row in chosen)
+    upside = sum(row["expected"]["value_if_paid_usd"] for row in chosen)
     p_all_nothing = 1.0
     for row in chosen:
         p_all_nothing *= row["expected"]["p_nothing"]
