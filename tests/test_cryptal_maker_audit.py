@@ -8,6 +8,7 @@ source for any private-trading capability.
 
 import asyncio
 import json
+import math
 import os
 import re
 import tempfile
@@ -564,6 +565,104 @@ class TestClockSkewCannotManufactureFills(unittest.TestCase):
             self.assertEqual(len(set(outcomes)), 1,
                              f"offset {offset} gave skew-dependent fills: {outcomes}")
             self.assertEqual(outcomes[0], offset > 0)
+
+
+# --------------------------------------------------------------------------
+# 5c. The activation watermark boundary itself must be conservative
+# --------------------------------------------------------------------------
+def _exact_ms(value: float) -> float:
+    """Truncate to a whole millisecond, the resolution Cryptal actually serves."""
+    return math.floor(value * 1000) / 1000.0
+
+
+class TestActivationWatermarkBoundary(unittest.TestCase):
+    """`activation_exchange_at` is read from the snapshot that precedes the virtual
+    quote, so a print stamped at exactly that millisecond is not proven to have
+    occurred after the order existed. Cryptal stamps to the millisecond, so the
+    boundary is reachable in production and equality must fail closed."""
+
+    SKEWS = (0.0, 0.36, 1.0, 1.9, -1.0, -5.0)
+
+    def _place(self, bot, skew, **kwargs):
+        bot._tick(_snapshot([], stamp=_exact_ms(time.time() + skew), **kwargs))
+        return dict(bot.quote)
+
+    def _cross_at(self, bot, quote, skew, offset_ms, volume=None, **kwargs):
+        """Print stamped offset_ms milliseconds from the quote's activation point."""
+        stamp_ms = int(round(quote["activation_exchange_at"] * 1000)) + offset_ms
+        trade = {"id": f"boundary{offset_ms}", "side": "ASK",
+                 "price": quote["price"],
+                 "volume": volume if volume is not None else quote["qty"],
+                 "timestamp": stamp_ms}
+        bot._tick(_snapshot([trade], stamp=_exact_ms(time.time() + skew), **kwargs))
+
+    def test_exact_watermark_print_never_fills_a_new_quote(self):
+        for skew in self.SKEWS:
+            with self.subTest(skew=skew), tempfile.TemporaryDirectory() as tmp:
+                bot = _bot(tmp)
+                quote = self._place(bot, skew)
+                self.assertEqual(quote["queue_ahead_btc"], 0.0)
+                self._cross_at(bot, quote, skew, 0)
+                self.assertEqual(bot.spot_qty, 0.0)
+                self.assertEqual(bot.short_qty, 0.0)
+                self.assertEqual(bot.fill_count, 0)
+
+    def test_exact_watermark_print_never_fills_a_repriced_quote(self):
+        for skew in self.SKEWS:
+            with self.subTest(skew=skew), tempfile.TemporaryDirectory() as tmp:
+                bot = _bot(tmp)
+                self._place(bot, skew, bid=64_000.0)
+                second = self._place(bot, skew, bid=64_400.0)
+                self.assertGreater(second["price"], 64_000.0)
+                self._cross_at(bot, second, skew, 0,
+                               volume=second["queue_ahead_btc"] + second["qty"],
+                               bid=64_400.0)
+                self.assertEqual(bot.spot_qty, 0.0)
+                self.assertEqual(bot.short_qty, 0.0)
+
+    def test_one_millisecond_past_the_watermark_still_fills(self):
+        for skew in self.SKEWS:
+            with self.subTest(skew=skew), tempfile.TemporaryDirectory() as tmp:
+                bot = _bot(tmp)
+                quote = self._place(bot, skew)
+                self._cross_at(bot, quote, skew, 1)
+                self.assertGreater(
+                    bot.spot_qty, 0.0, f"genuine +1ms fill lost at skew {skew}")
+                self.assertEqual(bot.spot_qty, bot.short_qty)
+
+    def test_one_millisecond_past_the_watermark_fills_after_a_reprice(self):
+        for skew in self.SKEWS:
+            with self.subTest(skew=skew), tempfile.TemporaryDirectory() as tmp:
+                bot = _bot(tmp)
+                self._place(bot, skew, bid=64_000.0)
+                second = self._place(bot, skew, bid=64_400.0)
+                self._cross_at(bot, second, skew, 1,
+                               volume=second["queue_ahead_btc"] + second["qty"],
+                               bid=64_400.0)
+                self.assertGreater(bot.spot_qty, 0.0)
+                self.assertEqual(bot.spot_qty, bot.short_qty)
+
+    def test_one_millisecond_before_the_watermark_never_fills(self):
+        for skew in self.SKEWS:
+            with self.subTest(skew=skew), tempfile.TemporaryDirectory() as tmp:
+                bot = _bot(tmp)
+                quote = self._place(bot, skew)
+                self._cross_at(bot, quote, skew, -1)
+                self.assertEqual(bot.spot_qty, 0.0)
+
+    def test_boundary_outcome_is_invariant_to_the_host_clock(self):
+        for offset_ms, should_fill in ((-1, False), (0, False), (1, True)):
+            outcomes = []
+            for skew in self.SKEWS:
+                with tempfile.TemporaryDirectory() as tmp:
+                    bot = _bot(tmp)
+                    quote = self._place(bot, skew)
+                    self._cross_at(bot, quote, skew, offset_ms)
+                    outcomes.append(bot.spot_qty > 0)
+            self.assertEqual(
+                len(set(outcomes)), 1,
+                f"offset {offset_ms}ms gave skew-dependent fills: {outcomes}")
+            self.assertEqual(outcomes[0], should_fill)
 
 
 # --------------------------------------------------------------------------
