@@ -1833,8 +1833,8 @@ async function load(){
         '<td class="num">'+money(r.tvl_usd)+'</td>'+
         '<td class="num">'+(r.audits||0)+'</td>'+
         '<td class="num">'+Number(r.age_months||0).toFixed(0)+'mo</td>'+
-        '<td class="num">$'+Number(e.realistic_if_it_lands_usd||0).toFixed(2)+
-          '<div class="sig">'+pct(e.probability)+' chance</div></td>'+
+        '<td class="num">$'+Number(e.value_if_paid_usd||0).toFixed(2)+
+          '<div class="sig">'+pct(e.p_paid)+' chance you are paid</div></td>'+
         '<td class="num" style="color:#4ade80;font-weight:600">$'+Number(e.expected_usd||0).toFixed(2)+'</td></tr>'+
         '<tr id="s'+i+'" style="display:none"><td></td><td colspan="8" class="steps">'+
         '<div class="sig">'+esc((r.signals||[]).join(' \u00b7 '))+'</div>'+
