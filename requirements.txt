@@ -21,6 +21,6 @@ lxml>=6.0           # parses the historical earnings table used by the event aud
                     # (to install it later, run:  pip install anthropic )
 
 # --- developer-only (not needed to run the bot normally) ---
-# watchfiles>=1.2   # AUTO-RESTART used by dev.bat / dev_reload.py: restarts the bot
+watchfiles>=1.2     # AUTO-RESTART used by dev.bat / dev_reload.py: restarts the bot
                     # whenever you save a .py file. Install with: pip install watchfiles
                     # Then launch with dev.bat instead of run.bat.

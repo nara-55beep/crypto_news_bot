@@ -290,6 +290,7 @@ function render(s){
   const pnl = Number(s.total_pnl)||0;
   const s5 = (s.signal_stats||{})['5']||{};
   const fv = s.forward_validation||{};
+  const av = s.ai_value_audit||{};
   const fp = fv.feasibility||{};
   $('stats').innerHTML =
     stat('Equity', money(s.equity), 'gold') +
@@ -305,6 +306,9 @@ function render(s){
     stat('Hot setups', s.hot_setups||0) +
     stat('Forward edge', (fv.status||'collecting').toLowerCase(),
          fv.status==='PROMISING_NOT_VALIDATED'?'g':fv.status==='REJECTED'?'r':'') +
+    stat('AI value', (av.status||'collecting').toLowerCase(),
+         av.status==='AI_LIFT_PROMISING_NOT_VALIDATED'?'g':
+         av.status==='NO_MEASURED_AI_EDGE'?'r':'') +
     stat('Validation power', (fp.status||'not assessable').toLowerCase(),
          fp.status==='RESOLVABLE_NOW'?'g':
          fp.status==='INFEASIBLE_WITHIN_HORIZON'?'r':'');
@@ -405,7 +409,11 @@ function render(s){
   ) + '<div class="note"><b>Resolved rows only - non-evidentiary.</b> These averages cover whichever signals happened to resolve, so they carry the survivor bias the verdict below is built to remove; a winner beside an unresolved halted name still shows as a win. '+ ((AS['5']||{}).stale_incomplete_days ? '<b>'+((AS['5']||{}).stale_incomplete_days)+' matured day(s) still unresolved.</b> ' : '')+ '<br>Forward verdict: <b>'+esc(fv.status||'COLLECTING')+'</b> — '
     + esc(fv.reason||'waiting for confirmed observations')+'<br>'
     + 'Evidence unit: '+esc(fv.grouping||'signal-day baskets')+'; '+(fv.signal_days||0)
-    + ' / '+(fv.minimum_signal_days||60)+' required days. This forward panel never unlocks trading by itself.</div>';
+    + ' / '+(fv.minimum_signal_days||60)+' required days. This forward panel never unlocks trading by itself.<br>'
+    + 'AI filter audit: <b>'+esc(av.status||'COLLECTING')+'</b> &mdash; '
+    + esc(av.reason||'waiting for paired approved and rejected setups')+'; '
+    + (av.paired_days||0)+' / '+(av.minimum_paired_days||60)+' paired days. '
+    + 'This measures whether AI approval adds value over same-day mechanical controls; it does not prove the strategy is profitable.</div>';
 
   $('rules').innerHTML = esc(s.rules||'') + '<br><br>' + esc(s.note||'')
     + '<br><br><span style="color:#5d6673">A cost proxy is derived from average dollar volume only for ranking. '

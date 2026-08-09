@@ -428,6 +428,9 @@ TELEGRAM_SESSION = os.getenv("TELEGRAM_SESSION", "tg_session")
 ALPACA_API_KEY = os.getenv("ALPACA_API_KEY", "")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY", "")
 ALPACA_DATA_URL   = "https://data.alpaca.markets"
+# Trading host. The market CALENDAR (/v2/calendar) lives here, not on the data
+# host - it is what tells us a session closes at 13:00 or not at all.
+ALPACA_TRADING_URL = "https://api.alpaca.markets"
 ALPACA_FEED       = "iex"        # free tier = "iex". (Paid SIP = "sip".)
 
 # The stocks the bot watches and can trade. Add/remove freely (keep it to a few

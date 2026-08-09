@@ -136,7 +136,7 @@ LISTED_EXCHANGES = {"NMS", "NCM", "NGM", "NYQ", "ASE", "NAE"}
 FRESH_NEWS_HOURS = 72.0
 OFFERING_FORMS = ("S-1", "S-3", "F-1", "F-3", "424B", "EFFECT")
 
-_MARKET_CACHE: tuple[float, bool, str] = (0.0, False, "unknown")
+_MARKET_CACHE: tuple[float, bool, str, dict] = (0.0, False, "unknown", {})
 
 
 def live_rule_evidence() -> dict:
@@ -436,12 +436,18 @@ def us_market_open(force_refresh: bool = False) -> bool:
         status = (yf.Market("US", timeout=8).status or {}) if yf is not None else {}
         label = str(status.get("status") or "unknown").lower()
         is_open = label == "open"
-        _MARKET_CACHE = (now, is_open, label)
+        _MARKET_CACHE = (now, is_open, label, dict(status))
     except Exception:
         # A provider outage must fail closed. It is safer to postpone a paper fill
         # than to pretend a holiday or early close is an active market.
-        _MARKET_CACHE = (now, False, "unavailable")
+        _MARKET_CACHE = (now, False, "unavailable", {})
     return _MARKET_CACHE[1]
+
+
+def us_market_status_payload(force_refresh: bool = False) -> dict:
+    """The provider's raw market-time record behind us_market_open()."""
+    us_market_open(force_refresh)
+    return dict(_MARKET_CACHE[3])
 
 
 def build_dossier(ticker: str) -> Dossier:
@@ -910,6 +916,20 @@ def quality_score(d: "Dossier") -> tuple[float, list]:
     return max(0.0, min(100.0, pts)), why
 
 
+def adv_spread_proxy(d: "Dossier") -> float:
+    """Hand-fitted round-trip cost by dollar volume. A RANKING heuristic, not a quote.
+
+    Exposed so ``adv_proxy_audit`` can score it against observed quotes. Until that
+    audit has forward-held observations, every number here is an assumption.
+    """
+    adv = d.avg_volume * d.price
+    if adv >= 50_000_000:   return 0.25
+    elif adv >= 10_000_000: return 0.55
+    elif adv >= 2_000_000:  return 1.20
+    elif adv >= 500_000:    return 2.50
+    return 6.00
+
+
 def effective_spread(d: "Dossier") -> tuple[float, bool]:
     """Return (cost proxy, estimated).
 
@@ -917,27 +937,25 @@ def effective_spread(d: "Dossier") -> tuple[float, bool]:
     use an ADV-derived *ranking proxy*, never pretend the stale book is executable.
     """
     quoted = d.spread_pct
-    adv = d.avg_volume * d.price
-    if adv >= 50_000_000:   est = 0.25
-    elif adv >= 10_000_000: est = 0.55
-    elif adv >= 2_000_000:  est = 1.20
-    elif adv >= 500_000:    est = 2.50
-    else:                  est = 6.00
+    est = adv_spread_proxy(d)
 
-    # A quote that contradicts the name's own liquidity is a data artifact, not a price.
-    # yfinance regularly hands back a one-sided or cross-venue book (bid from one venue,
-    # ask stale from another) that passes every freshness check yet implies a 40%+ round
-    # trip on a name doing $10M a day. Trusting it silently buries the best setups:
-    # on 2026-08-07 EMBC scored hype 51 / tech 100 / qual 99 at RVOL 9.7x and ranked 17th
-    # of 20 solely because of a bogus 46.6% "reliable" spread. Two other names on the same
-    # board carried 46.3% and 41.8% - three hits clustered in one range is a systematic
-    # artifact, not three coincidentally untradeable stocks.
-    # The mirror case is just as wrong: an exact 0.00% spread means bid == ask, a locked
-    # market that cannot persist, and it hands the name a free 100 tradeability score.
-    implausible = quoted <= 0 or quoted > max(4.0 * est, est + 3.0)
-    if d.spread_reliable and not implausible:
-        return quoted, False
-    return est, True
+    if not d.spread_reliable:
+        return est, True
+    # An exact 0.00% spread means bid == ask, a locked market that cannot persist, and
+    # it used to hand the name a free 100 tradeability score.
+    if quoted <= 0:
+        return est, True
+    if quoted > max(4.0 * est, est + 3.0):
+        # A quote contradicting the name's own liquidity may well be a data artifact -
+        # yfinance does hand back one-sided and cross-venue books that pass every
+        # freshness check. But substituting the SMALLER proxy cost was circular: the
+        # hand-fitted heuristic being audited got to rule that the observation
+        # disagreeing with it was wrong, and the name was then rescued into a signal at
+        # a cost nobody observed. A suspect book is a reason to distrust the book, never
+        # evidence that trading is cheaper than it says. Keep the worse of the two and
+        # mark it unexecutable, so the name fails closed instead of being rescued.
+        return max(quoted, est), True
+    return quoted, False
 
 
 def trusted_execution_quote(d: "Dossier") -> bool:
@@ -1199,6 +1217,14 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
     verdict = (ai.get("verdict") or "").upper()
     conviction = str(ai.get("conviction") or "").lower()
     hard = hard_risk_reason(d)
+    # Preserve the decision that existed immediately before the AI.  Without this the
+    # forward log contains only names the model approved, so it can measure returns but
+    # can never answer whether the model improved them relative to the same mechanical
+    # opportunity set it rejected.  Hard-rejected/unknown setups are not controls.
+    mechanical_action = (
+        mechanical_setup(d, r)
+        if not hard and trade >= 55 and d.technical_known else ""
+    )
 
     if hard:
         action, why = "NO TRADE", hard
@@ -1211,7 +1237,7 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
         # Momentum confirms a real event; it is no longer allowed to impersonate one.
         # This is deliberately stricter than v1 because the v1 price-only audit showed
         # -0.87% gross expectancy in the untouched test before costs.
-        setup = mechanical_setup(d, r)
+        setup = mechanical_action
         strong_setup, buy_setup = setup == "STRONG BUY", setup == "BUY"
         if not (strong_setup or buy_setup):
             if comp >= 38 and not dated_catalyst:
@@ -1268,6 +1294,7 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
     target1_pct = risk_pct * 1.5
     target2_pct = risk_pct * 2.5
     return {"action": action, "candidate_action": candidate_action, "why": why,
+            "mechanical_action": mechanical_action,
             "entry": round(px, 4), "stop": stop,
             "target1": round(px * (1 + target1_pct / 100.0), 4),
             "target2": round(px * (1 + target2_pct / 100.0), 4),

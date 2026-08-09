@@ -1,9 +1,12 @@
+import asyncio
 import json
 import os
 import sys
 import tempfile
 import unittest
 from unittest import mock
+
+import penny_quotes
 
 import pennystock_bot as research
 import pennystock_paper as paper
@@ -27,6 +30,47 @@ def isolated_bot(tmpdir):
     return paper.PennyStockPaperBot(
         state_path=os.path.join(tmpdir, "state.json"),
         archive_path=os.path.join(tmpdir, "archive.jsonl"))
+
+
+def seed_calendar(bot, sessions, source="alpaca"):
+    """Give a bot a real exchange-calendar record for the sessions it will measure.
+
+    Without one the schedule is a fallback guess, and an outcome resting on a guessed
+    close is deliberately not evidence - so any test about the exit leg has to say which
+    sessions the exchange actually reported.
+    """
+    bot._session_calendar = {
+        "sessions": {day: {"open_minute": 9 * 60 + 30, "close_minute": close}
+                     for day, close in sessions.items()},
+        "covered": {"from": min(sessions), "to": max(sessions)},
+        "fetched_on": "2026-01-01", "source": source}
+    return bot
+
+
+def alpaca_schedule(close_minute=16 * 60, **extra):
+    row = {"close_minute": close_minute, "source": "alpaca",
+           "evidentiary": True, "is_trading_day": True}
+    row.update(extra)
+    return row
+
+
+def measured_outcome(net=2.0, excess=1.5, **extra):
+    """An outcome measured the way production measures one: bought at the ask, sold at
+    an OBSERVED horizon bid, under the current measurement schema.
+
+    Fixtures that skip this are asserting an unobserved exit leg, and a positive verdict
+    built on them is correctly blocked - so any basket test that is really about
+    missingness or statistics must say plainly that its cost side was measured.
+    """
+    out = {"net_return_pct": net, "net_excess_return_pct": excess,
+           "measurement_schema": paper.MEASUREMENT_SCHEMA_VERSION,
+           "entry_basis": "ask", "exit_basis": "observed_bid",
+           "entry_quote_feed": "sip", "exit_quote_feed": "sip",
+           # BOTH legs. One observed side is not an observed round trip.
+           "entry_cost_evidentiary": True, "exit_cost_evidentiary": True,
+           "cost_evidentiary": True}
+    out.update(extra)
+    return out
 
 
 def complete_dossier(**changes):
@@ -94,18 +138,26 @@ class PennyStockLogicTests(unittest.TestCase):
         self.assertEqual(spread, 4.5)
         self.assertIn("live spread", research.hard_risk_reason(live))
 
-    def test_quote_contradicting_the_name_liquidity_is_treated_as_an_artifact(self):
-        """A 38% book on a name doing $4M/day is a bad tick, not a real cost.
+    def test_a_suspect_quote_fails_closed_instead_of_being_repriced_cheaper(self):
+        """A 38% book on a name doing $4M/day is probably a bad tick - but the ADV proxy
+        is a hand-fitted ranking heuristic, not an observation.
 
-        Trusting it multiplied the composite by 0.3 and buried the strongest setups
-        (see effective_spread). The fallback must be the ADV proxy AND flagged
-        estimated, so needs_open_recheck stops anything trading on a guess.
+        Letting it overrule the quote and then charging the SMALLER proxy cost was
+        circular: the estimator being audited got to rule that the observation
+        disagreeing with it was wrong, and the name was rescued into a signal at a cost
+        nobody had seen. The book is distrusted, never made cheaper.
         """
         artifact = complete_dossier(spread_pct=38.0, spread_reliable=True)
         spread, estimated = research.effective_spread(artifact)
-        self.assertTrue(estimated)
-        self.assertLess(spread, 4.0)
+        self.assertTrue(estimated)                     # never executable
+        self.assertGreaterEqual(spread, 38.0)          # and never cheaper than quoted
         self.assertFalse(research.trusted_execution_quote(artifact))
+
+        # the proxy still governs where there is no usable quote to contradict
+        stale = complete_dossier(spread_pct=38.0, spread_reliable=False)
+        proxy, estimated = research.effective_spread(stale)
+        self.assertTrue(estimated)
+        self.assertLess(proxy, 4.0)
 
         # the rescue must not resurrect a name that is genuinely untradeable
         thin = complete_dossier(
@@ -138,6 +190,23 @@ class PennyStockLogicTests(unittest.TestCase):
                 {"strategy_id": research.LIVE_STRATEGY_ID, "entry": artifact.price},
                 rank=1,
             )
+        self.assertEqual(bot.pos, {})
+        # A suspect book is no longer repriced down to the proxy, so it now fails the
+        # spread cap outright rather than the trusted-quote check. Either rejection is
+        # correct; reaching a fill is not.
+        self.assertTrue(any("exceeds the" in x["msg"] or "book is suspect" in x["msg"]
+                            for x in bot.log))
+
+        # and the trusted-quote branch still catches a name the proxy prices under the
+        # cap: an unreliable book is not an executable one
+        proxied = complete_dossier(spread_pct=38.0, spread_reliable=False)
+        with mock.patch.object(research, "edge_policy", return_value={
+            "status": "VALIDATED", "auto_trade_allowed": True,
+            "strategy_id": research.LIVE_STRATEGY_ID,
+        }):
+            bot._open(proxied, {"verdict": "SPECULATIVE_BUY", "conviction": "high"},
+                      {"strategy_id": research.LIVE_STRATEGY_ID, "entry": proxied.price},
+                      rank=1)
         self.assertEqual(bot.pos, {})
         self.assertTrue(any("book is suspect" in x["msg"] for x in bot.log))
 
@@ -544,8 +613,7 @@ class PennyStockLogicTests(unittest.TestCase):
         bot.signal_log = [{
             "ticker": f"T{day % 35}", paper.SIGNAL_DAY_FIELD: f"day-{day:03d}",
             "engine_version": paper.SIGNAL_ENGINE_VERSION,
-            "outcomes": {"5": {"net_return_pct": 2.0,
-                                 "net_excess_return_pct": 1.0}},
+            "outcomes": {"5": measured_outcome(2.0, 1.0)},
         } for day in range(70)]
         verdict = bot.forward_validation()
         self.assertEqual(verdict["status"], "PROMISING_NOT_VALIDATED")
@@ -1320,7 +1388,7 @@ class TestMissingnessBlocksVerdicts(unittest.TestCase):
     def _done(day, ticker="A", net=2.0, excess=1.5):
         return {"engine_version": paper.SIGNAL_ENGINE_VERSION,
                 paper.SIGNAL_DAY_FIELD: day, "ticker": ticker,
-                "outcomes": {"5": {"net_return_pct": net, "net_excess_return_pct": excess}}}
+                "outcomes": {"5": measured_outcome(net, excess)}}
 
     @staticmethod
     def _missing(day, ticker="HALTED"):
@@ -1333,8 +1401,7 @@ class TestMissingnessBlocksVerdicts(unittest.TestCase):
     def test_a_stale_missing_day_blocks_a_verdict_the_bound_cannot_survive(self):
         """A thin edge cannot absorb a name going to zero, so the verdict is withheld."""
         bot = isolated_bot(tempfile.mkdtemp())
-        thin = [dict(row, outcomes={"5": {"net_return_pct": 0.5,
-                                          "net_excess_return_pct": 0.4}})
+        thin = [dict(row, outcomes={"5": measured_outcome(0.5, 0.4)})
                 for row in self._sixty_good_days()]
         bot.signal_log = thin + [self._missing("2026-03-20", "HALTED")]
         verdict = bot.forward_validation()
@@ -1403,8 +1470,8 @@ class TestBoundIsDependenceRobust(unittest.TestCase):
     def _done(day, net=2.0, excess=1.5, ticker="A"):
         return {"engine_version": paper.SIGNAL_ENGINE_VERSION,
                 paper.SIGNAL_DAY_FIELD: day, "ticker": ticker, paper.SIGNAL_COST_FIELD: 1.0,
-                "outcomes": {"5": {"net_return_pct": net, "net_excess_return_pct": excess,
-                                   "benchmark_return_pct": 0.5}}}
+                "outcomes": {"5": measured_outcome(net, excess,
+                                                   benchmark_return_pct=0.5)}}
 
     def test_a_positive_mean_with_an_interval_spanning_zero_does_not_clear(self):
         bot = isolated_bot(tempfile.mkdtemp())
@@ -1549,15 +1616,27 @@ class TestEvidenceIntegrity(unittest.TestCase):
 
     def test_a_failed_append_is_retried_not_dropped(self):
         bot = isolated_bot(tempfile.mkdtemp())
+        # The outcome must be a production-shaped event for a signal that was really
+        # recorded. A bare {"id", "horizon"} is neither, and a fixture like that only
+        # ever proved the queue accepted rubbish.
+        self.assertTrue(bot._archive_event("signal", {
+            "id": "x", paper.SIGNAL_DAY_FIELD: "2026-01-01",
+            "engine_version": paper.SIGNAL_ENGINE_VERSION}))
         with mock.patch("builtins.open", side_effect=OSError("disk full")):
-            self.assertFalse(bot._archive_event("outcome", {"id": "x", "horizon": "5"}))
+            self.assertFalse(bot._archive_event("outcome", {
+                "id": "x", "horizon": "5", "outcome": {"net_return_pct": 4.0}}))
         self.assertEqual(len(bot._archive_outbox), 1)
-        self.assertIn("awaiting retry", bot.archive_error)
+        # Losing the disk after a real write lands on the torn-tail branch rather than
+        # the append branch, so assert the property both must satisfy: the event is
+        # retained and the failure is surfaced, not that one branch's wording appears.
+        self.assertIn("1 event(s)", bot.archive_write_error)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
         self.assertTrue(bot._archive_event("signal", {
             "id": "y", paper.SIGNAL_DAY_FIELD: "2026-01-02",
             "engine_version": paper.SIGNAL_ENGINE_VERSION}))         # both land now
         self.assertEqual(bot._archive_outbox, [])
-        self.assertEqual(len(bot._replay_archive()), 1)              # y; x had no signal
+        self.assertEqual(len(bot._replay_archive()), 2)              # x and y
+        self.assertEqual(bot.archive_error, "")                      # nothing orphaned
 
     def test_state_cache_and_archive_are_merged_by_id(self):
         """A final-horizon event can fail after the cache was written, so neither side
@@ -1606,6 +1685,8 @@ class TestEvidenceStoreIsAuthoritative(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
         bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        bot._archive_event("signal", {"id": "s1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                      "engine_version": paper.SIGNAL_ENGINE_VERSION})
         with mock.patch("builtins.open", side_effect=OSError("disk full")):
             bot._archive_event("outcome", {"id": "s1", "horizon": "5",
                                            "outcome": {"net_return_pct": 4.0}})
@@ -1614,14 +1695,18 @@ class TestEvidenceStoreIsAuthoritative(unittest.TestCase):
         self.assertEqual(len(restarted._archive_outbox), 1)
         self.assertIn("awaiting retry", restarted.archive_error)
         self.assertEqual(restarted.forward_validation()["status"], "DATA_INCOMPLETE")
-        restarted._archive_event("signal", {"id": "s2"})        # writes recover
+        restarted._archive_event("signal", {                    # writes recover
+            "id": "s2", paper.SIGNAL_DAY_FIELD: "2026-01-03",
+            "engine_version": paper.SIGNAL_ENGINE_VERSION})
         self.assertEqual(restarted._archive_outbox, [])
 
     def test_the_outbox_is_never_truncated(self):
         bot = isolated_bot(tempfile.mkdtemp())
         with mock.patch("builtins.open", side_effect=OSError("disk full")):
             for i in range(600):
-                bot._archive_event("outcome", {"id": f"s{i}", "horizon": "5"})
+                bot._archive_event("signal", {
+                    "id": f"s{i}", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                    "engine_version": paper.SIGNAL_ENGINE_VERSION})
         self.assertEqual(len(bot._archive_outbox), 600)     # was capped at 500
 
     def test_a_newline_terminated_corrupt_final_record_is_not_a_tear(self):
@@ -1686,7 +1771,9 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
                                        archive_path=self._corrupt_archive(tmp))
         self.assertIn("corrupt", bot.archive_integrity_error)
         self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
-        self.assertTrue(bot._archive_event("signal", {"id": "z"}))
+        self.assertTrue(bot._archive_event("signal", {
+            "id": "z", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+            "engine_version": paper.SIGNAL_ENGINE_VERSION}))
         self.assertIn("corrupt", bot.archive_integrity_error)          # still blocking
         self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
 
@@ -1709,8 +1796,11 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
         bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        bot._archive_event("signal", {"id": "s1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                      "engine_version": paper.SIGNAL_ENGINE_VERSION})
         with mock.patch("builtins.open", side_effect=OSError("disk full")):
-            bot._archive_event("outcome", {"id": "s1", "horizon": "5"})
+            bot._archive_event("outcome", {"id": "s1", "horizon": "5",
+                                           "outcome": {"net_return_pct": 4.0}})
         self.assertEqual(len(bot._archive_outbox), 1)
         self.assertFalse(os.path.exists(ap + ".outbox"))    # honest: nothing reached disk
         self.assertIn("memory only", bot.outbox_error)
@@ -1721,8 +1811,11 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
         bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        bot._archive_event("signal", {"id": "s1", paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                                      "engine_version": paper.SIGNAL_ENGINE_VERSION})
         with mock.patch("builtins.open", side_effect=OSError("disk full")):
-            bot._archive_event("outcome", {"id": "s1", "horizon": "5"})
+            bot._archive_event("outcome", {"id": "s1", "horizon": "5",
+                                           "outcome": {"net_return_pct": 4.0}})
         bot._save()                                          # the ordinary save path
         # Recovery must COMPLETE, not merely make the queue durable: the event belongs
         # in the archive, the queue empty, its file gone and the errors cleared.
@@ -1764,7 +1857,9 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
             bot._archive_event("outcome", {"id": "s1", "horizon": "5",
                                            "outcome": {"net_return_pct": 4.0},
                                            "resolved": True})
-        bot._archive_event("signal", {"id": "s2"})           # flushes the queue
+        bot._archive_event("signal", {                       # flushes the queue
+            "id": "s2", paper.SIGNAL_DAY_FIELD: "2026-01-03",
+            "engine_version": paper.SIGNAL_ENGINE_VERSION})
         rows = {r["id"]: r for r in bot.evidence_rows()}
         self.assertIn("5", rows["s1"].get("outcomes") or {})  # visible without restart
 
@@ -1785,6 +1880,1113 @@ class TestHealthFieldsAreIndependent(unittest.TestCase):
         bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
         legs = bot.evidence_rows()[0].get(paper.SIGNAL_BENCHMARK_FIELD) or {}
         self.assertEqual(sorted(legs), ["1", "10", "5"])   # cache-only 10 survives
+
+
+class TestExecutionRealisticMeasurement(unittest.TestCase):
+    """A long is bought at the ASK and sold at the BID.
+
+    The old model observed neither side: it ran Yahoo's last TRADE to a future close and
+    subtracted the entry-time spread once, as though the whole round trip had been paid
+    on the way in. Half the cost was never charged and no exit book was ever looked at.
+    """
+
+    DAYS = ["2026-01-02", "2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08",
+            "2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15",
+            "2026-01-16", "2026-01-20"]
+    HORIZON_5_DAY = DAYS[5]           # signal day is DAYS[0]; five sessions later
+
+    @classmethod
+    def _frame(cls, closes):
+        import pandas as pd
+        return pd.DataFrame({"Open": closes, "High": closes, "Low": closes,
+                             "Close": closes, "Volume": [1_000_000] * len(closes)},
+                            index=pd.to_datetime(cls.DAYS))
+
+    def _yf(self, closes):
+        outer = self
+
+        class FakeTicker:
+            def __init__(self, symbol):
+                self.symbol = symbol
+
+            def history(self, **kw):
+                if self.symbol == "IWM":
+                    return outer._frame([100.0] * len(outer.DAYS))
+                return outer._frame(closes)
+
+        return mock.Mock(Ticker=FakeTicker)
+
+    @staticmethod
+    def _signal(**extra):
+        """The exact snapshot from the report: last trade 1.00 on a 1.00/1.20 book."""
+        half = 100 * 0.10 / 1.10
+        row = {"id": "sig1", "t": 0.0,
+               paper.SIGNAL_DAY_FIELD: TestExecutionRealisticMeasurement.DAYS[0],
+               "ticker": "PENNY", "engine_version": paper.SIGNAL_ENGINE_VERSION,
+               "measurement_schema": paper.MEASUREMENT_SCHEMA_VERSION,
+               "price": 1.00, "entry_last_trade": 1.00,
+               "entry_bid": 1.00, "entry_ask": 1.20, "entry_quote_mid": 1.10,
+               "entry_half_spread_pct": half,
+               # a venue book taken in the regular session, so the ENTRY leg is
+               # evidentiary and the tests below isolate the exit leg
+               # 10:00 NY on the signal session, received three seconds later
+               "entry_quote_feed": "sip", "entry_quote_source": "alpaca",
+               "entry_quote_captured_at": "2026-01-02T15:00:00+00:00",
+               "entry_quote_received_at": "2026-01-02T15:00:03+00:00",
+               paper.SIGNAL_COST_FIELD: 2 * half,
+               "benchmark_ticker": "IWM", "benchmark_price": 100.0,
+               "outcomes": {}, "resolved": False}
+        row.update(extra)
+        return row
+
+    def _measure(self, row, closes=None):
+        closes = closes or ([1.00] + [1.20] * (len(self.DAYS) - 1))
+        bot = seed_calendar(isolated_bot(tempfile.mkdtemp()),
+                            {day: 16 * 60 for day in self.DAYS})
+        bot.signal_log = [row]
+        bot._evidence[row["id"]] = row
+        with mock.patch.object(research, "yf", self._yf(closes)):
+            asyncio.run(bot._update_signal_outcomes())
+        return bot, row
+
+    def test_the_last_trade_entry_basis_flipped_a_loss_into_a_gain(self):
+        """The reported reproduction, driven through the real outcome path.
+
+        last trade $1.00, book $1.00/$1.20, future close $1.20, executable exit $1.19
+        bid. The tracker booked +1.82% net; the ask->bid round trip is -0.83%.
+        """
+        _bot, row = self._measure(self._signal())
+        out = row["outcomes"]["5"]
+        executable = (1.19 / 1.20 - 1) * 100                   # -0.83%
+        self.assertEqual(out["entry_basis"], "ask")
+        self.assertAlmostEqual(out["entry_price"], 1.20, places=6)
+        self.assertLess(out["net_return_pct"], 0.0)            # no longer a gain
+        self.assertLessEqual(out["net_return_pct"], executable)  # and never optimistic
+        # the specific wrong number must not come back
+        self.assertNotAlmostEqual(out["net_return_pct"], 1.82, places=2)
+        # gross is now a pure mid-to-close price move, charging nothing
+        self.assertAlmostEqual(out["gross_return_pct"],
+                               round((1.20 / 1.10 - 1) * 100, 2), places=2)
+
+    # 16:00 New York on the horizon session, in January, is 21:00 UTC.
+    CLOSING_STAMP = "2026-01-09T21:00:00+00:00"
+
+    def _closing_quote(self, day_stamp=None, **extra):
+        obs = {"session_day": self.HORIZON_5_DAY, "at": day_stamp or self.CLOSING_STAMP,
+               "bid": 1.19, "ask": 1.21, "feed": "sip", "source": "alpaca"}
+        obs.update(extra)
+        return obs
+
+    def test_an_observed_exit_bid_measures_the_real_round_trip(self):
+        _bot, row = self._measure(
+            self._signal(quote_observations=[self._closing_quote()]))
+        out = row["outcomes"]["5"]
+        self.assertEqual(out["exit_basis"], "observed_bid")
+        self.assertAlmostEqual(out["exit_price"], 1.19, places=6)
+        self.assertAlmostEqual(out["net_return_pct"],
+                               round((1.19 / 1.20 - 1) * 100, 2), places=2)
+        self.assertTrue(out["exit_cost_evidentiary"])
+        self.assertTrue(out["entry_cost_evidentiary"])
+        self.assertTrue(paper.PennyStockPaperBot.outcome_is_evidentiary(out))
+        self.assertEqual(out["exit_quote_at"], self.CLOSING_STAMP)
+        self.assertEqual(out["exit_session"], self.HORIZON_5_DAY)
+
+    def test_a_prior_session_book_can_never_settle_this_horizon(self):
+        """A Jan-8 close is another day's price. Accepting one at a one-session
+        tolerance let it settle the Jan-9 horizon and be stamped evidentiary."""
+        _bot, row = self._measure(self._signal(quote_observations=[
+            self._closing_quote(session_day=self.DAYS[4],
+                                day_stamp="2026-01-08T21:00:00+00:00")]))
+        out = row["outcomes"]["5"]
+        self.assertEqual(out["exit_basis"], "modeled_bound_on_close")
+        self.assertFalse(out["exit_cost_evidentiary"])
+        self.assertFalse(paper.PennyStockPaperBot.outcome_is_evidentiary(out))
+
+    def test_an_opening_quote_is_not_a_closing_exit(self):
+        """09:31 is not the close, however well it is timestamped: the outcome it
+        would be compared against is the daily Close of that session."""
+        _bot, row = self._measure(self._signal(quote_observations=[
+            self._closing_quote(day_stamp="2026-01-09T14:31:00+00:00")]))
+        out = row["outcomes"]["5"]
+        self.assertEqual(out["exit_basis"], "modeled_bound_on_close")
+        self.assertFalse(out["exit_cost_evidentiary"])
+
+    def test_a_crossed_exit_book_is_refused_by_the_leg_itself(self):
+        """valid_event should stop this, and exit_leg must not depend on it having."""
+        _bot, row = self._measure(self._signal(quote_observations=[
+            self._closing_quote(bid=2.00, ask=1.00)]))
+        out = row["outcomes"]["5"]
+        self.assertEqual(out["exit_basis"], "modeled_bound_on_close")
+        self.assertNotAlmostEqual(out["exit_price"], 2.00, places=6)
+        self.assertFalse(out["exit_cost_evidentiary"])
+
+    def test_a_yahoo_entry_book_is_not_evidence_however_good_the_exit(self):
+        """Yahoo's freshness comes from the last TRADE timestamp, not the bid/ask, so
+        it cannot establish what a purchase would have paid."""
+        row = self._signal(entry_quote_feed="yfinance", entry_quote_source="yfinance",
+                           quote_observations=[self._closing_quote()])
+        _bot, row = self._measure(row)
+        out = row["outcomes"]["5"]
+        self.assertTrue(out["exit_cost_evidentiary"])       # the exit really was seen
+        self.assertFalse(out["entry_cost_evidentiary"])     # the entry was not
+        self.assertFalse(out["cost_evidentiary"])
+        self.assertFalse(paper.PennyStockPaperBot.outcome_is_evidentiary(out))
+
+    def test_a_later_session_exit_is_its_own_horizon_not_this_one(self):
+        """A Jan-12 book measures a longer hold. It is recorded under its own key so it
+        can never be pooled into the 5-session basket it did not measure."""
+        _bot, row = self._measure(self._signal(quote_observations=[
+            self._closing_quote(session_day=self.DAYS[6],
+                                day_stamp="2026-01-12T21:00:00+00:00")]))
+        self.assertEqual(row["outcomes"]["5"]["exit_basis"], "modeled_bound_on_close")
+        delayed = row["outcomes"]["5" + paper.DELAYED_EXIT_SUFFIX]
+        self.assertEqual(delayed["horizon_basis"], "delayed_exit")
+        self.assertEqual(delayed["exit_session"], self.DAYS[6])
+        self.assertEqual(delayed["exit_delay_sessions"], 1)
+        self.assertAlmostEqual(delayed["net_return_pct"],
+                               round((1.19 / 1.20 - 1) * 100, 2), places=2)
+        # the basket for horizon 5 looks up "5" exactly, so it cannot pick this up
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = [row]
+        book = bot.daily_baskets("5")
+        self.assertEqual(book["cost_modeled_rows"], 1)
+
+    def test_a_modeled_exit_is_conservative_and_not_evidentiary(self):
+        _bot, row = self._measure(self._signal())
+        out = row["outcomes"]["5"]
+        self.assertEqual(out["exit_basis"], "modeled_bound_on_close")
+        self.assertFalse(out["cost_evidentiary"])
+        self.assertFalse(paper.PennyStockPaperBot.outcome_is_evidentiary(out))
+        # never a credit: at least the entry half-spread, which is the floor
+        self.assertGreaterEqual(out["exit_cost_pct"],
+                                row["entry_half_spread_pct"] - 1e-9)
+
+    def test_a_row_with_no_ask_is_not_measured_at_all(self):
+        """An unknown entry price is not a licence to fall back to the last trade."""
+        row = self._signal(entry_ask=None, ask=None)
+        _bot, row = self._measure(row)
+        self.assertEqual(row["outcomes"], {})
+        self.assertIn("no entry ask", row["measurement_blocked"])
+
+    def test_a_legacy_row_is_measured_from_its_recorded_ask(self):
+        """Rows predate entry_ask but did record the raw book: reconstruct, not discard."""
+        legacy = {"id": "old1", "t": 0.0, paper.SIGNAL_DAY_FIELD: self.DAYS[0],
+                  "ticker": "PENNY", "engine_version": paper.SIGNAL_ENGINE_VERSION,
+                  "price": 1.00, "bid": 1.00, "ask": 1.20,
+                  paper.SIGNAL_COST_FIELD: 2 * 100 * 0.10 / 1.10,
+                  "benchmark_price": 100.0, "outcomes": {}, "resolved": False}
+        _bot, row = self._measure(legacy)
+        out = row["outcomes"]["5"]
+        self.assertAlmostEqual(out["entry_price"], 1.20, places=6)
+        self.assertEqual(out["measurement_schema"], paper.MEASUREMENT_SCHEMA_VERSION)
+
+    def test_modeled_exit_costs_block_a_positive_verdict(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.signal_log = [{
+            "ticker": f"T{d % 35}", paper.SIGNAL_DAY_FIELD: f"day-{d:03d}",
+            "engine_version": paper.SIGNAL_ENGINE_VERSION,
+            "outcomes": {"5": measured_outcome(2.0, 1.0, cost_evidentiary=False,
+                                               exit_cost_evidentiary=False,
+                                               exit_basis="modeled_bound_on_close")},
+        } for d in range(70)]
+        verdict = bot.forward_validation()
+        self.assertEqual(verdict["status"], "DATA_INCOMPLETE")
+        self.assertIn("exit leg", verdict["reason"])
+        self.assertFalse(verdict["auto_trade_allowed"])
+
+        # the same baskets with an observed exit are promising - and still locked
+        for row in bot.signal_log:
+            row["outcomes"]["5"] = measured_outcome(2.0, 1.0)
+        verdict = bot.forward_validation()
+        self.assertEqual(verdict["status"], "PROMISING_NOT_VALIDATED")
+        self.assertFalse(verdict["auto_trade_allowed"])
+
+    def test_an_outcome_from_an_earlier_schema_is_never_evidentiary(self):
+        """Repairing the measurement must not re-bless what a broken one produced.
+
+        Schema 1 had ask-based arithmetic, so its numbers look plausible - but it took a
+        prior session's book as a close, trusted a crossed quote and never checked the
+        entry feed, so its stamp means nothing here.
+        """
+        unversioned = {"net_return_pct": 2.0, "cost_evidentiary": True}
+        schema_one = {"net_return_pct": 2.0, "measurement_schema": 1,
+                      "cost_evidentiary": True, "exit_cost_evidentiary": True,
+                      "entry_cost_evidentiary": True}
+        self.assertFalse(paper.PennyStockPaperBot.outcome_is_evidentiary(unversioned))
+        self.assertFalse(paper.PennyStockPaperBot.outcome_is_evidentiary(schema_one))
+        self.assertTrue(paper.PennyStockPaperBot.outcome_is_evidentiary(
+            measured_outcome(2.0, 1.0)))
+
+    def test_either_leg_alone_is_not_an_observed_round_trip(self):
+        for missing in ("entry_cost_evidentiary", "exit_cost_evidentiary"):
+            with self.subTest(missing=missing):
+                self.assertFalse(paper.PennyStockPaperBot.outcome_is_evidentiary(
+                    measured_outcome(2.0, 1.0, **{missing: False})))
+
+    def test_only_completed_sessions_may_resolve_a_horizon(self):
+        """The current bar moves until the close, and an outcome written from it is
+        never revisited."""
+        import datetime as dt
+        days = ["2026-01-07", "2026-01-08", "2026-01-09"]
+        during = dt.datetime(2026, 1, 9, 11, 0, tzinfo=paper.NY)
+        after = dt.datetime(2026, 1, 9, 16, 25, tzinfo=paper.NY)
+        just_closed = dt.datetime(2026, 1, 9, 16, 5, tzinfo=paper.NY)
+        self.assertEqual(paper.PennyStockPaperBot.completed_sessions(days, during), 2)
+        self.assertEqual(paper.PennyStockPaperBot.completed_sessions(days, after), 3)
+        # the close alone is not enough; the provider still has to publish the bar
+        self.assertEqual(
+            paper.PennyStockPaperBot.completed_sessions(days, just_closed), 2)
+
+    def test_a_partial_session_does_not_resolve_the_final_horizon(self):
+        """Driven through the real path: with today's bar still forming, the horizon it
+        would complete stays unmeasured rather than being fixed to a partial close."""
+        import datetime as dt
+        row = self._signal(quote_observations=[self._closing_quote()])
+        mid_session = dt.datetime(2026, 1, 9, 11, 0, tzinfo=paper.NY)
+        real = paper.PennyStockPaperBot.completed_sessions
+        with mock.patch.object(paper.PennyStockPaperBot, "completed_sessions",
+                               staticmethod(lambda dates, now=None:
+                                            real(dates, mid_session))):
+            _bot, row = self._measure(row)
+        self.assertNotIn("5", row["outcomes"])          # Jan-9 bar is not final yet
+        self.assertIn("1", row["outcomes"])             # earlier horizons still resolve
+
+    def test_the_engine_version_is_untouched_by_a_measurement_repair(self):
+        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 6)
+        self.assertEqual(paper.MEASUREMENT_SCHEMA_VERSION, 2)
+
+
+class TestQuoteTelemetryAndProxyAudit(unittest.TestCase):
+    """Exit books must be captured for every tracked name, and the feed they came from
+    is part of the observation."""
+
+    @staticmethod
+    def _quote(**extra):
+        row = {"event": "quote", "id": "s1", "session_day": "2026-01-05",
+               "at": "2026-01-05T20:00:00+00:00", "bid": 1.0, "ask": 1.1,
+               "feed": "iex"}
+        row.update(extra)
+        return row
+
+    def test_a_quote_event_requires_its_feed_identity(self):
+        self.assertTrue(paper.PennyStockPaperBot.valid_event(self._quote()))
+        self.assertFalse(paper.PennyStockPaperBot.valid_event(self._quote(feed="")))
+        self.assertFalse(paper.PennyStockPaperBot.valid_event(self._quote(bid=0)))
+        self.assertFalse(paper.PennyStockPaperBot.valid_event(self._quote(at="")))
+        self.assertFalse(paper.PennyStockPaperBot.valid_event(
+            self._quote(feed="some-vendor")))          # unrecognised feed
+
+    def test_a_crossed_or_locked_book_is_not_a_valid_quote_event(self):
+        """bid 2.00 / ask 1.00 is not a wide quote, it is a broken one - and it was
+        taken as an exit price of 2.00 and stamped evidentiary."""
+        self.assertFalse(paper.PennyStockPaperBot.valid_event(
+            self._quote(bid=2.00, ask=1.00)))          # crossed
+        self.assertFalse(paper.PennyStockPaperBot.valid_event(
+            self._quote(bid=1.00, ask=1.00)))          # locked
+
+    def test_a_quote_whose_stamp_disagrees_with_its_session_is_refused(self):
+        """The session is what the EXCHANGE stamp says. A stale book relabelled into
+        today is fabricated evidence - and it also convinced the capture that today was
+        already done, so no real book was ever taken."""
+        self.assertFalse(paper.PennyStockPaperBot.valid_event(
+            self._quote(session_day="2026-08-08")))
+        self.assertFalse(paper.PennyStockPaperBot.valid_event(
+            self._quote(at="not-a-timestamp")))
+
+    def test_session_times_are_read_in_market_time(self):
+        # 21:00 UTC in January is 16:00 in New York
+        self.assertEqual(penny_quotes.session_date("2026-01-09T21:00:00+00:00"),
+                         "2026-01-09")
+        self.assertTrue(penny_quotes.in_closing_window("2026-01-09T21:00:00+00:00"))
+        self.assertFalse(penny_quotes.in_closing_window("2026-01-09T14:31:00+00:00"))
+        self.assertTrue(penny_quotes.in_regular_session("2026-01-09T14:31:00+00:00"))
+        # a stamp just past midnight UTC still belongs to the previous NY session
+        self.assertEqual(penny_quotes.session_date("2026-01-10T00:30:00+00:00"),
+                         "2026-01-09")
+        # Alpaca stamps nanoseconds; the parser must not choke on them
+        self.assertEqual(penny_quotes.session_date("2026-01-09T21:00:00.123456789Z"),
+                         "2026-01-09")
+        self.assertIsNone(penny_quotes.session_date("garbage"))
+        self.assertIsNone(penny_quotes.session_date(""))
+
+    def test_yahoo_is_not_an_execution_feed(self):
+        self.assertTrue(penny_quotes.is_execution_feed("sip"))
+        self.assertTrue(penny_quotes.is_execution_feed("iex"))
+        self.assertFalse(penny_quotes.is_execution_feed("yfinance"))
+        self.assertTrue(penny_quotes.is_known_feed("yfinance"))   # known, not executable
+
+    def test_replaying_a_quote_twice_records_one_observation(self):
+        store = {}
+        fold = paper.PennyStockPaperBot._fold_evidence_event
+        fold(store, {"event": "signal", "id": "s1",
+                     paper.SIGNAL_DAY_FIELD: "2026-01-02",
+                     "engine_version": paper.SIGNAL_ENGINE_VERSION})
+        self.assertTrue(fold(store, self._quote()))
+        self.assertTrue(fold(store, self._quote()))
+        self.assertEqual(len(store["s1"]["quote_observations"]), 1)
+
+    def test_a_quote_with_no_preceding_signal_is_an_orphan(self):
+        self.assertFalse(paper.PennyStockPaperBot._fold_evidence_event(
+            {}, self._quote()))
+
+    def test_iex_is_never_recorded_as_the_nbbo(self):
+        """Free Alpaca data is one venue. Calling it NBBO would misdescribe every
+        spread measured from it."""
+        self.assertFalse(penny_quotes.is_consolidated("iex"))
+        self.assertTrue(penny_quotes.is_consolidated("sip"))
+        described = penny_quotes.feed_description("iex")
+        self.assertIn("NOT", described.upper())
+        self.assertIn("single venue", described.lower())
+
+    def test_a_one_sided_or_crossed_book_is_not_an_observation(self):
+        good = penny_quotes._observation("ABCD", {"bp": 1.0, "ap": 1.1, "t": "T"}, "iex")
+        self.assertIsNotNone(good)
+        self.assertFalse(good["is_consolidated"])
+        self.assertAlmostEqual(good["half_spread_pct"], 0.1 / 2 / 1.05 * 100, places=6)
+        for bad in ({"bp": 0, "ap": 1.1, "t": "T"},        # one-sided
+                    {"bp": 1.2, "ap": 1.1, "t": "T"},      # crossed
+                    {"bp": 1.0, "ap": 1.1, "t": ""}):      # untimestamped
+            self.assertIsNone(penny_quotes._observation("ABCD", bad, "iex"))
+
+    def test_the_proxy_audit_reports_understatement_not_just_error(self):
+        """Understating the cost is the dangerous direction: it admits a name at a
+        price nobody could have traded."""
+        records = [{"proxy_pct": 1.0, "observed_pct": 5.0, "price": 2.0,
+                    "dollar_volume": 3_000_000, "feed": "sip",
+                    "at": "2026-01-05T15:00:00+00:00"} for _ in range(10)]
+        audit = penny_quotes.adv_proxy_audit(records, min_per_bucket=20)
+        self.assertEqual(audit["observations"], 10)
+        self.assertFalse(audit["calibrated"])
+        self.assertAlmostEqual(audit["overall"]["median_bias_pts"], -4.0, places=6)
+        self.assertEqual(audit["overall"]["understated_share"], 1.0)
+        self.assertAlmostEqual(audit["overall"]["p95_understatement_pts"], 4.0, places=6)
+        self.assertIn("$2-10M", audit["by_dollar_volume"])
+        self.assertIn("sip", audit["by_feed"])
+        self.assertTrue(audit["underpowered_buckets"])          # 10 observations < 20
+
+    def test_the_audit_refuses_to_score_an_empty_sample(self):
+        audit = penny_quotes.adv_proxy_audit([])
+        self.assertEqual(audit["observations"], 0)
+        self.assertFalse(audit["calibrated"])
+        self.assertIn("assumption", audit["reason"])
+
+    def test_the_bot_audit_reads_observations_off_the_evidence_store(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot._evidence = {"s1": {
+            "id": "s1", "ticker": "PENNY", "price": 2.0, "dollar_volume": 3_000_000,
+            "adv_proxy_pct": 1.20,
+            "quote_observations": [{"at": "2026-01-05T15:00:00+00:00",
+                                    "spread_pct": 6.0, "feed": "iex"}],
+        }}
+        audit = bot.adv_proxy_audit(min_per_bucket=1)
+        self.assertEqual(audit["observations"], 1)
+        self.assertAlmostEqual(audit["overall"]["median_bias_pts"], -4.8, places=6)
+
+    def test_capture_without_alpaca_says_so_instead_of_silently_skipping(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        with mock.patch.object(penny_quotes, "configured", return_value=False):
+            asyncio.run(bot._capture_exit_quotes())
+        self.assertIn("not configured", bot.quote_capture_error)
+        self.assertIn("modeled bound", bot.quote_capture_error)
+
+    def test_capture_covers_tracked_names_that_left_the_board(self):
+        """The names that stop ranking carry the losses; measuring only the survivors
+        is how a strategy measures itself into looking good."""
+        bot = isolated_bot(tempfile.mkdtemp())
+        today = paper.datetime.now(paper.NY).strftime("%Y-%m-%d")
+        bot._evidence = {
+            "s1": {"id": "s1", "ticker": "OFFBOARD", paper.SIGNAL_DAY_FIELD: today,
+                   "engine_version": paper.SIGNAL_ENGINE_VERSION,
+                   "resolved": False, "outcomes": {}},
+            "s2": {"id": "s2", "ticker": "DONE", paper.SIGNAL_DAY_FIELD: today,
+                   "engine_version": paper.SIGNAL_ENGINE_VERSION,
+                   "resolved": True, "outcomes": {}},
+        }
+        bot.watchlist = []                      # nothing is on the board any more
+        asked = {}
+        # A real closing stamp for TODAY. The earlier version of this test used a fixed
+        # January timestamp while the session label came from the wall clock, so it
+        # agreed with the very bug it was meant to cover.
+        closing = paper.datetime.now(paper.NY).replace(
+            hour=16, minute=0, second=0, microsecond=0).isoformat()
+
+        async def fake_quotes(symbols):
+            asked["symbols"] = list(symbols)
+            return {"OFFBOARD": {"ticker": "OFFBOARD", "bid": 1.0, "ask": 1.1,
+                                 "at": closing, "feed": "iex",
+                                 "source": "alpaca"}}, ""
+
+        with mock.patch.object(penny_quotes, "configured", return_value=True), \
+                mock.patch.object(penny_quotes, "latest_quotes", fake_quotes):
+            asyncio.run(bot._capture_exit_quotes())
+        self.assertEqual(asked["symbols"], ["OFFBOARD"])       # resolved name skipped
+        observations = bot._evidence["s1"]["quote_observations"]
+        self.assertEqual(len(observations), 1)
+        self.assertEqual(observations[0]["session_day"], today)
+        self.assertEqual(observations[0]["at"], closing)
+
+        # the closing book for today exists, so a second pass adds nothing
+        with mock.patch.object(penny_quotes, "configured", return_value=True), \
+                mock.patch.object(penny_quotes, "latest_quotes", fake_quotes):
+            asyncio.run(bot._capture_exit_quotes())
+        self.assertEqual(len(bot._evidence["s1"]["quote_observations"]), 1)
+
+    def test_a_stale_book_is_rejected_rather_than_relabelled_as_today(self):
+        """The reported reproduction: a book stamped 2026-01-05T14:31:00Z was archived
+        under today's date, and then blocked any further capture that session."""
+        bot = isolated_bot(tempfile.mkdtemp())
+        today = paper.datetime.now(paper.NY).strftime("%Y-%m-%d")
+        bot._evidence = {"s1": {"id": "s1", "ticker": "PENNY",
+                                paper.SIGNAL_DAY_FIELD: today,
+                                "engine_version": paper.SIGNAL_ENGINE_VERSION,
+                                "resolved": False, "outcomes": {}}}
+
+        async def stale(symbols):
+            return {"PENNY": {"ticker": "PENNY", "bid": 1.0, "ask": 1.1,
+                              "at": "2026-01-05T14:31:00Z", "feed": "iex",
+                              "source": "alpaca"}}, ""
+
+        with mock.patch.object(penny_quotes, "configured", return_value=True), \
+                mock.patch.object(penny_quotes, "latest_quotes", stale):
+            asyncio.run(bot._capture_exit_quotes())
+        self.assertEqual(bot._evidence["s1"].get("quote_observations", []), [])
+        self.assertIn("stamped 2026-01-05", bot.quote_capture_error)
+
+    def test_capture_keeps_trying_until_the_closing_book_exists(self):
+        """An opening snapshot must not end the session's capture: it cannot serve as
+        the closing exit, so stopping there leaves the horizon unmeasurable."""
+        bot = isolated_bot(tempfile.mkdtemp())
+        today = paper.datetime.now(paper.NY)
+        day = today.strftime("%Y-%m-%d")
+        bot._evidence = {"s1": {
+            "id": "s1", "ticker": "PENNY", paper.SIGNAL_DAY_FIELD: day,
+            "engine_version": paper.SIGNAL_ENGINE_VERSION,
+            "resolved": False, "outcomes": {},
+            "quote_observations": [{
+                "session_day": day, "feed": "iex", "bid": 1.0, "ask": 1.1,
+                "at": today.replace(hour=9, minute=45, second=0,
+                                    microsecond=0).isoformat()}],
+        }}
+        closing = today.replace(hour=16, minute=0, second=0, microsecond=0).isoformat()
+
+        async def at_close(symbols):
+            return {"PENNY": {"ticker": "PENNY", "bid": 1.19, "ask": 1.21,
+                              "at": closing, "feed": "iex", "source": "alpaca"}}, ""
+
+        with mock.patch.object(penny_quotes, "configured", return_value=True), \
+                mock.patch.object(penny_quotes, "latest_quotes", at_close):
+            asyncio.run(bot._capture_exit_quotes())
+        stamps = [o["at"] for o in bot._evidence["s1"]["quote_observations"]]
+        self.assertEqual(len(stamps), 2)                # the open one was not enough
+        self.assertIn(closing, stamps)
+
+
+class TestClosingCaptureSchedule(unittest.TestCase):
+    """The closing book exists for ten minutes a day and cannot be fetched afterwards.
+
+    Riding the hourly outcome timer meant a pass at 15:54 and the next at 16:54 skipped
+    the window entirely, and that loss is permanent.
+    """
+
+    import datetime as dt
+
+    def _bot_with_tracked_signal(self, day=None, observations=None):
+        bot = isolated_bot(tempfile.mkdtemp())
+        day = day or paper.datetime.now(paper.NY).strftime("%Y-%m-%d")
+        bot._evidence = {"s1": {
+            "id": "s1", "ticker": "PENNY", paper.SIGNAL_DAY_FIELD: day,
+            "engine_version": paper.SIGNAL_ENGINE_VERSION, "resolved": False,
+            "outcomes": {}, "quote_observations": observations or []}}
+        return bot
+
+    def test_capture_fires_inside_a_window_the_hourly_timer_would_miss(self):
+        """Hourly passes at 15:54 and 16:54 straddle the window; this must not."""
+        bot = self._bot_with_tracked_signal(day="2026-01-09")
+        close = 16 * 60
+        missed = [self.dt.datetime(2026, 1, 9, 15, 54, tzinfo=paper.NY),
+                  self.dt.datetime(2026, 1, 9, 16, 54, tzinfo=paper.NY)]
+        for when in missed:
+            self.assertFalse(
+                penny_quotes.in_closing_window(when.isoformat(), close),
+                f"{when:%H:%M} should be outside the window")
+        # ... yet the capture scheduler still runs inside it
+        for when in (self.dt.datetime(2026, 1, 9, 15, 56, tzinfo=paper.NY),
+                     self.dt.datetime(2026, 1, 9, 16, 0, tzinfo=paper.NY)):
+            with self.subTest(at=f"{when:%H:%M}"):
+                self.assertTrue(bot.closing_capture_due(1000.0, when, close))
+
+    def test_capture_starts_before_the_window_and_stops_after_it(self):
+        bot = self._bot_with_tracked_signal(day="2026-01-09")
+        close = 16 * 60
+        # 15:41 is the load-bearing case: the lead runs from the CLOSE, so a 15-minute
+        # lead starts at 15:45. Subtracting the window width as well started it at 15:40.
+        cases = {"11:00": False, "15:39": False, "15:41": False, "15:44": False,
+                 "15:45": True, "15:59": True, "16:05": True, "16:06": False,
+                 "16:54": False}
+        for clock, expected in cases.items():
+            hour, minute = (int(x) for x in clock.split(":"))
+            when = self.dt.datetime(2026, 1, 9, hour, minute, tzinfo=paper.NY)
+            with self.subTest(at=clock):
+                self.assertEqual(bot.closing_capture_due(1000.0, when, close), expected)
+
+    def test_capture_retries_on_its_own_clock_not_the_outcome_timer(self):
+        bot = self._bot_with_tracked_signal(day="2026-01-09")
+        close, when = 16 * 60, self.dt.datetime(2026, 1, 9, 15, 58, tzinfo=paper.NY)
+        self.assertTrue(bot.closing_capture_due(1000.0, when, close))
+        bot._last_closing_capture = 1000.0
+        # a few seconds later is too soon, but well inside the hourly timer
+        self.assertFalse(bot.closing_capture_due(1010.0, when, close))
+        self.assertTrue(bot.closing_capture_due(
+            1000.0 + paper.CLOSING_CAPTURE_RETRY_SEC + 1, when, close))
+        self.assertLessEqual(paper.CLOSING_CAPTURE_RETRY_SEC, 60)
+
+    def test_capture_stops_once_every_tracked_name_has_its_closing_book(self):
+        close = 16 * 60
+        when = self.dt.datetime(2026, 1, 9, 15, 58, tzinfo=paper.NY)
+        bot = self._bot_with_tracked_signal(day="2026-01-09", observations=[{
+            "session_day": "2026-01-09", "at": "2026-01-09T21:00:00+00:00",
+            "bid": 1.0, "ask": 1.1, "feed": "iex"}])
+        self.assertFalse(bot.closing_capture_due(1000.0, when, close))
+        # an opening quote does not count as the closing book
+        bot = self._bot_with_tracked_signal(day="2026-01-09", observations=[{
+            "session_day": "2026-01-09", "at": "2026-01-09T14:31:00+00:00",
+            "bid": 1.0, "ask": 1.1, "feed": "iex"}])
+        self.assertTrue(bot.closing_capture_due(1000.0, when, close))
+
+    def test_an_early_close_session_uses_its_real_window(self):
+        """US markets close at 13:00 on half days. A hardcoded 16:00 window would miss
+        every one of those sessions."""
+        half_day = 13 * 60
+        self.assertTrue(penny_quotes.in_closing_window(
+            "2026-11-27T18:00:00+00:00", half_day))          # 13:00 NY
+        self.assertFalse(penny_quotes.in_closing_window(
+            "2026-11-27T18:00:00+00:00", 16 * 60))           # missed at 16:00
+        bot = self._bot_with_tracked_signal(day="2026-11-27")
+        when = self.dt.datetime(2026, 11, 27, 12, 58, tzinfo=paper.NY)
+        self.assertTrue(bot.closing_capture_due(1000.0, when, half_day))
+        self.assertFalse(bot.closing_capture_due(1000.0, when, 16 * 60))
+
+    def test_the_close_comes_from_the_provider_before_any_assumption(self):
+        minute, source = penny_quotes.scheduled_close_minute(
+            self.dt.date(2026, 11, 27), payload={"close": "2026-11-27T18:00:00+00:00"})
+        self.assertEqual((minute, source), (13 * 60, "provider"))
+        # A close belonging to the NEXT session is not this session's close. Taking it
+        # turned a 13:00 half day into 16:00 and opened the window hours too late.
+        self.assertEqual(
+            penny_quotes.scheduled_close_minute(
+                self.dt.date(2026, 11, 27),
+                payload={"close": "2026-11-30T21:00:00+00:00"}),
+            (13 * 60, "calendar"))
+        # no payload: the recurring half-day rules, then 16:00
+        self.assertEqual(
+            penny_quotes.scheduled_close_minute(self.dt.date(2026, 11, 27)),
+            (13 * 60, "calendar"))
+        self.assertEqual(
+            penny_quotes.scheduled_close_minute(self.dt.date(2026, 1, 9)),
+            (16 * 60, "default"))
+
+    def test_the_recurring_half_days_are_recognised(self):
+        # 2026: Thanksgiving is 26 Nov, so the 27th closes early; Christmas Eve is a
+        # Thursday; 3 July is a Friday with the 4th on a Saturday, so it is a full day
+        self.assertTrue(penny_quotes.is_us_half_day(self.dt.date(2026, 11, 27)))
+        self.assertTrue(penny_quotes.is_us_half_day(self.dt.date(2026, 12, 24)))
+        self.assertFalse(penny_quotes.is_us_half_day(self.dt.date(2026, 7, 3)))
+        self.assertTrue(penny_quotes.is_us_half_day(self.dt.date(2025, 7, 3)))
+        self.assertFalse(penny_quotes.is_us_half_day(self.dt.date(2026, 1, 9)))
+        # 2027-12-24 is a Friday with Christmas on the Saturday, so the 24th IS the
+        # observed holiday - a full closure, not a 13:00 session. Calling it a half day
+        # opens a capture window on a dark market.
+        self.assertFalse(penny_quotes.is_us_half_day(self.dt.date(2027, 12, 24)))
+        self.assertFalse(penny_quotes.is_us_half_day(self.dt.date(2021, 12, 24)))
+
+    def test_a_half_day_closing_quote_is_accepted_as_the_exit(self):
+        """The close recorded WITH the observation decides, not a global 16:00."""
+        row = {"quote_observations": [{
+            "session_day": "2026-11-27", "at": "2026-11-27T18:00:00+00:00",
+            "bid": 1.19, "ask": 1.21, "feed": "sip",
+            "believed_close_minute": 13 * 60}]}
+        seen = paper.PennyStockPaperBot._closing_observation(
+            row, "2026-11-27", alpaca_schedule(13 * 60))
+        self.assertIsNotNone(seen)
+        # the same quote against a 16:00 session would not be a close at all
+        self.assertIsNone(paper.PennyStockPaperBot._closing_observation(
+            row, "2026-11-27", alpaca_schedule(16 * 60)))
+
+    def test_a_quote_cannot_certify_its_own_closing_time(self):
+        """An 11:00 book declaring an 11:00 close became an evidentiary closing quote.
+        The close is resolved from the stored exchange calendar, never from the quote."""
+        row = {"quote_observations": [{
+            "session_day": "2026-01-09", "at": "2026-01-09T16:00:00+00:00",  # 11:00 NY
+            "bid": 1.19, "ask": 1.21, "feed": "sip",
+            "believed_close_minute": 11 * 60}]}                # "we closed at 11:00"
+        self.assertIsNone(paper.PennyStockPaperBot._closing_observation(
+            row, "2026-01-09", alpaca_schedule(16 * 60)))
+        # and with no calendar record at all there is no close to match against
+        self.assertIsNone(paper.PennyStockPaperBot._closing_observation(
+            row, "2026-01-09", None))
+
+    def test_a_guessed_schedule_never_certifies_an_exit(self):
+        """A fallback close may still drive capture, but it cannot make an outcome
+        evidence: nothing confirmed the quote was taken at the real close."""
+        row = {"entry_bid": 1.0, "entry_ask": 1.2, "entry_half_spread_pct": 9.09,
+               "quote_observations": [{
+                   "session_day": "2026-01-09", "at": "2026-01-09T21:00:00+00:00",
+                   "bid": 1.19, "ask": 1.21, "feed": "sip"}]}
+        guessed = alpaca_schedule(16 * 60, source="fallback:default",
+                                  evidentiary=False)
+        leg = paper.PennyStockPaperBot.exit_leg(row, "2026-01-09", 1.20,
+                                                ["2026-01-09"], guessed)
+        self.assertEqual(leg["exit_basis"], "modeled_bound_on_close")
+        self.assertFalse(leg["cost_evidentiary"])
+        # the identical quote under an exchange-confirmed schedule is evidence
+        leg = paper.PennyStockPaperBot.exit_leg(row, "2026-01-09", 1.20,
+                                                ["2026-01-09"], alpaca_schedule())
+        self.assertEqual(leg["exit_basis"], "observed_bid")
+        self.assertTrue(leg["cost_evidentiary"])
+
+    def test_capture_does_not_run_on_a_non_trading_day(self):
+        """A date absent from the exchange calendar is a holiday. Capture must not run
+        against a dark market and then report that nothing had a book."""
+        bot = self._bot_with_tracked_signal(day="2026-01-09")
+        holiday = {"close_minute": None, "source": "alpaca-holiday",
+                   "evidentiary": True, "is_trading_day": False}
+        when = self.dt.datetime(2026, 1, 9, 15, 58, tzinfo=paper.NY)
+        self.assertFalse(bot.closing_capture_due(1000.0, when, schedule=holiday))
+
+    def test_a_missing_calendar_reports_a_holiday_only_inside_covered_dates(self):
+        bot = seed_calendar(isolated_bot(tempfile.mkdtemp()),
+                            {"2026-01-08": 16 * 60, "2026-01-12": 16 * 60})
+        listed = bot.session_schedule("2026-01-08")
+        self.assertTrue(listed["is_trading_day"])
+        self.assertTrue(listed["evidentiary"])
+        # inside the answered range but absent -> the exchange says it is not a session
+        gap = bot.session_schedule("2026-01-09")
+        self.assertFalse(gap["is_trading_day"])
+        self.assertTrue(gap["evidentiary"])
+        # outside the range the calendar never answered for -> a guess, not evidence
+        outside = bot.session_schedule("2026-03-02")
+        self.assertTrue(outside["is_trading_day"])
+        self.assertFalse(outside["evidentiary"])
+        self.assertTrue(outside["source"].startswith("fallback:"))
+
+    def test_a_recorded_session_is_frozen_against_a_later_refresh(self):
+        """A refresh after the close must not replace today's 13:00 with tomorrow's
+        16:00."""
+        bot = seed_calendar(isolated_bot(tempfile.mkdtemp()), {"2026-11-27": 13 * 60})
+        stored = dict(bot._session_calendar["sessions"])
+
+        async def newer(start, end):
+            return {"2026-11-27": {"open_minute": 570, "close_minute": 16 * 60}}, ""
+
+        with mock.patch.object(penny_quotes, "fetch_calendar", newer):
+            asyncio.run(bot.refresh_session_calendar(force=True))
+        self.assertEqual(bot._session_calendar["sessions"]["2026-11-27"],
+                         stored["2026-11-27"])
+        self.assertEqual(bot.session_schedule("2026-11-27")["close_minute"], 13 * 60)
+
+    def test_the_calendar_is_read_from_alpaca_and_survives_a_restart(self):
+        tmp = tempfile.mkdtemp()
+        ap, sp = os.path.join(tmp, "a.jsonl"), os.path.join(tmp, "s.json")
+        bot = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+
+        async def calendar(start, end):
+            return {"2026-11-27": {"open_minute": 570, "close_minute": 13 * 60}}, ""
+
+        with mock.patch.object(penny_quotes, "fetch_calendar", calendar):
+            asyncio.run(bot.refresh_session_calendar(force=True))
+        self.assertEqual(bot.session_schedule("2026-11-27"),
+                         {"close_minute": 13 * 60, "source": "alpaca",
+                          "evidentiary": True, "is_trading_day": True})
+        restarted = paper.PennyStockPaperBot(state_path=sp, archive_path=ap)
+        self.assertEqual(
+            restarted.session_schedule("2026-11-27")["close_minute"], 13 * 60)
+
+    def test_a_failed_calendar_fetch_leaves_schedules_non_evidentiary(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+
+        async def broken(start, end):
+            return {}, "HTTP 403: forbidden"
+
+        with mock.patch.object(penny_quotes, "fetch_calendar", broken):
+            asyncio.run(bot.refresh_session_calendar(force=True))
+        self.assertIn("403", bot.calendar_error)
+        self.assertFalse(bot.session_schedule("2026-01-09")["evidentiary"])
+
+    def test_the_capture_check_is_the_same_validator_as_the_exit_leg(self):
+        """A weaker check here let capture believe a crossed, non-venue book was the
+        close and stop trying, while the exit leg correctly refused it."""
+        schedule = alpaca_schedule()
+        for bad in ({"bid": 2.00, "ask": 1.00, "feed": "sip"},     # crossed
+                    {"bid": 1.19, "ask": 1.21, "feed": "yfinance"}):   # not a venue
+            row = {"quote_observations": [dict(
+                bad, session_day="2026-01-09", at="2026-01-09T21:00:00+00:00")]}
+            with self.subTest(book=bad):
+                self.assertFalse(paper.PennyStockPaperBot._has_closing_quote(
+                    row, "2026-01-09", schedule))
+                self.assertIsNone(paper.PennyStockPaperBot._closing_observation(
+                    row, "2026-01-09", schedule))
+
+
+class TestEntryQuoteFreshness(unittest.TestCase):
+    """A regular-session clock time was the only test, so a book from a PREVIOUS
+    session at 10:15 passed and became an evidentiary entry."""
+
+    SIGNAL_DAY = "2026-01-09"
+    AT = "2026-01-09T15:00:00+00:00"          # 10:00 NY on the signal session
+    RECEIVED = "2026-01-09T15:00:03+00:00"    # three seconds later
+
+    def _row(self, **extra):
+        row = {paper.SIGNAL_DAY_FIELD: self.SIGNAL_DAY,
+               "entry_bid": 1.00, "entry_ask": 1.20, "entry_quote_feed": "sip",
+               "entry_quote_captured_at": self.AT,
+               "entry_quote_received_at": self.RECEIVED}
+        row.update(extra)
+        return row
+
+    def test_a_fresh_same_session_venue_book_is_evidentiary(self):
+        self.assertTrue(paper.PennyStockPaperBot.entry_is_evidentiary(self._row()))
+
+    def test_a_previous_session_book_is_refused(self):
+        """The reported hole: right clock time, wrong day."""
+        stale = self._row(entry_quote_captured_at="2026-01-08T15:00:00+00:00",
+                          entry_quote_received_at="2026-01-08T15:00:03+00:00")
+        self.assertFalse(paper.PennyStockPaperBot.entry_is_evidentiary(stale))
+
+    def test_an_over_age_book_is_refused(self):
+        old = self._row(entry_quote_received_at="2026-01-09T15:09:00+00:00")   # 9 min
+        self.assertFalse(paper.PennyStockPaperBot.entry_is_evidentiary(old))
+        self.assertLessEqual(paper.ENTRY_QUOTE_MAX_AGE_SEC, 300)
+
+    def test_a_future_stamped_book_is_refused(self):
+        ahead = self._row(entry_quote_captured_at="2026-01-09T15:05:00+00:00",
+                          entry_quote_received_at="2026-01-09T15:00:03+00:00")
+        self.assertFalse(paper.PennyStockPaperBot.entry_is_evidentiary(ahead))
+        # ordinary sub-second clock skew is still tolerated
+        skewed = self._row(entry_quote_captured_at="2026-01-09T15:00:04+00:00",
+                           entry_quote_received_at="2026-01-09T15:00:03+00:00")
+        self.assertTrue(paper.PennyStockPaperBot.entry_is_evidentiary(skewed))
+
+    def test_a_book_with_no_receipt_time_cannot_be_aged(self):
+        self.assertFalse(paper.PennyStockPaperBot.entry_is_evidentiary(
+            self._row(entry_quote_received_at=None)))
+
+    def test_an_out_of_session_or_yahoo_book_is_refused(self):
+        self.assertFalse(paper.PennyStockPaperBot.entry_is_evidentiary(
+            self._row(entry_quote_captured_at="2026-01-09T09:00:00+00:00",
+                      entry_quote_received_at="2026-01-09T09:00:03+00:00")))  # pre-open
+        self.assertFalse(paper.PennyStockPaperBot.entry_is_evidentiary(
+            self._row(entry_quote_feed="yfinance")))
+
+    def test_the_recorded_flag_is_never_trusted_over_the_stored_book(self):
+        """A row written by an older, laxer version must not carry a stale book in."""
+        lying = self._row(entry_quote_captured_at="2026-01-08T15:00:00+00:00",
+                          entry_quote_received_at="2026-01-08T15:00:03+00:00",
+                          entry_cost_evidentiary=True)
+        self.assertFalse(paper.PennyStockPaperBot.entry_is_evidentiary(lying))
+
+    def test_the_capture_path_records_both_clocks(self):
+        book = paper.PennyStockPaperBot._entry_book(
+            {"bid": 0.9, "ask": 1.3, "quote_age_min": 1.0,
+             "entry_quote": {"bid": 1.00, "ask": 1.20, "feed": "sip",
+                             "source": "alpaca", "at": self.AT,
+                             "received_at": self.RECEIVED}},
+            paper.datetime.fromisoformat(self.AT).timestamp())
+        self.assertEqual(book["entry_quote_captured_at"], self.AT)
+        self.assertEqual(book["entry_quote_received_at"], self.RECEIVED)
+        self.assertAlmostEqual(book["entry_quote_age_sec"], 3.0, places=3)
+        self.assertTrue(book["entry_cost_evidentiary"])
+        self.assertEqual(book["entry_ask"], 1.20)      # the venue book, not Yahoo's
+
+    def test_a_stale_venue_book_falls_back_to_yahoo_and_is_not_evidence(self):
+        book = paper.PennyStockPaperBot._entry_book(
+            {"bid": 0.9, "ask": 1.3, "quote_age_min": 1.0,
+             "entry_quote": {"bid": 1.00, "ask": 1.20, "feed": "sip",
+                             "source": "alpaca",
+                             "at": "2026-01-08T15:00:00+00:00",
+                             "received_at": self.RECEIVED}},
+            paper.datetime.fromisoformat(self.AT).timestamp())
+        self.assertFalse(book["entry_cost_evidentiary"])
+        self.assertEqual(book["entry_quote_feed"], "yfinance")
+        self.assertEqual(book["entry_ask"], 1.3)       # Yahoo's, and not evidence
+
+
+class TestQuarantineCannotBeLost(unittest.TestCase):
+    """The marker and the .outbox.corrupt.* artifact are INDEPENDENT records of the same
+    quarantine, and the damaged file itself is evidence that must survive."""
+
+    @staticmethod
+    def _outbox(tmp, *lines):
+        ap = os.path.join(tmp, "a.jsonl")
+        with open(ap + ".outbox", "w", encoding="utf-8") as f:
+            for line in lines:
+                f.write(line + "\n")
+        return ap
+
+    @staticmethod
+    def _bot(tmp, ap):
+        return paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                        archive_path=ap)
+
+    @staticmethod
+    def _artifacts(ap):
+        import glob
+        return glob.glob(ap + ".outbox.corrupt.*")
+
+    @staticmethod
+    def _blocking_open(real_open):
+        def guard(path, *a, **k):
+            # the staging file counts: the marker is written tmp-then-replace
+            if ".quarantine" in str(path):
+                raise OSError("marker write failed")
+            return real_open(path, *a, **k)
+        return guard
+
+    @staticmethod
+    def _blocking_replace(real_replace):
+        def guard(src, dst, *a, **k):
+            if ".corrupt." in str(dst):
+                raise OSError("move failed")
+            return real_replace(src, dst, *a, **k)
+        return guard
+
+    def test_a_failed_marker_write_does_not_erase_the_quarantine(self):
+        """Startup consulted only the marker, so a failed marker write made the whole
+        quarantine disappear on the next run while the damage sat on disk."""
+        import builtins
+        tmp = tempfile.mkdtemp()
+        ap = self._outbox(tmp, "{not json")
+        with mock.patch("builtins.open",
+                        side_effect=self._blocking_open(builtins.open)):
+            first = self._bot(tmp, ap)
+        self.assertFalse(os.path.exists(ap + ".quarantine"))     # marker never landed
+        self.assertEqual(len(self._artifacts(ap)), 1)
+        self.assertEqual(first.forward_validation()["status"], "DATA_INCOMPLETE")
+
+        restarted = self._bot(tmp, ap)
+        self.assertIn("quarantine", restarted.quarantine_error)  # the artifact alone
+        self.assertEqual(restarted.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_the_marker_alone_blocks_when_the_artifact_is_gone(self):
+        """The other half of the same independence: clearing the artifact is not
+        resolution either."""
+        tmp = tempfile.mkdtemp()
+        ap = self._outbox(tmp, "{not json")
+        self._bot(tmp, ap)
+        for artifact in self._artifacts(ap):
+            os.remove(artifact)
+        restarted = self._bot(tmp, ap)
+        self.assertIn("quarantine", restarted.quarantine_error)
+        self.assertEqual(restarted.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_a_failed_quarantine_move_preserves_the_corrupt_source(self):
+        """It reported "damaged file left in place" and then called _persist_outbox,
+        which overwrote that file with the salvage alone."""
+        tmp = tempfile.mkdtemp()
+        ap = self._outbox(tmp, json.dumps(
+            {"event": "signal", "id": "keep", paper.SIGNAL_DAY_FIELD: "2026-01-01",
+             "engine_version": paper.SIGNAL_ENGINE_VERSION}), "{not json")
+        with mock.patch("os.replace", side_effect=self._blocking_replace(os.replace)):
+            bot = self._bot(tmp, ap)
+            with open(ap + ".outbox", encoding="utf-8") as f:
+                body = f.read()
+            self.assertIn("{not json", body)         # the damaged bytes survive
+            self.assertIn("keep", body)              # and so does the salvage inside it
+            self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+            # nor may the queue be retired: the preserved file still holds these events,
+            # so a drain would be replayed into the archive on the next start
+            self.assertFalse(bot._flush_archive_outbox())
+            self.assertEqual(len(bot._archive_outbox), 1)
+            with open(ap + ".outbox", encoding="utf-8") as f:
+                self.assertIn("{not json", f.read())
+            self.assertFalse(os.path.exists(ap))     # nothing appended to the archive
+
+    def test_a_failed_move_does_not_delete_an_unsalvageable_outbox(self):
+        """With nothing to salvage, _persist_outbox removed the file outright - erasing
+        the only copy of the corrupt evidence."""
+        tmp = tempfile.mkdtemp()
+        ap = self._outbox(tmp, "{not json")
+        with mock.patch("os.replace", side_effect=self._blocking_replace(os.replace)):
+            bot = self._bot(tmp, ap)
+            self.assertTrue(os.path.exists(ap + ".outbox"))
+            with open(ap + ".outbox", encoding="utf-8") as f:
+                self.assertIn("{not json", f.read())
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_a_live_event_is_held_while_the_outbox_is_quarantined_in_place(self):
+        """A failed quarantine move blocks the ARCHIVE too. The damaged outbox is still
+        the only copy of the queue, so a new event may not be appended, may not repair
+        the tail, and may not retire anything - it joins the queue in memory."""
+        tmp = tempfile.mkdtemp()
+        ap = self._outbox(tmp, json.dumps(
+            {"event": "signal", "id": "keep", paper.SIGNAL_DAY_FIELD: "2026-01-01",
+             "engine_version": paper.SIGNAL_ENGINE_VERSION}), "{not json")
+        with mock.patch("os.replace", side_effect=self._blocking_replace(os.replace)):
+            bot = self._bot(tmp, ap)
+            self.assertEqual(len(bot._archive_outbox), 1)        # the salvaged signal
+            self.assertFalse(bot._flush_archive_outbox())
+            held = bot.archive_write_error
+            self.assertTrue(held)
+
+            self.assertFalse(bot._archive_event("signal", {
+                "id": "s2", paper.SIGNAL_DAY_FIELD: "2026-01-03",
+                "engine_version": paper.SIGNAL_ENGINE_VERSION}))
+            self.assertFalse(os.path.exists(ap))                 # archive never created
+            self.assertEqual(len(bot._archive_outbox), 2)        # whole queue held
+            self.assertEqual([x.get("id") for x in bot._archive_outbox], ["keep", "s2"])
+            self.assertIn("memory only", bot.outbox_error)
+            self.assertEqual(bot.archive_write_error, held)      # not cleared
+            with open(ap + ".outbox", encoding="utf-8") as f:
+                self.assertIn("{not json", f.read())             # source still intact
+            self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+        # and once the move can complete, the held queue lands in full
+        self.assertTrue(bot._flush_archive_outbox())
+        with open(ap, encoding="utf-8") as f:
+            body = f.read()
+        self.assertIn("keep", body)
+        self.assertIn("s2", body)
+        self.assertIn("quarantine", bot.quarantine_error)        # still blocking
+
+    def test_a_blocked_outbox_recovers_once_the_move_succeeds(self):
+        """A degraded disk must not strand the path forever - but the block stays."""
+        tmp = tempfile.mkdtemp()
+        ap = self._outbox(tmp, json.dumps(
+            {"event": "signal", "id": "keep", paper.SIGNAL_DAY_FIELD: "2026-01-01",
+             "engine_version": paper.SIGNAL_ENGINE_VERSION}), "{not json")
+        with mock.patch("os.replace", side_effect=self._blocking_replace(os.replace)):
+            bot = self._bot(tmp, ap)
+        self.assertTrue(bot._persist_outbox())                # os.replace works again
+        self.assertEqual(len(self._artifacts(ap)), 1)
+        with open(self._artifacts(ap)[0], encoding="utf-8") as f:
+            self.assertIn("{not json", f.read())             # the damage is preserved
+        self.assertIn("quarantine", bot.quarantine_error)    # and still blocks
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+
+class TestEventsAreValidatedBeforeAnyWrite(unittest.TestCase):
+    """Both checks run before a file write: the shape of each event, and its ordering
+    after a signal. Writing first and finding the damage on the next restart is how the
+    archive got corrupted by the code meant to protect it."""
+
+    @staticmethod
+    def _bot(tmp):
+        return paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                        archive_path=os.path.join(tmp, "a.jsonl"))
+
+    @staticmethod
+    def _signal(sid, day="2026-01-02"):
+        return {"id": sid, paper.SIGNAL_DAY_FIELD: day,
+                "engine_version": paper.SIGNAL_ENGINE_VERSION}
+
+    def test_a_thin_internally_generated_event_fails_closed(self):
+        tmp = tempfile.mkdtemp()
+        bot = self._bot(tmp)
+        self.assertFalse(bot._archive_event("signal", {"id": "thin"}))
+        self.assertIn("refused", bot.archive_write_error)
+        self.assertEqual(bot._archive_outbox, [])           # not queued for later either
+        self.assertFalse(os.path.exists(bot.archive_path))  # and nothing was written
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_an_outcome_with_no_signal_fails_closed(self):
+        tmp = tempfile.mkdtemp()
+        bot = self._bot(tmp)
+        self.assertFalse(bot._archive_event("outcome", {
+            "id": "ghost", "horizon": "5", "outcome": {"net_return_pct": 4.0}}))
+        self.assertIn("no preceding signal", bot.archive_write_error)
+        self.assertFalse(os.path.exists(bot.archive_path))
+
+    def test_a_signal_earlier_in_the_same_batch_satisfies_ordering(self):
+        """The signal need not already be on disk - only ordered before its outcome."""
+        tmp = tempfile.mkdtemp()
+        bot = self._bot(tmp)
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            bot._archive_event("signal", self._signal("s1"))     # held, not applied
+        self.assertEqual(len(bot._archive_outbox), 1)
+        self.assertNotIn("s1", bot._evidence)
+        self.assertTrue(bot._archive_event("outcome", {
+            "id": "s1", "horizon": "5", "outcome": {"net_return_pct": 4.0}}))
+        rows = {r["id"]: r for r in bot._replay_archive()}
+        self.assertIn("5", rows["s1"].get("outcomes") or {})
+        self.assertEqual(bot.archive_error, "")
+
+    def test_an_orphan_in_a_restored_outbox_is_quarantined_not_appended(self):
+        """It passed valid_event, so it was written and only the NEXT restart found it."""
+        tmp = tempfile.mkdtemp()
+        ap = os.path.join(tmp, "a.jsonl")
+        with open(ap + ".outbox", "w", encoding="utf-8") as f:
+            f.write(json.dumps({"event": "outcome", "id": "ghost", "horizon": "5",
+                                "outcome": {"net_return_pct": 4.0}}) + "\n")
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+        bot._save()                                    # the ordinary flush path
+        self.assertIn("quarantined", bot.quarantine_error)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+        body = ""
+        if os.path.exists(ap):
+            with open(ap, encoding="utf-8") as f:
+                body = f.read()
+        self.assertNotIn("ghost", body)                # never reached the archive
+
+        restarted = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                             archive_path=ap)
+        self.assertEqual(restarted.archive_integrity_error, "")   # no orphan on disk
+        self.assertIn("quarantine", restarted.quarantine_error)   # still blocked
+        self.assertEqual(restarted.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_an_unrecordable_quarantine_retires_nothing(self):
+        """With neither the artifact nor the marker on disk, dropping the bad events
+        would erase the evidence and the block together - the same erasure the
+        quarantine exists to prevent."""
+        import builtins
+        tmp = tempfile.mkdtemp()
+        ap = os.path.join(tmp, "a.jsonl")
+        orphan = {"event": "outcome", "id": "ghost", "horizon": "5",
+                  "outcome": {"net_return_pct": 4.0}}
+        with open(ap + ".outbox", "w", encoding="utf-8") as f:
+            f.write(json.dumps(orphan) + "\n")
+        real_open = builtins.open
+
+        def no_quarantine_records(path, *a, **k):
+            if ".corrupt." in str(path) or ".quarantine" in str(path):
+                raise OSError("disk full")
+            return real_open(path, *a, **k)
+
+        bot = paper.PennyStockPaperBot(state_path=os.path.join(tmp, "s.json"),
+                                       archive_path=ap)
+        self.assertEqual(len(bot._archive_outbox), 1)
+        with mock.patch("builtins.open", side_effect=no_quarantine_records):
+            self.assertFalse(bot._flush_archive_outbox())
+        self.assertEqual(len(bot._archive_outbox), 1)       # still held, not dropped
+        self.assertFalse(os.path.exists(ap))                # and not appended either
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+        # once the records can be written, the quarantine completes and still blocks
+        self.assertFalse(bot._flush_archive_outbox())
+        self.assertEqual(bot._archive_outbox, [])
+        self.assertIn("quarantined", bot.quarantine_error)
+        self.assertEqual(len(TestQuarantineCannotBeLost._artifacts(ap)), 1)
+        self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+    def test_a_valid_ordered_queue_still_flushes(self):
+        """The new gate must block bad evidence, not ordinary recovery."""
+        tmp = tempfile.mkdtemp()
+        bot = self._bot(tmp)
+        bot._archive_event("signal", self._signal("s1"))
+        with mock.patch("builtins.open", side_effect=OSError("disk full")):
+            bot._archive_event("outcome", {"id": "s1", "horizon": "5",
+                                           "outcome": {"net_return_pct": 4.0}})
+        self.assertEqual(len(bot._archive_outbox), 1)
+        self.assertTrue(bot._flush_archive_outbox())
+        self.assertEqual(bot._archive_outbox, [])
+        self.assertEqual(bot.archive_error, "")
+        self.assertEqual(bot.quarantine_error, "")
+
+    def test_the_engine_version_and_trading_block_are_untouched(self):
+        tmp = tempfile.mkdtemp()
+        bot = self._bot(tmp)
+        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 6)
+        self.assertFalse(bot.forward_validation()["auto_trade_allowed"])
 
 
 class TestArchiveRepairAndSchema(unittest.TestCase):
@@ -1955,3 +3157,177 @@ class TestArchiveRepairIsNonDestructive(unittest.TestCase):
         bot._save()                                           # drains the good event
         self.assertNotEqual(bot.quarantine_error, "")         # block survives salvage
         self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+
+class TestAIIncrementalValueAudit(unittest.TestCase):
+    """The model needs a measured control group before anyone can call it edge."""
+
+    @staticmethod
+    def _rank():
+        return {
+            "composite": 80.0, "hype": 75.0, "quality": 75.0,
+            "tradeability": 95.0, "technical": 80.0, "catalyst": 70.0,
+        }
+
+    @staticmethod
+    def _row(day, sid, selection, net, excess, outcome=True):
+        role = (paper.PRIMARY_EVIDENCE_ROLE if selection == "approved"
+                else paper.CONTROL_EVIDENCE_ROLE)
+        return {
+            "id": sid, paper.SIGNAL_DAY_FIELD: day,
+            "engine_version": paper.SIGNAL_ENGINE_VERSION,
+            "ticker": sid, paper.EVIDENCE_ROLE_FIELD: role,
+            paper.AI_SELECTION_FIELD: selection,
+            "ai_policy_version": paper.AI_DECISION_POLICY_VERSION,
+            "ai_policy_id": paper.ai_decision_policy_id(),
+            "outcomes": ({"5": measured_outcome(net, excess)} if outcome else {}),
+            "resolved": outcome,
+        }
+
+    def test_ai_veto_preserves_the_pre_ai_mechanical_setup(self):
+        signal = research.signal_from(
+            complete_dossier(), self._rank(),
+            {"verdict": "AVOID", "conviction": "high", "score": 10},
+        )
+        self.assertEqual(signal["mechanical_action"], "STRONG BUY")
+        self.assertEqual(signal["candidate_action"], "AVOID")
+        self.assertEqual(signal["action"], "AVOID")
+
+    def test_prompt_change_gets_a_new_ai_policy_population(self):
+        original = paper.ai_decision_policy_id()
+        with mock.patch.object(research, "SYSTEM_PROMPT",
+                               research.SYSTEM_PROMPT + "\nchanged"):
+            changed = paper.ai_decision_policy_id()
+        self.assertNotEqual(original, changed)
+
+    def test_vetoed_setup_is_confirmed_for_measurement_but_never_promoted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            signal = research.signal_from(
+                complete_dossier(), self._rank(),
+                {"verdict": "AVOID", "conviction": "high", "score": 10},
+            )
+            board = [{
+                "ticker": "VETO", "price": 2.0, "quote_reliable": True,
+                "market_state": "REGULAR", "spread_estimated": False,
+                "catalyst_key": "same", "signal": signal,
+            }]
+            bot._update_setup_states(board, now=100.0)
+            bot._update_setup_states(board, now=150.0)
+        self.assertTrue(board[0]["confirmation"]["confirmed"])
+        self.assertEqual(board[0]["signal"]["action"], "AVOID")
+
+    def test_vetoed_setup_is_archived_as_control_not_live_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            signal = research.signal_from(
+                complete_dossier(), self._rank(),
+                {"verdict": "AVOID", "conviction": "high", "score": 10},
+            )
+            board = [{
+                "ticker": "VETO", "rank": 1, "price": 2.0,
+                "composite": 80.0, "hype": 75.0, "quality": 75.0,
+                "tradeability": 95.0, "technical": 80.0, "catalyst": 70.0,
+                "spread_pct": 1.0, "spread_estimated": False,
+                "market_state": "REGULAR", "quote_reliable": True,
+                "bid": 1.99, "ask": 2.01, "quote_age_min": 1.0,
+                "confirmation": {"confirmed": True, "observations": 2},
+                "signal": signal,
+                "ai": {"verdict": "AVOID", "conviction": "high", "score": 10},
+            }]
+            bot._record_signals(board)
+            self.assertEqual(len(bot.signal_log), 1)
+            row = bot.signal_log[0]
+            self.assertEqual(row[paper.EVIDENCE_ROLE_FIELD],
+                             paper.CONTROL_EVIDENCE_ROLE)
+            self.assertEqual(row[paper.AI_SELECTION_FIELD], "rejected")
+            self.assertEqual(bot.evidence_rows(), [])
+            self.assertEqual(len(bot.mechanical_evidence_rows()), 1)
+
+    def test_control_rows_do_not_contaminate_the_live_profitability_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            approved = self._row("2026-01-02", "APPROVED", "approved", 2.0, 1.5)
+            rejected = self._row("2026-01-02", "REJECTED", "rejected", -50.0, -50.5)
+            bot._evidence = {approved["id"]: approved, rejected["id"]: rejected}
+            bot.signal_log = [approved, rejected]
+            book = bot.daily_baskets("5")
+        self.assertEqual(book["logged_rows"], 1)
+        self.assertEqual(book["baskets"][0]["members"], 1)
+        self.assertEqual(book["baskets"][0]["net_pct"], 2.0)
+
+    def test_paired_forward_audit_can_measure_ai_lift_without_unlocking_trading(self):
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.extend((
+                    self._row(day, f"A{index}", "approved", 2.0, 1.5),
+                    self._row(day, f"R{index}", "rejected", -1.0, -1.5),
+                ))
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["status"], "AI_LIFT_PROMISING_NOT_VALIDATED")
+        self.assertEqual(audit["paired_days"], paper.AI_VALUE_MIN_PAIRED_DAYS)
+        self.assertEqual(audit["mean_ai_lift_pct"], 3.0)
+        self.assertFalse(audit["auto_trade_allowed"])
+
+    def test_mature_missing_control_blocks_a_positive_ai_claim(self):
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.extend((
+                    self._row(day, f"A{index}", "approved", 2.0, 1.5),
+                    self._row(day, f"R{index}", "rejected", -1.0, -1.5),
+                ))
+            stale_day = "2026-03-15"
+            rows.extend((
+                self._row(stale_day, "STALE-A", "approved", 2.0, 1.5),
+                self._row(stale_day, "STALE-R", "rejected", 0.0, 0.0,
+                          outcome=False),
+            ))
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            later_sessions = [date(2026, 3, 16) + timedelta(days=i)
+                              for i in range(20)]
+            with mock.patch.object(bot, "_recent_sessions",
+                                   return_value=later_sessions):
+                audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+        self.assertEqual(audit["stale_paired_days"], 1)
+        self.assertFalse(audit["auto_trade_allowed"])
+
+    def test_ai_failures_cannot_select_a_pretty_available_sample(self):
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.extend((
+                    self._row(day, f"A{index}", "approved", 2.0, 1.5),
+                    self._row(day, f"R{index}", "rejected", -1.0, -1.5),
+                ))
+            # 31 failures beside 120 classified rows puts coverage below 80%.
+            for index in range(31):
+                row = self._row(
+                    (start + timedelta(days=index)).isoformat(),
+                    f"U{index}", "unavailable", 0.0, 0.0, outcome=False)
+                rows.append(row)
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+        self.assertLess(audit["classification_coverage_pct"], 80.0)

@@ -22,6 +22,8 @@ decides whether the trade is even takeable.
 from __future__ import annotations
 
 import asyncio
+import glob
+import hashlib
 import json
 import math
 import os
@@ -32,6 +34,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import config
+import penny_quotes
 import pennystock_bot as research
 from research import penny_feasibility as feasibility
 
@@ -122,6 +125,128 @@ MISSING_OUTCOME_ASSUMPTION_PCT = -100.0
 # never quietly change a statistic.
 SIGNAL_ARCHIVE_PATH = os.path.join(config.DATA_DIR, "pennystock_signal_archive.jsonl")
 SIGNAL_ENGINE_VERSION = 6
+# The live verdict must contain only AI-approved signals, but the question "does the AI
+# add value?" requires the mechanically identical names it rejected.  Both cohorts are
+# recorded under one durable measurement path and separated by an explicit role.  Rows
+# written before this field existed are the original approved population and therefore
+# remain primary for backward compatibility.
+EVIDENCE_ROLE_FIELD = "evidence_role"
+PRIMARY_EVIDENCE_ROLE = "live_ai_approved"
+CONTROL_EVIDENCE_ROLE = "mechanical_ai_control"
+AI_SELECTION_FIELD = "ai_selection"
+AI_VALUE_MIN_PAIRED_DAYS = 60
+AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT = 80.0
+# A model/prompt selector is part of the tested rule.  Keep this separate from both the
+# mechanical engine and price-measurement schema so an AI-policy edit cannot pool its
+# outcomes with an older policy and call the mixture evidence.
+AI_DECISION_POLICY_VERSION = 1
+# The STRATEGY and the MEASUREMENT are versioned separately, on purpose. Repairing a
+# broken cost model must not restart the strategy's evidence clock, and bumping the
+# strategy must not silently re-bless outcomes computed under a cost model since found
+# wrong. Schema 0 is everything recorded before the entry basis was fixed: it measured
+# gross return from the last TRADE and then subtracted the entry-time spread once as a
+# supposed round trip, so a name quoted 1.00/1.20 that closed at 1.20 booked +1.82%
+# when the executable ask->bid round trip was -0.83%. Those outcomes are not evidence.
+# Schema 2 fixes the timing and validation of schema 1, which had ask-based arithmetic
+# but accepted a PRIOR session's book as a close, let an opening quote settle a closing
+# horizon, trusted a crossed book, resolved partial daily bars, and never checked the
+# entry feed at all. Schema 1 outcomes stay non-evidentiary however they were stamped.
+MEASUREMENT_SCHEMA_VERSION = 2
+# A long is bought at the ASK. Nothing else is an entry price - not the last trade, not
+# the mid. Rows without a usable ask cannot be measured executably at all.
+ENTRY_BASIS_FIELD = "entry_ask"
+# A daily bar is not final until the session ends and the provider publishes it.
+# Resolving against a still-forming bar records a "close" that was never the close.
+DAILY_BAR_PUBLICATION_DELAY_MIN = 20
+# How old an entry book may be at confirmation and still describe what a purchase would
+# have paid. A penny-stock book moves; two minutes is already generous.
+ENTRY_QUOTE_MAX_AGE_SEC = 120
+# Tolerance for ordinary clock skew between the venue and this machine. Beyond it, a
+# timestamp AHEAD of our receipt is a feed or clock fault, not a fresher quote.
+ENTRY_QUOTE_CLOCK_SKEW_SEC = 5
+# Closing books are chased on their own clock. Tying capture to the hourly outcome timer
+# meant a run at 15:54 and the next at 16:54 skipped the window completely.
+CLOSING_CAPTURE_LEAD_MIN = 15
+CLOSING_CAPTURE_RETRY_SEC = 45
+# A later session's book measures a different holding period. It is recorded under its
+# own key so it can never be pooled into the horizon it did not measure.
+DELAYED_EXIT_SUFFIX = "_delayed_exit"
+# How many sessions past the horizon a delayed exit will still be looked for.
+MAX_DELAYED_EXIT_SESSIONS = 3
+
+
+def _as_price(value) -> float | None:
+    """A price, or None. Zero and negative are absences, not prices."""
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if out > 0 else None
+
+
+def ai_decision_policy_id() -> str:
+    """Stable identity of the actual LLM selector used by this process.
+
+    A manual version is not enough: prompts and preferred/fallback models are easy to
+    edit without remembering a counter.  Hashing both makes a changed selector start a
+    new comparison population automatically rather than pool two policies.
+    """
+    payload = {
+        "version": AI_DECISION_POLICY_VERSION,
+        "system_prompt": research.SYSTEM_PROMPT,
+        "model_chain": list(research.AI_MODEL_CHAIN),
+        "preferred_model": getattr(config, "PENNY_AI_MODEL", None),
+        "require_ai_confirm": bool(research.REQUIRE_AI_CONFIRM),
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _as_pct(value) -> float | None:
+    """A percentage, or None. Unlike a price, zero is a legitimate value here."""
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if out >= 0 else None
+
+
+def minute_of(when: datetime) -> int:
+    """Minutes since midnight, market time."""
+    return when.hour * 60 + when.minute
+
+
+def _quote_is_two_sided(quote) -> bool:
+    """A real book: both sides present, and neither crossed nor locked.
+
+    bid 2.00 / ask 1.00 is not a wide quote, it is a broken one. Accepting it took the
+    bid as an exit price and called the result evidence.
+    """
+    if not isinstance(quote, dict):
+        return False
+    bid, ask = _as_price(quote.get("bid")), _as_price(quote.get("ask"))
+    return bid is not None and ask is not None and ask > bid
+
+
+def _quote_mid(bid, ask) -> float | None:
+    b, a = _as_price(bid), _as_price(ask)
+    if b is None or a is None or a < b:
+        return None
+    return (b + a) / 2
+
+
+def _half_spread_pct(bid, ask) -> float | None:
+    """Half the quoted spread, as a percentage of the mid.
+
+    ONE side of the round trip. A buy pays this above the mid and the eventual sell pays
+    it again below the exit mid - and it is that second leg the old measurement never
+    charged, because it subtracted the entry spread once and called the trip closed.
+    """
+    b, a = _as_price(bid), _as_price(ask)
+    mid = _quote_mid(bid, ask)
+    if mid is None or mid <= 0:
+        return None
+    return (a - b) / 2 / mid * 100
 
 
 @dataclass
@@ -194,10 +319,23 @@ class PennyStockPaperBot:
         # Separate from outbox_error: clearing a drained queue must not
         # also clear the record that evidence was quarantined.
         self.quarantine_error = ""
+        # Not an integrity failure, so it does not join archive_error: a missed exit
+        # book leaves the outcome non-evidentiary, which already blocks a verdict.
+        self.quote_capture_error = ""
+        self.calendar_error = ""
+        self._last_closing_capture = 0.0
+        # The record of when each session ended, stored apart from the quotes so a quote
+        # can never be the authority on when the exchange closed.
+        self._calendar_path = self.archive_path + ".calendar.json"
+        self._session_calendar: dict = {}
         self._archive_outbox: list[dict] = []
+        # Set when a quarantine move failed. The damaged outbox is then the only copy
+        # of those bytes, so the path is off limits for writing until it is aside.
+        self._outbox_write_blocked = False
         self._evidence: dict[str, dict] = {}
         self._was_market_open = False
         self._scan_lock = asyncio.Lock()
+        self._load_session_calendar()
         self._load_outbox()
         self._load()
 
@@ -429,7 +567,14 @@ class PennyStockPaperBot:
         for b in board:
             ticker = b["ticker"]
             sig = b.get("signal") or {}
-            candidate = sig.get("candidate_action") in ("BUY", "STRONG BUY")
+            # Confirmation belongs to the pre-AI mechanical opportunity set.  Using
+            # the post-AI action made every veto disappear before it could become a
+            # measured control.  The approved path is unchanged; rejected names are
+            # confirmed only for research and can never reach _open().
+            mechanical_action = (sig.get("mechanical_action")
+                                 or sig.get("candidate_action") or "")
+            candidate = mechanical_action in ("BUY", "STRONG BUY")
+            live_candidate = sig.get("candidate_action") in ("BUY", "STRONG BUY")
             executable_observation = bool(
                 b.get("quote_reliable")
                 and str(b.get("market_state") or "").upper() == "REGULAR"
@@ -477,6 +622,7 @@ class PennyStockPaperBot:
                 "first_seen": first_seen, "last_seen": now,
                 "first_price": first_price, "last_price": price,
                 "catalyst_key": catalyst_key,
+                "mechanical_action": mechanical_action,
                 "candidate_action": sig.get("candidate_action"),
                 "executable_observation": executable_observation,
                 "reset_reason": reset_reason,
@@ -493,7 +639,7 @@ class PennyStockPaperBot:
             b["confirmation"] = confirmation
             sig["confirmed"] = confirmed
             sig["confirmation_observations"] = hits
-            if candidate and not confirmed:
+            if candidate and not confirmed and live_candidate:
                 if not executable_observation:
                     sig["why"] = (
                         "research candidate only; waiting for a fresh, plausible "
@@ -681,6 +827,201 @@ class PennyStockPaperBot:
             return None
         return round((bench_close[future[horizon - 1]] / start - 1) * 100, 4)
 
+    # ---------------- execution-realistic measurement ----------------
+    @staticmethod
+    def entry_basis(item: dict) -> float | None:
+        """What a long actually pays: the ASK at signal time.
+
+        Never the last trade and never the mid. Legacy rows predate entry_ask but did
+        record the raw book, so the ask is reconstructed rather than the row discarded.
+        A row with no ask at all cannot be measured executably and must not be guessed.
+        """
+        return _as_price(item.get(ENTRY_BASIS_FIELD)) or _as_price(item.get("ask"))
+
+    @staticmethod
+    def _entry_half_spread_pct(item: dict) -> float | None:
+        seen = _as_pct(item.get("entry_half_spread_pct"))
+        if seen is not None:
+            return seen
+        return _half_spread_pct(item.get("entry_bid") or item.get("bid"),
+                                item.get("entry_ask") or item.get("ask"))
+
+    @classmethod
+    def modeled_exit_cost_pct(cls, item: dict) -> float | None:
+        """A deliberately conservative stand-in for the unobserved exit half-spread.
+
+        This is NOT calibrated. Nothing here has been checked against a real exit book,
+        which is exactly why every outcome that uses it is stamped
+        ``cost_evidentiary: false`` and cannot support a positive verdict. Two floors,
+        whichever is worse: the entry half-spread (a penny name's book does not reliably
+        tighten by the time you want out) and half the modeled round trip. With neither
+        available the exit cannot be bounded at all, and None means do not measure.
+        """
+        floors = []
+        entry_half = cls._entry_half_spread_pct(item)
+        if entry_half is not None:
+            floors.append(entry_half)
+        round_trip = _as_pct(item.get(SIGNAL_COST_FIELD))
+        if round_trip is not None:
+            floors.append(round_trip / 2.0)
+        return max(floors) if floors else None
+
+    @staticmethod
+    def _closing_observation(item: dict, day: str,
+                            schedule: dict | None = None) -> dict | None:
+        """The book at the CLOSE of one exact session, or None.
+
+        Every clause here is load-bearing:
+          * the EXACT session - a prior session's book is another day's price, and
+            allowing a one-session tolerance let a Jan-8 quote settle a Jan-9 horizon;
+          * the session its EXCHANGE stamp states, never the stored label, so a stale
+            book cannot be relabelled into the day it is wanted for;
+          * inside the closing window - an opening or midday quote is not a close, and
+            comparing one against a daily bar measures two different moments;
+          * a venue feed and a two-sided book, re-checked here rather than trusted from
+            whatever happened to reach the archive.
+        """
+        # The close comes from the independently stored exchange calendar, NEVER from
+        # the quote. A quote carrying its own session_close_minute could certify itself:
+        # an 11:00 book declaring an 11:00 close became an evidentiary closing quote.
+        close_minute = (schedule or {}).get("close_minute")
+        if close_minute is None:
+            return None
+        close_minute = int(close_minute)
+        best, best_gap = None, None
+        for obs in (item.get("quote_observations") or []):
+            if not _quote_is_two_sided(obs):
+                continue
+            if not penny_quotes.is_execution_feed(obs.get("feed")):
+                continue
+            if penny_quotes.session_date(obs.get("at")) != day:
+                continue
+            if not penny_quotes.in_closing_window(obs.get("at"), close_minute):
+                continue
+            minute = penny_quotes.session_minute(obs.get("at"))
+            gap = abs(minute - close_minute)
+            if best_gap is None or gap < best_gap:
+                best, best_gap = obs, gap
+        return best
+
+    @classmethod
+    def _delayed_closing_observation(cls, item: dict, horizon_day: str,
+                                     sessions: list[str],
+                                     schedules=None) -> tuple[dict, str, int] | None:
+        """The earliest closing book AFTER the horizon, with how late it is.
+
+        A later book is a real observation of a different holding period. It is returned
+        separately so it can be recorded under its own horizon key instead of quietly
+        standing in for the one that was actually missed.
+        """
+        if horizon_day not in sessions:
+            return None
+        start = sessions.index(horizon_day)
+        for offset in range(1, MAX_DELAYED_EXIT_SESSIONS + 1):
+            if start + offset >= len(sessions):
+                break
+            day = sessions[start + offset]
+            schedule = schedules(day) if schedules else None
+            seen = cls._closing_observation(item, day, schedule)
+            if seen and (schedule or {}).get("evidentiary"):
+                return seen, day, offset
+        return None
+
+    @classmethod
+    def exit_leg(cls, item: dict, horizon_day: str, end_close: float,
+                 sessions: list[str], schedule: dict | None = None) -> dict | None:
+        """The sell side, measured as its own leg.
+
+        The old model observed neither side: it ran the last TRADE to a future close and
+        subtracted the entry-time spread once, as though the whole round trip had been
+        paid on the way in. Selling costs again, against a book nobody had looked at.
+        """
+        seen = cls._closing_observation(item, horizon_day, schedule)
+        # A guessed schedule may still drive capture, but it cannot certify that a quote
+        # was taken at the close - so an outcome resting on one is not evidence.
+        if seen and (schedule or {}).get("evidentiary"):
+            bid = _as_price(seen.get("bid"))
+            half = _half_spread_pct(seen.get("bid"), seen.get("ask"))
+            # Fail closed independently of whatever validation the record passed to get
+            # here: a price with no computable spread is not an observed round trip.
+            if bid is not None and half is not None:
+                return {"exit_price": bid,
+                        "exit_basis": "observed_bid",
+                        "exit_cost_pct": half,
+                        "exit_quote_at": seen.get("at"),
+                        "exit_session": horizon_day,
+                        "exit_quote_source": seen.get("source") or "",
+                        "exit_quote_feed": seen.get("feed") or "",
+                        "cost_evidentiary": True}
+        bound = cls.modeled_exit_cost_pct(item)
+        if bound is None:
+            return None
+        # Round the bound UP. A cost that exists to be conservative must never be
+        # softened by display rounding, however slightly.
+        bound = math.ceil(bound * 10_000) / 10_000
+        return {"exit_price": end_close * (1 - bound / 100.0),
+                "exit_basis": "modeled_bound_on_close",
+                "exit_cost_pct": bound,
+                "exit_quote_at": None,
+                "exit_session": horizon_day,
+                "exit_quote_source": "",
+                "exit_quote_feed": "",
+                "cost_evidentiary": False}
+
+    @staticmethod
+    def entry_is_evidentiary(item: dict) -> bool:
+        """Whether the ENTRY book is one a purchase could have been made against.
+
+        Yahoo's quote is not: this codebase's own comments call it "not an execution
+        feed", and its freshness is derived from the last TRADE timestamp rather than
+        the bid/ask, so it cannot establish what a buy would have paid. Validating only
+        the exit leg let a Yahoo entry and an Alpaca exit combine into "evidence".
+
+        Re-derived from the stored row rather than trusting the flag written at capture,
+        so a row that was mis-stamped - or written by an older, laxer version - cannot
+        carry a stale book into a verdict.
+        """
+        return PennyStockPaperBot._entry_quote_usable(
+            {"bid": item.get("entry_bid"), "ask": item.get("entry_ask"),
+             "feed": item.get("entry_quote_feed"),
+             "at": item.get("entry_quote_captured_at")},
+            str(item.get(SIGNAL_DAY_FIELD) or ""),
+            item.get("entry_quote_received_at"))
+
+    @staticmethod
+    def outcome_is_evidentiary(outcome: dict) -> bool:
+        """Whether one horizon outcome may support a positive verdict.
+
+        BOTH legs, under the current schema. A round trip with one observed side is not
+        an observed round trip. Schema 1 stamped a single ``cost_evidentiary`` from the
+        exit alone, while accepting a prior session's book as a close and a crossed book
+        as a quote - so nothing it produced qualifies here, however it was stamped.
+        """
+        return (isinstance(outcome, dict)
+                and int(outcome.get("measurement_schema") or 0) == MEASUREMENT_SCHEMA_VERSION
+                and bool(outcome.get("entry_cost_evidentiary"))
+                and bool(outcome.get("exit_cost_evidentiary")))
+
+    @staticmethod
+    def completed_sessions(dates: list[str], now_ny: datetime | None = None) -> int:
+        """How many leading daily bars are final and safe to resolve against.
+
+        Today's bar is still forming until the close, and the provider needs a few
+        minutes after it to publish. Resolving a horizon against a partial bar writes a
+        "close" that was never the close - permanently, because outcomes are immutable.
+        """
+        now = now_ny or datetime.now(NY)
+        today = now.strftime("%Y-%m-%d")
+        settled = (now.hour * 60 + now.minute
+                   >= penny_quotes.MARKET_CLOSE_MINUTE + DAILY_BAR_PUBLICATION_DELAY_MIN)
+        keep = 0
+        for day in dates:
+            if day < today or (day == today and settled):
+                keep += 1
+            else:
+                break
+        return keep
+
     @property
     def archive_error(self) -> str:
         return "; ".join(x for x in (self.archive_integrity_error,
@@ -712,6 +1053,21 @@ class PennyStockPaperBot:
         if kind == "outcome":
             return (str(event.get("horizon") or "").strip() != ""
                     and isinstance(event.get("outcome"), dict))
+        if kind == "quote":
+            # A crossed or locked book is not a quote, however well formed the record
+            # is: bid 2.00 / ask 1.00 passed here and was taken as an exit price.
+            if not _quote_is_two_sided(event):
+                return False
+            # The session a quote belongs to is the one its EXCHANGE stamp says, and the
+            # label has to agree. A stale book relabelled as today is fabricated
+            # evidence, and it also convinces the capture that today is already done.
+            stamped = penny_quotes.session_date(event.get("at"))
+            if stamped is None or stamped != str(event.get("session_day") or "").strip():
+                return False
+            # Feed identity is required, not decorative. An IEX book is one venue and a
+            # SIP book is the consolidated tape; pooling them measures neither, and an
+            # unrecognised feed cannot be separated from either later.
+            return penny_quotes.is_known_feed(event.get("feed"))
         return False
 
     @classmethod
@@ -735,6 +1091,16 @@ class PennyStockPaperBot:
             row.setdefault("outcomes", {})[str(event.get("horizon"))] = (
                 event.get("outcome") or {})
             row["resolved"] = bool(event.get("resolved"))
+            return True
+        if kind == "quote":
+            seen = row.setdefault("quote_observations", [])
+            stamp = str(event.get("at") or "")
+            # Keyed by the exchange's own timestamp so a replayed or retried event
+            # cannot turn one observation of the book into two.
+            if not any(str(o.get("at") or "") == stamp for o in seen):
+                seen.append({k: v for k, v in event.items()
+                             if k not in ("event", "id")})
+                seen.sort(key=lambda o: str(o.get("at") or ""))
             return True
         return False
 
@@ -792,9 +1158,32 @@ class PennyStockPaperBot:
         """
         if not self._archive_outbox:
             return True
+        if not self._outbox_path_writable():
+            # The preserved outbox still holds these very events, so a drain could not
+            # be recorded: the next start would salvage and append them a second time.
+            self.archive_write_error = (
+                f"{len(self._archive_outbox)} event(s) held; the outbox file is "
+                f"quarantined in place and the queue cannot be retired")
+            return False
         if not self._repair_torn_tail():
             return False
         pending = list(self._archive_outbox)
+        unusable = self._unusable_pending(pending)
+        if unusable:
+            if not self._quarantine_events(unusable,
+                                           "no preceding signal, or not a valid event"):
+                # Nothing about the quarantine reached disk, so retiring these events
+                # would erase them and the block together. Hold the whole queue.
+                self.archive_write_error = (
+                    f"{len(unusable)} unusable event(s) could not be quarantined; "
+                    f"{len(pending)} event(s) held and nothing was appended")
+                return False
+            drop = {id(x) for x in unusable}
+            pending = [x for x in pending if id(x) not in drop]
+            self._archive_outbox = list(pending)
+            if not pending:
+                self._persist_outbox()
+                return False
         try:
             os.makedirs(os.path.dirname(self.archive_path) or ".", exist_ok=True)
             with open(self.archive_path, "a", encoding="utf-8") as f:
@@ -814,6 +1203,133 @@ class PennyStockPaperBot:
         self.archive_write_error = ""
         return True
 
+    # ---------------- quarantine bookkeeping ----------------
+    def _quarantine_artifacts(self) -> list[str]:
+        """Every quarantined-evidence file on disk, marker or no marker."""
+        return sorted(glob.glob(
+            glob.escape(self.archive_path + ".outbox") + ".corrupt.*"))
+
+    def _record_quarantine(self, entry: dict) -> bool:
+        """Add one line to the marker as a whole, fsynced file.
+
+        Appending in place could leave a half-written line behind a crash, and an
+        unreadable marker is indistinguishable from an absent one. Returns whether it
+        reached disk: the artifact scan is the independent second record, so a failed
+        marker write no longer erases the block.
+        """
+        try:
+            lines: list[str] = []
+            if os.path.exists(self._quarantine_marker):
+                with open(self._quarantine_marker, encoding="utf-8") as f:
+                    lines = [x for x in f.read().splitlines() if x.strip()]
+            lines.append(json.dumps(entry, default=str))
+            tmp = self._quarantine_marker + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self._quarantine_marker)
+            return True
+        except OSError:
+            return False
+
+    def _note_existing_quarantine(self) -> None:
+        """Block on EITHER record of a past quarantine, independently.
+
+        Startup used to consult only the marker. A failed marker write therefore made
+        the whole quarantine disappear on the next run while the damaged evidence sat
+        on disk untouched, and collection resumed as if nothing had happened.
+        """
+        artifacts = self._quarantine_artifacts()
+        marked = os.path.exists(self._quarantine_marker)
+        if not artifacts and not marked:
+            return
+        entries: list[str] = []
+        if marked:
+            try:
+                with open(self._quarantine_marker, encoding="utf-8") as f:
+                    entries = [x for x in f.read().splitlines() if x.strip()]
+            except OSError:
+                entries = []
+        count = max(len(entries), len(artifacts), 1)
+        self.quarantine_error = (
+            f"{count} unresolved outbox quarantine(s); evidence is incomplete until "
+            f"{os.path.basename(self._quarantine_marker)} and every "
+            f"{os.path.basename(self.archive_path)}.outbox.corrupt.* are cleared")
+
+    def _quarantine_events(self, events: list[dict], why: str) -> bool:
+        """Set unusable queued events aside on disk - never on the archive - and block.
+
+        The artifact is named like an outbox quarantine on purpose, so the startup scan
+        finds it and the block survives a restart even if the marker cannot be written.
+
+        Returns whether either record reached disk. With neither, dropping these events
+        from the queue would erase the evidence AND the block together - the exact
+        failure this quarantine exists to prevent - so the caller must keep holding them.
+        """
+        stamp = str(int(time.time() * 1000))
+        target = f"{self.archive_path}.outbox.corrupt.{stamp}"
+        written = False
+        try:
+            with open(target, "w", encoding="utf-8") as f:
+                for row in events:
+                    f.write(json.dumps(row, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            written = True
+        except OSError:
+            pass
+        marked = self._record_quarantine(
+            {"at": stamp, "bad_events": len(events), "why": why,
+             "quarantined_to": os.path.basename(target) if written else None})
+        self.quarantine_error = (
+            f"{len(events)} queued event(s) quarantined ({why}); "
+            + (f"held in {os.path.basename(target)}" if written
+               else "they could not be written to disk and are still queued")
+            + " - evidence incomplete until resolved")
+        return written or marked
+
+    def _outbox_path_writable(self) -> bool:
+        """Whether the outbox file may be written, retrying a failed quarantine move.
+
+        A failed move leaves the damaged file as the ONLY copy of the corrupt bytes -
+        and of the salvage still inside it. Writing the path would destroy both, so it
+        stays blocked until the move finally succeeds.
+        """
+        if not self._outbox_write_blocked:
+            return True
+        path = self.archive_path + ".outbox"
+        if not os.path.exists(path):
+            self._outbox_write_blocked = False
+            return True
+        stamp = str(int(time.time() * 1000))
+        target = f"{path}.corrupt.{stamp}"
+        try:
+            os.replace(path, target)
+        except OSError:
+            return False
+        self._record_quarantine({"at": stamp, "bad_events": None,
+                                 "why": "deferred quarantine move succeeded",
+                                 "quarantined_to": os.path.basename(target)})
+        self._outbox_write_blocked = False
+        return True
+
+    def _unusable_pending(self, pending: list[dict]) -> list[dict]:
+        """The events in a batch that must not be appended.
+
+        Shape is not enough. A correctly formed outcome whose signal was never recorded
+        cannot be folded, so appending it writes an orphan that only the NEXT restart
+        discovers. The batch is folded through the real reducer against a probe store
+        first - keys only, so there is neither a deep copy of the evidence nor a second
+        copy of the ordering rule to drift from it.
+        """
+        probe: dict[str, dict] = {sid: {} for sid in self._evidence}
+        bad = []
+        for event in pending:
+            if not self.valid_event(event) or not self._fold_evidence_event(probe, event):
+                bad.append(event)
+        return bad
+
     def _persist_outbox(self) -> bool:
         """Write the pending queue atomically so an outage cannot lose it on restart.
 
@@ -822,6 +1338,12 @@ class PennyStockPaperBot:
         what swallowing this exception did.
         """
         path = self.archive_path + ".outbox"
+        if not self._outbox_path_writable():
+            self.outbox_error = (
+                f"{len(self._archive_outbox)} event(s) held in memory only - the outbox "
+                f"file still holds unquarantined corrupt evidence and must not be "
+                f"overwritten")
+            return False
         try:
             if not self._archive_outbox:
                 if os.path.exists(path):
@@ -845,16 +1367,9 @@ class PennyStockPaperBot:
 
     def _load_outbox(self) -> None:
         """Restore any queue left behind by a failed write in a previous run."""
-        # An unresolved quarantine keeps blocking regardless of the current outbox.
-        if os.path.exists(self._quarantine_marker):
-            try:
-                with open(self._quarantine_marker, encoding="utf-8") as f:
-                    entries = [x for x in f.read().splitlines() if x.strip()]
-            except OSError:
-                entries = []
-            self.quarantine_error = (
-                f"{len(entries) or 1} unresolved outbox quarantine(s); evidence is "
-                f"incomplete until {os.path.basename(self._quarantine_marker)} is cleared")
+        # An unresolved quarantine keeps blocking regardless of the current outbox, and
+        # the marker is only one of its two independent records.
+        self._note_existing_quarantine()
         path = self.archive_path + ".outbox"
         if not os.path.exists(path):
             return
@@ -890,20 +1405,26 @@ class PennyStockPaperBot:
                 moved = True
             except OSError:
                 pass
-            try:
-                with open(self._quarantine_marker, "a", encoding="utf-8") as f:
-                    f.write(json.dumps({"at": stamp, "bad_events": bad,
-                                        "quarantined_to": os.path.basename(target)
-                                        if moved else None}) + chr(10))
-            except OSError:
-                pass
-            # Salvaged events are written back only AFTER the damaged file has moved,
-            # so they land in a fresh outbox rather than being erased with it.
-            self._persist_outbox()
+            self._record_quarantine({"at": stamp, "bad_events": bad,
+                                     "why": "unusable record(s) in the outbox",
+                                     "quarantined_to": os.path.basename(target)
+                                     if moved else None})
+            if moved:
+                # Salvaged events are written back only AFTER the damaged file has
+                # moved, so they land in a fresh outbox rather than being erased with it.
+                self._persist_outbox()
+            else:
+                # The damaged file is still the only copy of the corrupt bytes AND of
+                # the salvage inside it. _persist_outbox would have overwritten it with
+                # the salvage alone - or removed it outright when nothing was salvaged -
+                # so the reported "left in place" was false. Leave the path untouched
+                # and hold the salvage in memory until the move succeeds.
+                self._outbox_write_blocked = True
             self.quarantine_error = (
                 f"outbox had {bad} unusable event(s); "
                 + (f"quarantined to {os.path.basename(target)}" if moved
-                   else "quarantine move FAILED, damaged file left in place")
+                   else "quarantine move FAILED, damaged file preserved in place and "
+                        "held out of the archive")
                 + " - evidence incomplete until resolved")
         elif restored:
             self.outbox_error = (f"{len(restored)} archived event(s) awaiting retry "
@@ -919,6 +1440,43 @@ class PennyStockPaperBot:
         """
         event = {"event": kind, **payload}
         pending = list(self._archive_outbox) + [event]
+        # Validate BEFORE any file write. This path trusted its own callers, so a thin
+        # internally generated record was appended, reported as a success, and only
+        # found on the next restart - by which point the archive was already corrupt.
+        unusable = self._unusable_pending(pending)
+        if any(x is event for x in unusable):
+            # Our own output is a bug, not evidence: fail closed and queue nothing.
+            self.archive_write_error = (
+                f"refused to archive an invalid {kind} event "
+                f"(id {str(payload.get('id') or '')!r}): it is malformed or has no "
+                f"preceding signal; nothing was written")
+            return False
+        # A quarantined-in-place outbox blocks the archive too, and the check belongs
+        # BEFORE the tail repair and the append: while the damaged file is still the
+        # only copy of the queue, nothing may touch the archive and nothing may be
+        # retired from that queue. Hold the new event with the rest and say so.
+        if not self._outbox_path_writable():
+            self._archive_outbox = pending
+            # sets the memory-only error; writes nothing while the path is blocked
+            self._persist_outbox()
+            # archive_write_error is deliberately left alone: a prior append failure is
+            # still true, and clearing it here would report a write that never happened.
+            return False
+        if unusable:
+            if not self._quarantine_events(unusable,
+                                           "no preceding signal, or not a valid event"):
+                # See _flush_archive_outbox: an unrecorded quarantine may not retire
+                # anything, or the queue and the block vanish together.
+                self._archive_outbox = pending
+                self._persist_outbox()
+                self.archive_write_error = (
+                    f"{len(unusable)} unusable event(s) could not be quarantined; "
+                    f"{len(pending)} event(s) held and nothing was appended")
+                return False
+            drop = {id(x) for x in unusable}
+            pending = [x for x in pending if id(x) not in drop]
+            self._archive_outbox = [x for x in self._archive_outbox
+                                    if id(x) not in drop]
         if not self._repair_torn_tail():
             # Appending onto an unterminated fragment concatenates the next event into
             # it, so BOTH are unreadable on replay - the tear silently eats the next
@@ -1028,7 +1586,22 @@ class PennyStockPaperBot:
         rows = list(self._evidence.values()) if self._evidence else list(self.signal_log)
         return [x for x in rows
                 if x.get("engine_version") == SIGNAL_ENGINE_VERSION
-                and x.get(SIGNAL_DAY_FIELD)]
+                and x.get(SIGNAL_DAY_FIELD)
+                and x.get(EVIDENCE_ROLE_FIELD, PRIMARY_EVIDENCE_ROLE)
+                == PRIMARY_EVIDENCE_ROLE]
+
+    def mechanical_evidence_rows(self) -> list[dict]:
+        """All pre-AI eligible rows, including the non-trading AI control group.
+
+        This is deliberately separate from ``evidence_rows``: adding a control row must
+        never change the live strategy's forward mean, evidence clock, or gate.
+        """
+        rows = list(self._evidence.values()) if self._evidence else list(self.signal_log)
+        return [x for x in rows
+                if x.get("engine_version") == SIGNAL_ENGINE_VERSION
+                and x.get(SIGNAL_DAY_FIELD)
+                and x.get(EVIDENCE_ROLE_FIELD, PRIMARY_EVIDENCE_ROLE)
+                in (PRIMARY_EVIDENCE_ROLE, CONTROL_EVIDENCE_ROLE)]
 
     def _proxy_cost_share(self, admitted_days: set[str]) -> float:
         """Share of admitted rows whose cost was an ADV proxy rather than a real quote.
@@ -1100,6 +1673,7 @@ class PennyStockPaperBot:
         complete: list[dict] = []
         pending_days, stale_days = 0, 0
         pending_rows, stale_rows = 0, 0
+        modeled_days, modeled_rows = 0, 0
         stale_detail: list[dict] = []
         for day in sorted(by_day):
             rows = by_day[day]
@@ -1138,6 +1712,12 @@ class PennyStockPaperBot:
                 continue
             nets = [float(o["net_return_pct"]) for o in resolved]
             excess = [o.get("net_excess_return_pct") for o in resolved]
+            # An outcome whose exit leg was never observed rests on an uncalibrated
+            # bound. It can be reported, but it cannot support a positive verdict.
+            modeled = [o for o in resolved if not self.outcome_is_evidentiary(o)]
+            if modeled:
+                modeled_days += 1
+                modeled_rows += len(modeled)
             complete.append({
                 "day": day,
                 "members": len(rows),
@@ -1145,6 +1725,8 @@ class PennyStockPaperBot:
                 # benchmarked only when EVERY member has a benchmark, for the same reason
                 "excess_pct": (sum(float(e) for e in excess) / len(excess)
                                if all(e is not None for e in excess) else None),
+                "cost_modeled_members": len(modeled),
+                "cost_evidentiary": not modeled,
             })
         return {
             "horizon": str(horizon),
@@ -1162,6 +1744,10 @@ class PennyStockPaperBot:
             "incomplete_days": pending_days + stale_days,
             "unresolved_rows": pending_rows + stale_rows,
             "mature_after_sessions": mature_after,
+            # Baskets resting on a modeled exit cost rather than an observed exit book.
+            # Reportable, never sufficient for a positive verdict.
+            "cost_modeled_days": modeled_days,
+            "cost_modeled_rows": modeled_rows,
         }
 
     def missing_outcome_bound(self, horizon: str = "5") -> dict:
@@ -1438,6 +2024,17 @@ class PennyStockPaperBot:
                 "market_state": d.market_state,
                 "bid": round(d.bid, 4), "ask": round(d.ask, 4),
                 "quote_age_min": round(d.quote_age_min, 2),
+                # Kept with the signal so the ADV proxy can later be scored against the
+                # book that was actually observed, rather than re-derived from data that
+                # has since moved.
+                "dollar_volume": round(d.avg_volume * d.price, 2),
+                "adv_proxy_pct": round(research.adv_spread_proxy(d), 4),
+                # quote_type is the SECURITY type ("EQUITY"), not the data source. It
+                # was recorded as the provenance of the quote, which made every entry
+                # book claim to have come from a feed called EQUITY.
+                "quote_source": "yfinance",
+                "quote_feed": "yfinance",
+                "quote_instrument_type": d.quote_type,
                 "volume_surge": round(d.volume_surge, 2),
                 "composite": r["composite"], "hype": r["hype"],
                 "technical": r["technical"], "catalyst": r["catalyst"],
@@ -1477,6 +2074,8 @@ class PennyStockPaperBot:
         self.scan_failures = 0
         self.provider_backoff_until = 0.0
         self.last_error = ""
+        # The entry book has to be taken at confirmation; it cannot be fetched later.
+        await self._capture_entry_quotes(board)
         self._record_signals(board)
 
         # ---- 3) trade every actionable name we can ----
@@ -1526,26 +2125,134 @@ class PennyStockPaperBot:
         self.provider_backoff_until = now + delay
         self.status = f"provider backoff {int(delay // 60)}m"
 
+    @staticmethod
+    def _entry_quote_usable(venue: dict, signal_day: str, received_at: str) -> bool:
+        """Whether a venue book describes what a purchase would have paid, right then.
+
+        A regular-session CLOCK TIME was the only test, so a book from a previous
+        session at 10:15 passed and became an evidentiary entry. All four conditions
+        matter: a real two-sided venue book, stamped for THIS signal's session, inside
+        the regular session, and actually fresh at the moment we received it - neither
+        stale nor stamped in the future.
+        """
+        if not _quote_is_two_sided(venue):
+            return False
+        if not penny_quotes.is_execution_feed(venue.get("feed")):
+            return False
+        stamp = venue.get("at")
+        if penny_quotes.session_date(stamp) != str(signal_day or ""):
+            return False
+        if not penny_quotes.in_regular_session(stamp):
+            return False
+        age = penny_quotes.age_seconds(stamp, received_at)
+        if age is None:
+            return False
+        return -ENTRY_QUOTE_CLOCK_SKEW_SEC <= age <= ENTRY_QUOTE_MAX_AGE_SEC
+
+    @staticmethod
+    def _entry_book(b: dict, now: float) -> dict:
+        """The entry side of the measurement, preferring a venue book over Yahoo's.
+
+        Yahoo's quote establishes the ADMISSION decision and that is unchanged. It
+        cannot establish what a purchase would have PAID: the codebase's own comments
+        call it "not an execution feed", and its freshness is derived from the last
+        trade timestamp, not the bid/ask. When Alpaca has given us a real book at
+        confirmation the row is measured against it; otherwise the row is still
+        recorded, it is simply not evidence.
+        """
+        venue = b.get("entry_quote") or {}
+        # Local receipt time, stored alongside the exchange stamp. Freshness is the gap
+        # between the two; with only one of them there is nothing to measure it against.
+        received_at = (venue.get("received_at")
+                       or datetime.fromtimestamp(now, timezone.utc).isoformat())
+        signal_day = datetime.fromtimestamp(now, NY).strftime("%Y-%m-%d")
+        usable = PennyStockPaperBot._entry_quote_usable(venue, signal_day, received_at)
+        bid = venue.get("bid") if usable else b.get("bid")
+        ask = venue.get("ask") if usable else b.get("ask")
+        return {
+            "entry_bid": _as_price(bid),
+            "entry_ask": _as_price(ask),
+            "entry_quote_mid": _quote_mid(bid, ask),
+            "entry_half_spread_pct": _half_spread_pct(bid, ask),
+            "entry_quote_source": (venue.get("source") or "alpaca") if usable else "yfinance",
+            "entry_quote_feed": (venue.get("feed") or "") if usable else "yfinance",
+            # the exchange's own stamp, never our clock
+            "entry_quote_captured_at": (
+                venue.get("at") if usable
+                else datetime.fromtimestamp(now, timezone.utc).isoformat()),
+            "entry_quote_received_at": received_at,
+            "entry_quote_age_sec": (penny_quotes.age_seconds(venue.get("at"), received_at)
+                                    if usable else None),
+            "entry_quote_is_consolidated": bool(venue.get("is_consolidated")) if usable else False,
+            "entry_quote_age_min": b.get("quote_age_min"),
+            "entry_cost_evidentiary": usable,
+        }
+
+    async def _capture_entry_quotes(self, board) -> None:
+        """Attach a venue book to every name about to be recorded as a signal.
+
+        Runs at confirmation, because the entry book cannot be fetched afterwards any
+        more than the exit one can. Names with no venue book are recorded anyway - with
+        entry_cost_evidentiary false, which keeps them out of a positive verdict rather
+        than out of the archive.
+        """
+        wanted = [b for b in board
+                  if b.get("quote_reliable")
+                  and str(b.get("market_state") or "").upper() == "REGULAR"
+                  and not b.get("spread_estimated")
+                  and b.get("ticker")]
+        if not wanted or not penny_quotes.configured():
+            return
+        quotes, error = await penny_quotes.latest_quotes([b["ticker"] for b in wanted])
+        received_at = datetime.now(timezone.utc).isoformat()
+        for b in wanted:
+            seen = quotes.get(str(b["ticker"]).upper())
+            if seen:
+                # Stamp receipt here, next to the fetch. Freshness is the gap between
+                # the exchange's time and ours, and it cannot be reconstructed later.
+                b["entry_quote"] = {**seen, "received_at": received_at}
+        if error:
+            self.quote_capture_error = f"entry quote capture: {error}"
+
     def _record_signals(self, board):
-        """Log every actionable signal with the price at the time, so we can later
-        MEASURE whether these calls beat random instead of assuming they do."""
+        """Log the whole confirmed pre-AI opportunity set.
+
+        Approved rows remain the only live-rule evidence.  AI WATCH/AVOID rows are a
+        non-trading control measured with the exact same entry, exit and archive code.
+        Otherwise the model selects the sample and its rejected counterfactual vanishes,
+        making its incremental value impossible to test.
+        """
         now = time.time()
         signal_day = datetime.fromtimestamp(now, NY).strftime("%Y-%m-%d")
         for b in board:
             act = b["signal"]["action"]
             candidate_action = b["signal"].get("candidate_action", act)
+            mechanical_action = (b["signal"].get("mechanical_action")
+                                 or candidate_action)
             confirmed = bool((b.get("confirmation") or {}).get("confirmed"))
             executable_snapshot = bool(
                 b.get("quote_reliable")
                 and str(b.get("market_state") or "").upper() == "REGULAR"
                 and not b.get("spread_estimated")
             )
-            if candidate_action in ("BUY", "STRONG BUY") and confirmed and executable_snapshot:
+            if mechanical_action in ("BUY", "STRONG BUY") and confirmed and executable_snapshot:
                 # One observation per ticker/session. Repeated adaptive scans are
                 # correlated duplicates, not independent evidence of accuracy.
                 if any(x.get("ticker") == b["ticker"] and x.get(SIGNAL_DAY_FIELD) == signal_day
                        for x in self.signal_log):
                     continue
+                ai = b.get("ai") or {}
+                verdict = str(ai.get("verdict") or "").upper()
+                # signal_from() is the authoritative pre-policy selector. Repeating
+                # the verdict rule here would create two AI gates that could drift.
+                ai_approved = candidate_action in ("BUY", "STRONG BUY")
+                ai_selection = (
+                    "approved" if ai_approved
+                    else "rejected" if verdict in ("WATCH", "AVOID")
+                    else "unavailable"
+                )
+                evidence_role = (PRIMARY_EVIDENCE_ROLE if ai_approved
+                                 else CONTROL_EVIDENCE_ROLE)
                 self.signal_log = self._retained_signals()
                 self.signal_log.insert(0, {
                     "id": uuid.uuid4().hex[:10], "t": now, SIGNAL_DAY_FIELD: signal_day,
@@ -1554,11 +2261,25 @@ class PennyStockPaperBot:
                     "strategy_id": research.LIVE_STRATEGY_ID,
                     "ticker": b["ticker"], "action": act,
                     "candidate_action": candidate_action,
+                    "mechanical_action": mechanical_action,
+                    EVIDENCE_ROLE_FIELD: evidence_role,
+                    AI_SELECTION_FIELD: ai_selection,
+                    "ai_policy_version": AI_DECISION_POLICY_VERSION,
+                    "ai_policy_id": ai_decision_policy_id(),
                     "confirmed": True,
                     "confirmation_observations": (b.get("confirmation") or {}).get("observations"),
                     "executed": act in ("BUY", "STRONG BUY"),
                     "rank": b["rank"], "price": b["price"],
-                    "decision_mid": b["price"],
+                    # The measured entry basis, stored apart from every display field.
+                    # "price" and "decision_mid" both used to hold Yahoo's last TRADE,
+                    # and the outcome math then treated that as the purchase price - so
+                    # half the real cost was never charged and "mid" was not a mid.
+                    "measurement_schema": MEASUREMENT_SCHEMA_VERSION,
+                    "entry_last_trade": _as_price(b.get("price")),
+                    **self._entry_book(b, now),
+                    "dollar_volume": b.get("dollar_volume"),
+                    "adv_proxy_pct": b.get("adv_proxy_pct"),
+                    "decision_mid": _quote_mid(b.get("bid"), b.get("ask")),
                     "bid": b.get("bid"), "ask": b.get("ask"),
                     "quote_age_min": b.get("quote_age_min"),
                     "market_state": b.get("market_state"),
@@ -1578,8 +2299,8 @@ class PennyStockPaperBot:
                     "adverse_sec_items": b.get("adverse_sec_items") or [],
                     "news_snapshot": b.get("news_snapshot") or [],
                     "ai_model": b.get("ai_model") or "",
-                    "ai_verdict": (b.get("ai") or {}).get("verdict"),
-                    "ai_conviction": (b.get("ai") or {}).get("conviction"),
+                    "ai_verdict": ai.get("verdict"),
+                    "ai_conviction": ai.get("conviction"),
                     "outcomes": {}, "resolved": False,
                 })
                 self._evidence[str(self.signal_log[0].get("id"))] = self.signal_log[0]
@@ -1587,6 +2308,301 @@ class PennyStockPaperBot:
         # Session-based, matching what _save persists, so analytics cannot change across
         # a restart. The append-only archive keeps everything regardless.
         self.signal_log = self._retained_signals()
+
+    def _record_delayed_exit(self, item: dict, outcomes: dict, horizon_key: str,
+                             seen: dict, exit_day: str, offset: int,
+                             entry: float, entry_mid: float,
+                             entry_evidentiary: bool) -> None:
+        """Store a later session's observed exit as its OWN horizon.
+
+        The horizon whose closing book was missed stays on the modeled bound. This is a
+        separate measurement of a longer hold, keyed so ``daily_baskets(horizon)`` - which
+        looks up str(horizon) exactly - can never pick it up as the original.
+        """
+        key = f"{horizon_key}{DELAYED_EXIT_SUFFIX}"
+        if key in outcomes:
+            return
+        bid = _as_price(seen.get("bid"))
+        half = _half_spread_pct(seen.get("bid"), seen.get("ask"))
+        if bid is None or half is None:
+            return
+        outcomes[key] = {
+            "return_pct": round((bid / entry - 1) * 100, 2),
+            "net_return_pct": round((bid / entry - 1) * 100, 2),
+            "gross_return_pct": round((bid / entry_mid - 1) * 100, 2),
+            "measurement_schema": MEASUREMENT_SCHEMA_VERSION,
+            "horizon_basis": "delayed_exit",
+            "measures_horizon_sessions": f"{horizon_key}+{offset}",
+            "excluded_from_basket": f"the {horizon_key}-session basket; this is a "
+                                    f"{offset}-session-longer hold",
+            "entry_basis": "ask", "entry_price": round(entry, 6),
+            "exit_basis": "observed_bid", "exit_price": round(bid, 6),
+            "exit_cost_pct": round(half, 4),
+            "exit_session": exit_day,
+            "exit_delay_sessions": offset,
+            "exit_quote_at": seen.get("at"),
+            "exit_quote_feed": seen.get("feed") or "",
+            "entry_quote_feed": item.get("entry_quote_feed") or "",
+            "entry_cost_evidentiary": entry_evidentiary,
+            "exit_cost_evidentiary": True,
+            "cost_evidentiary": bool(entry_evidentiary),
+        }
+
+    @staticmethod
+    def _within_tracking_window(row: dict, today: str) -> bool:
+        """Whether a signal's horizons could still be open.
+
+        Calendar-generous on purpose: one wasted quote request costs nothing, while a
+        missed session loses that exit book permanently - it cannot be fetched later.
+        """
+        day = str(row.get(SIGNAL_DAY_FIELD) or "")
+        try:
+            started = datetime.strptime(day, "%Y-%m-%d").date()
+            now = datetime.strptime(today, "%Y-%m-%d").date()
+        except ValueError:
+            return False
+        return 0 <= (now - started).days <= max(SIGNAL_HORIZONS) * 3 + 7
+
+    # ---------------- session calendar ----------------
+    def _load_session_calendar(self) -> None:
+        """Load the independently stored record of when each session ended.
+
+        Kept apart from the quotes on purpose. A quote carried its own
+        session_close_minute and was believed, so a book stamped 11:00 could declare
+        that the exchange had closed at 11:00 and certify itself as the close.
+        """
+        try:
+            if os.path.exists(self._calendar_path):
+                with open(self._calendar_path, encoding="utf-8") as f:
+                    stored = json.load(f)
+                if isinstance(stored, dict):
+                    self._session_calendar = stored
+        except (OSError, ValueError) as e:
+            self.calendar_error = (
+                f"session calendar unreadable ({type(e).__name__}); every schedule "
+                f"falls back and stays non-evidentiary")
+
+    def _persist_session_calendar(self) -> bool:
+        try:
+            tmp = self._calendar_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self._session_calendar, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self._calendar_path)
+            return True
+        except OSError as e:
+            self.calendar_error = f"session calendar could not be written ({type(e).__name__})"
+            return False
+
+    async def refresh_session_calendar(self, force: bool = False) -> None:
+        """Fetch real session times once a day and freeze them by date.
+
+        Frozen deliberately: a schedule already recorded for a date is never replaced,
+        so a refresh after the close cannot overwrite today's 13:00 with tomorrow's
+        16:00 - which is exactly what reading a live status payload did.
+        """
+        today = datetime.now(NY).date()
+        if not force and self._session_calendar.get("fetched_on") == today.isoformat():
+            return
+        start = today - timedelta(days=45)
+        end = today + timedelta(days=10)
+        sessions, error = await penny_quotes.fetch_calendar(start, end)
+        if error or not sessions:
+            self.calendar_error = (
+                f"session calendar unavailable ({error or 'empty response'}); "
+                f"schedules fall back and stay non-evidentiary")
+            return
+        known = dict(self._session_calendar.get("sessions") or {})
+        for day, times in sessions.items():
+            known.setdefault(day, times)          # freeze: never overwrite a past date
+        covered = self._session_calendar.get("covered") or {}
+        self._session_calendar = {
+            "sessions": known,
+            "covered": {"from": min(covered.get("from", start.isoformat()),
+                                    start.isoformat()),
+                        "to": max(covered.get("to", end.isoformat()), end.isoformat())},
+            "fetched_on": today.isoformat(),
+            "source": "alpaca",
+        }
+        self.calendar_error = ""
+        self._persist_session_calendar()
+
+    def session_schedule(self, day: str) -> dict:
+        """When that session ended, and whether we actually know.
+
+        ``evidentiary`` is false whenever the answer came from a fallback rather than the
+        exchange calendar. A guessed schedule may still drive capture - better to try -
+        but it must never let an outcome into a positive verdict.
+        """
+        sessions = self._session_calendar.get("sessions") or {}
+        covered = self._session_calendar.get("covered") or {}
+        if day in sessions:
+            return {"close_minute": int(sessions[day]["close_minute"]),
+                    "source": "alpaca", "evidentiary": True, "is_trading_day": True}
+        if covered.get("from") and covered["from"] <= day <= covered.get("to", ""):
+            # inside a range the exchange calendar answered for, and absent from it
+            return {"close_minute": None, "source": "alpaca-holiday",
+                    "evidentiary": True, "is_trading_day": False}
+        try:
+            target = datetime.strptime(day, "%Y-%m-%d").date()
+        except ValueError:
+            return {"close_minute": None, "source": "unknown",
+                    "evidentiary": False, "is_trading_day": False}
+        try:
+            payload = research.us_market_status_payload()
+        except Exception:
+            payload = {}
+        minute, source = penny_quotes.scheduled_close_minute(target, payload=payload)
+        return {"close_minute": minute, "source": f"fallback:{source}",
+                "evidentiary": False, "is_trading_day": True}
+
+    @classmethod
+    def _has_closing_quote(cls, row: dict, session_day: str, schedule: dict) -> bool:
+        """Exactly the test the exit leg applies - not a looser one.
+
+        A weaker check here meant capture believed a crossed, non-venue book was the
+        session's close and stopped trying, while the exit leg correctly refused it. The
+        result was no closing book at all.
+        """
+        return cls._closing_observation(row, session_day, schedule) is not None
+
+    def closing_capture_due(self, now: float, now_ny: datetime | None = None,
+                            close_minute: int | None = None,
+                            schedule: dict | None = None) -> bool:
+        """Whether a closing-book capture should run right now.
+
+        Capture used to ride the hourly outcome timer, so a pass at 15:54 and the next
+        at 16:54 skipped the 15:55-16:05 window completely - and a closing book missed
+        is missed permanently. This runs on its own clock: from a quarter-hour before
+        the real close, every CLOSING_CAPTURE_RETRY_SEC, until every tracked name has a
+        valid closing quote. Outcome calculation stays on its own slower schedule.
+        """
+        when = now_ny or datetime.now(NY)
+        session_day = when.strftime("%Y-%m-%d")
+        if schedule is None:
+            schedule = (self.session_schedule(session_day) if close_minute is None
+                        else {"close_minute": close_minute, "evidentiary": True,
+                              "is_trading_day": True, "source": "given"})
+        # A date the exchange calendar does not list is a holiday. Capture must not run
+        # against a dark market and then report that nothing had a two-sided book.
+        if not schedule.get("is_trading_day") or schedule.get("close_minute") is None:
+            return False
+        close_minute = int(schedule["close_minute"])
+        _low, high = penny_quotes.closing_window(close_minute)
+        # The lead runs from the CLOSE, not from the start of the window - subtracting
+        # both made a "15 minute" lead begin 20 minutes early.
+        if not (close_minute - CLOSING_CAPTURE_LEAD_MIN <= minute_of(when) <= high):
+            return False
+        if now - self._last_closing_capture < CLOSING_CAPTURE_RETRY_SEC:
+            return False
+        return any(
+            not row.get("resolved") and row.get("ticker")
+            and self._within_tracking_window(row, session_day)
+            and not self._has_closing_quote(row, session_day, schedule)
+            for row in self._evidence.values())
+
+    async def _capture_exit_quotes(self) -> None:
+        """Record a timestamped book for every tracked signal, once per session.
+
+        Every tracked name, not only those still on the top-20 board. A signal that fell
+        off the board still has horizons to measure, and the names that stop ranking are
+        exactly the ones carrying the losses - observing only the survivors is how a
+        strategy measures itself into looking good.
+
+        Without this the exit leg is unobservable and every outcome falls back to the
+        uncalibrated bound, which blocks a positive verdict by design.
+        """
+        if not penny_quotes.configured():
+            self.quote_capture_error = (
+                "no exit quotes captured: Alpaca is not configured, so every exit leg "
+                "falls back to the modeled bound and stays non-evidentiary")
+            return
+        now_ny = datetime.now(NY)
+        session_day = now_ny.strftime("%Y-%m-%d")
+        schedule = self.session_schedule(session_day)
+        if not schedule.get("is_trading_day"):
+            self.quote_capture_error = (
+                f"{session_day} is not a trading session ({schedule['source']}); "
+                f"no closing book exists to capture")
+            return
+        tracked: dict[str, list[dict]] = {}
+        for row in self._evidence.values():
+            if row.get("resolved") or not row.get("ticker"):
+                continue
+            if not self._within_tracking_window(row, session_day):
+                continue
+            # Keep capturing until the CLOSING book exists. Stopping at the first quote
+            # of the day left an opening snapshot as the session's only observation.
+            if self._has_closing_quote(row, session_day, schedule):
+                continue
+            tracked.setdefault(str(row["ticker"]).upper(), []).append(row)
+        if not tracked:
+            self.quote_capture_error = ""
+            return
+        quotes, error = await penny_quotes.latest_quotes(list(tracked))
+        received_at = datetime.now(timezone.utc).isoformat()
+        rejected: list[str] = []
+        for symbol, observation in quotes.items():
+            # The session is whatever the EXCHANGE stamp says. Stamping the wall clock
+            # onto a stale book both fabricates the observation and convinces the next
+            # pass that today has already been captured.
+            stamped = penny_quotes.session_date(observation.get("at"))
+            if stamped is None:
+                rejected.append(f"{symbol}: unparseable quote timestamp")
+                continue
+            if stamped != session_day:
+                rejected.append(f"{symbol}: book stamped {stamped}, not {session_day}")
+                continue
+            if not _quote_is_two_sided(observation):
+                rejected.append(f"{symbol}: not a two-sided book")
+                continue
+            for row in tracked.get(symbol, []):
+                if not row.get("id"):
+                    continue
+                self._archive_event("quote", {
+                    "id": row["id"], "session_day": stamped,
+                    # What we BELIEVED the close was at capture time. Provenance only -
+                    # the exit leg resolves the real close from the stored exchange
+                    # calendar, because a quote that certifies its own closing time can
+                    # certify itself as the close.
+                    "believed_close_minute": schedule.get("close_minute"),
+                    "believed_close_source": schedule.get("source"),
+                    "received_at": received_at,
+                    **observation})
+        missing = [s for s in tracked if s not in quotes]
+        self.quote_capture_error = "; ".join(x for x in (
+            error,
+            (f"{len(missing)} tracked name(s) had no two-sided book this session"
+             if missing else ""),
+            ("; ".join(rejected[:5]) if rejected else "")) if x)
+
+    def adv_proxy_audit(self, min_per_bucket: int = 20) -> dict:
+        """Score the ADV spread proxy against the books observed after each signal.
+
+        The proxy decides which names look tradeable, so an unaudited proxy is an
+        unaudited admission rule. Reports median bias and the p90/p95 UNDERSTATEMENT -
+        the direction that admits a name at a cost nobody could have traded - split by
+        price, dollar volume, time of session and feed.
+        """
+        records = []
+        for row in self._evidence.values():
+            proxy = _as_pct(row.get("adv_proxy_pct"))
+            if proxy is None:
+                continue
+            for obs in (row.get("quote_observations") or []):
+                observed = _as_pct(obs.get("spread_pct"))
+                if observed is None:
+                    continue
+                records.append({
+                    "ticker": row.get("ticker"), "proxy_pct": proxy,
+                    "observed_pct": observed,
+                    "price": (_as_price(row.get("entry_last_trade"))
+                              or _as_price(row.get("price"))),
+                    "dollar_volume": row.get("dollar_volume"),
+                    "at": obs.get("at"), "feed": obs.get("feed"),
+                })
+        return penny_quotes.adv_proxy_audit(records, min_per_bucket=min_per_bucket)
 
     async def _update_signal_outcomes(self):
         """Attach causal, cost-adjusted 1/5/10-session returns to prior signals."""
@@ -1609,6 +2625,10 @@ class PennyStockPaperBot:
             benchmark = await asyncio.to_thread(fetch_history, "IWM")
             if benchmark is not None and not benchmark.empty:
                 benchmark = benchmark.dropna(subset=["Close"])
+                # Today's bar is still forming; resolving against it is permanent.
+                settled = self.completed_sessions(
+                    [x.date().isoformat() for x in benchmark.index])
+                benchmark = benchmark.iloc[:settled]
         except Exception:
             benchmark = None
 
@@ -1642,22 +2662,51 @@ class PennyStockPaperBot:
                 if hist is None or hist.empty:
                     continue
                 hist = hist.dropna(subset=["Close"])
+                # Only completed sessions may resolve a horizon. The current bar moves
+                # until the close, and an outcome written from it is never revisited.
+                settled = self.completed_sessions(
+                    [x.date().isoformat() for x in hist.index])
+                hist = hist.iloc[:settled]
+                if hist.empty:
+                    continue
                 dates = [x.date().isoformat() for x in hist.index]
                 for item in items:
                     indices = [i for i, day in enumerate(dates)
                                if day > item[SIGNAL_DAY_FIELD]]
                     outcomes = item.setdefault("outcomes", {})
-                    entry = float(item.get("price") or 0)
-                    if entry <= 0:
+                    # A long is bought at the ask. Measuring from item["price"] - the
+                    # last trade - charged none of the entry half-spread and then took
+                    # the entry spread off the far end as if that were the round trip.
+                    entry = self.entry_basis(item)
+                    if entry is None:
+                        item["measurement_blocked"] = (
+                            "no entry ask recorded; the executable entry price is "
+                            "unknown and must not be guessed from the last trade")
                         continue
+                    item.pop("measurement_blocked", None)
+                    entry_evidentiary = self.entry_is_evidentiary(item)
+                    entry_mid = (_quote_mid(item.get("entry_bid") or item.get("bid"),
+                                            item.get("entry_ask") or item.get("ask"))
+                                 or _as_price(item.get("entry_last_trade"))
+                                 or _as_price(item.get("price")) or entry)
                     for horizon in SIGNAL_HORIZONS:
                         key = str(horizon)
                         if key in outcomes or len(indices) < horizon:
                             continue
                         rows = hist.iloc[indices[:horizon]]
                         end_close = float(rows.iloc[-1]["Close"])
-                        gross = (end_close / entry - 1) * 100
-                        cost = max(0.0, float(item.get(SIGNAL_COST_FIELD) or 0))
+                        horizon_day = dates[indices[horizon - 1]]
+                        leg = self.exit_leg(item, horizon_day, end_close, dates,
+                                            self.session_schedule(horizon_day))
+                        if leg is None or not _as_price(leg.get("exit_price")):
+                            # Neither an observed exit book nor anything to bound one
+                            # with. An unmeasurable horizon stays unmeasured; it does
+                            # not get a number invented for it.
+                            continue
+                        # price move only, mid to close, charging nothing
+                        gross = (end_close / entry_mid - 1) * 100
+                        # what the round trip actually returns: ask in, bid out
+                        net = (float(leg["exit_price"]) / entry - 1) * 100
                         bench_return = None
                         if benchmark is not None and not benchmark.empty:
                             bench_dates = [x.date().isoformat() for x in benchmark.index]
@@ -1676,25 +2725,63 @@ class PennyStockPaperBot:
                                     if bench_entry > 0:
                                         bench_return = (bench_end / bench_entry - 1) * 100
                         outcomes[key] = {
-                            "return_pct": round(gross, 2),
+                            # the headline is the executable number now, not the gross
+                            "return_pct": round(net, 2),
                             "gross_return_pct": round(gross, 2),
-                            "net_return_pct": round(gross - cost, 2),
+                            "net_return_pct": round(net, 2),
                             "benchmark_return_pct": (round(bench_return, 2)
                                                      if bench_return is not None else None),
-                            "net_excess_return_pct": (round(gross - cost - bench_return, 2)
+                            "net_excess_return_pct": (round(net - bench_return, 2)
                                                       if bench_return is not None else None),
                             "max_gain_pct": round((float(rows["High"].max()) / entry - 1) * 100, 2),
                             "max_drawdown_pct": round((float(rows["Low"].min()) / entry - 1) * 100, 2),
                             "target1_hit": bool(item.get("target1") and float(rows["High"].max()) >= float(item["target1"])),
                             "stop_hit": bool(item.get("stop") and float(rows["Low"].min()) <= float(item["stop"])),
+                            # how this number was arrived at, so a later reader can tell
+                            # an observed round trip from a bounded guess
+                            "measurement_schema": MEASUREMENT_SCHEMA_VERSION,
+                            "entry_basis": "ask",
+                            "entry_price": round(entry, 6),
+                            "entry_mid": round(entry_mid, 6),
+                            "exit_basis": leg["exit_basis"],
+                            "exit_price": round(float(leg["exit_price"]), 6),
+                            "exit_cost_pct": (round(leg["exit_cost_pct"], 4)
+                                              if leg.get("exit_cost_pct") is not None
+                                              else None),
+                            "exit_quote_at": leg.get("exit_quote_at"),
+                            "exit_session": leg.get("exit_session"),
+                            "exit_quote_source": leg.get("exit_quote_source") or "",
+                            "exit_quote_feed": leg.get("exit_quote_feed") or "",
+                            "entry_quote_feed": item.get("entry_quote_feed") or "",
+                            # Both legs are stamped, and both are required. One observed
+                            # side does not make an observed round trip.
+                            "entry_cost_evidentiary": entry_evidentiary,
+                            "exit_cost_evidentiary": bool(leg["cost_evidentiary"]),
+                            "cost_evidentiary": bool(leg["cost_evidentiary"]
+                                                     and entry_evidentiary),
                         }
+                        # A book from a LATER session measures a different holding
+                        # period. Record it under its own key so it is available as
+                        # evidence for what it did measure, and can never be pooled
+                        # into the horizon it did not.
+                        if not leg["cost_evidentiary"]:
+                            delayed = self._delayed_closing_observation(
+                                item, horizon_day, dates, self.session_schedule)
+                            if delayed:
+                                seen, exit_day, offset = delayed
+                                self._record_delayed_exit(
+                                    item, outcomes, key, seen, exit_day, offset,
+                                    entry, entry_mid, entry_evidentiary)
+                    # Delayed-exit keys measure a different hold and must not make a
+                    # signal look resolved at the horizon they did not reach.
                     item["resolved"] = all(str(h) in outcomes for h in SIGNAL_HORIZONS)
                     for h in SIGNAL_HORIZONS:
-                        if str(h) in outcomes:
-                            self._archive_event("outcome", {
-                                "id": item.get("id"), "horizon": str(h),
-                                "outcome": outcomes[str(h)],
-                                "resolved": item["resolved"]})
+                        for key in (str(h), f"{h}{DELAYED_EXIT_SUFFIX}"):
+                            if key in outcomes:
+                                self._archive_event("outcome", {
+                                    "id": item.get("id"), "horizon": key,
+                                    "outcome": outcomes[key],
+                                    "resolved": item["resolved"]})
             except Exception as e:
                 self.last_error = f"outcome {ticker}: {type(e).__name__}"
             await asyncio.sleep(0.2)
@@ -1713,7 +2800,13 @@ class PennyStockPaperBot:
         stats = {}
         for horizon in SIGNAL_HORIZONS:
             book = self.daily_baskets(str(horizon))
-            values = [x.get("outcomes", {}).get(str(horizon)) for x in self.signal_log]
+            # The signal log also holds AI-rejected controls. This display describes
+            # the live approved rule, so controls must not leak into it any more than
+            # they leak into daily_baskets/forward_validation.
+            values = [x.get("outcomes", {}).get(str(horizon))
+                      for x in self.signal_log
+                      if x.get(EVIDENCE_ROLE_FIELD, PRIMARY_EVIDENCE_ROLE)
+                      == PRIMARY_EVIDENCE_ROLE]
             values = [x for x in values if isinstance(x, dict)]
             returns = [float(x.get("net_return_pct", x.get("return_pct", 0))) for x in values]
             excess = [float(x["net_excess_return_pct"]) for x in values
@@ -1813,6 +2906,19 @@ class PennyStockPaperBot:
         elif mean <= 0 or ex_mean <= 0 or lo <= 0 or ex_lo <= 0:
             status = "REJECTED"
             reason = "forward net edge is non-positive or its dependence-robust 95% interval crosses zero"
+        elif book.get("cost_modeled_days"):
+            # A positive result computed on an exit cost nobody observed is a statement
+            # about the bound, not about the market. The bound is deliberately harsh, so
+            # this is not the usual "too optimistic" failure - it is simply not evidence
+            # either way, and it may not be promoted until real exit books back it.
+            status = "DATA_INCOMPLETE"
+            reason = (
+                f"{book['cost_modeled_days']} of {len(book['baskets'])} completed "
+                f"basket(s) hold {book['cost_modeled_rows']} outcome(s) whose exit leg "
+                f"was never observed; their round trip rests on an uncalibrated exit-cost "
+                f"bound (cost_evidentiary: false). A positive verdict needs horizon bid "
+                f"quotes, not a modeled one"
+            )
         elif book["stale_incomplete_days"] and not bound.get("clears_zero"):
             # Matured days that never resolved are not missing at random: they hold the
             # names that halted or delisted. Excluding them removes losses, so a positive
@@ -1858,6 +2964,181 @@ class PennyStockPaperBot:
             "uncertainty": "Newey-West HAC, 5-lag, 95% interval",
         }
 
+    def ai_value_audit(self, horizon: str = "5") -> dict:
+        """Does the AI improve the same mechanical setups it reviews?
+
+        The unit is a paired signal day: at least one mechanically eligible name was
+        approved and at least one was rejected, every member resolved, and every round
+        trip used observed entry/exit books.  Pairing removes the day's common market
+        move before estimating the AI lift.  This audit can reject or flag a promising
+        AI filter; it can never authorize trading or prove the underlying strategy is
+        profitable.
+        """
+        horizon = str(horizon)
+        policy_id = ai_decision_policy_id()
+        eligible_rows = [r for r in self.mechanical_evidence_rows()
+                         if int(r.get("ai_policy_version") or 0)
+                         == AI_DECISION_POLICY_VERSION
+                         and r.get("ai_policy_id") == policy_id]
+        rows = [r for r in eligible_rows
+                if r.get(AI_SELECTION_FIELD) in ("approved", "rejected")]
+        unavailable_rows = [r for r in eligible_rows
+                            if r.get(AI_SELECTION_FIELD) == "unavailable"]
+        classification_coverage = (
+            100.0 * len(rows) / len(eligible_rows) if eligible_rows else 0.0
+        )
+        model_counts: dict[str, int] = {}
+        for row in rows:
+            model = str(row.get("ai_model") or "unknown")
+            model_counts[model] = model_counts.get(model, 0) + 1
+        by_day: dict[str, list[dict]] = {}
+        for row in rows:
+            by_day.setdefault(str(row[SIGNAL_DAY_FIELD]), []).append(row)
+
+        today = datetime.now(NY).date()
+        need = int(horizon) + HORIZON_GRACE_SESSIONS
+        sessions = self._recent_sessions()
+        fallback_days = math.ceil(need * 7 / 5) + 2
+
+        def is_mature(day: str) -> bool:
+            try:
+                parsed = datetime.strptime(day, "%Y-%m-%d").date()
+            except ValueError:
+                return True
+            if sessions:
+                return sum(1 for session in sessions if session > parsed) >= need
+            return (today - parsed).days >= fallback_days
+
+        pairs: list[dict] = []
+        pending_days = stale_days = modeled_days = unpaired_days = 0
+        for day in sorted(by_day):
+            members = by_day[day]
+            approved = [r for r in members
+                        if r.get(AI_SELECTION_FIELD) == "approved"]
+            rejected = [r for r in members
+                        if r.get(AI_SELECTION_FIELD) == "rejected"]
+            if not approved or not rejected:
+                unpaired_days += 1
+                continue
+            outcomes = [(r.get("outcomes") or {}).get(horizon) for r in members]
+            if not all(isinstance(out, dict)
+                       and out.get("net_return_pct") is not None for out in outcomes):
+                if is_mature(day):
+                    stale_days += 1
+                else:
+                    pending_days += 1
+                continue
+            if not all(self.outcome_is_evidentiary(out) for out in outcomes):
+                modeled_days += 1
+                continue
+
+            def group_mean(group: list[dict], field: str) -> float | None:
+                values = [(r.get("outcomes") or {}).get(horizon, {}).get(field)
+                          for r in group]
+                if not values or any(value is None for value in values):
+                    return None
+                return sum(float(value) for value in values) / len(values)
+
+            approved_net = group_mean(approved, "net_return_pct")
+            rejected_net = group_mean(rejected, "net_return_pct")
+            approved_excess = group_mean(approved, "net_excess_return_pct")
+            rejected_excess = group_mean(rejected, "net_excess_return_pct")
+            if approved_net is None or rejected_net is None:
+                continue
+            pairs.append({
+                "day": day,
+                "approved_members": len(approved),
+                "rejected_members": len(rejected),
+                "approved_net_pct": approved_net,
+                "rejected_net_pct": rejected_net,
+                "net_lift_pct": approved_net - rejected_net,
+                "excess_lift_pct": (
+                    approved_excess - rejected_excess
+                    if approved_excess is not None and rejected_excess is not None
+                    else None),
+            })
+
+        net_lifts = [pair["net_lift_pct"] for pair in pairs]
+        excess_lifts = [pair["excess_lift_pct"] for pair in pairs
+                        if pair["excess_lift_pct"] is not None]
+        net_mean, net_lo, net_hi = self._hac_mean_ci(net_lifts)
+        ex_mean, ex_lo, ex_hi = self._hac_mean_ci(excess_lifts)
+        approved_mean = (sum(pair["approved_net_pct"] for pair in pairs) / len(pairs)
+                         if pairs else 0.0)
+        rejected_mean = (sum(pair["rejected_net_pct"] for pair in pairs) / len(pairs)
+                         if pairs else 0.0)
+
+        if self.archive_error:
+            status = "DATA_INCOMPLETE"
+            reason = f"evidence integrity problem: {self.archive_error}"
+        elif (eligible_rows and classification_coverage
+              < AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT):
+            status = "DATA_INCOMPLETE"
+            reason = (
+                f"AI classified only {classification_coverage:.1f}% of mechanically "
+                f"eligible rows; need at least "
+                f"{AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT:.0f}% so API/model failures "
+                f"cannot select the measured sample"
+            )
+        elif stale_days or modeled_days:
+            status = "DATA_INCOMPLETE"
+            reason = (
+                f"{stale_days} matured paired day(s) have missing outcomes and "
+                f"{modeled_days} paired day(s) lack observed execution costs"
+            )
+        elif (len(pairs) < AI_VALUE_MIN_PAIRED_DAYS
+              or len(excess_lifts) < AI_VALUE_MIN_PAIRED_DAYS):
+            status = "COLLECTING"
+            reason = (
+                f"need {AI_VALUE_MIN_PAIRED_DAYS} completed paired AI-control days; "
+                f"have {len(pairs)} net / {len(excess_lifts)} IWM-relative"
+            )
+        elif net_lo > 0 and ex_lo > 0:
+            status = "AI_LIFT_PROMISING_NOT_VALIDATED"
+            reason = (
+                "AI-approved setups beat same-day AI-rejected mechanical controls "
+                "after observed costs; an independent frozen-rule audit is still required"
+            )
+        else:
+            status = "NO_MEASURED_AI_EDGE"
+            reason = (
+                "the paired after-cost AI lift is non-positive or its dependence-robust "
+                "95% interval crosses zero"
+            )
+
+        return {
+            "status": status,
+            "auto_trade_allowed": False,
+            "reason": reason,
+            "horizon_sessions": int(horizon),
+            "paired_days": len(pairs),
+            "minimum_paired_days": AI_VALUE_MIN_PAIRED_DAYS,
+            "paired_days_remaining": max(0, AI_VALUE_MIN_PAIRED_DAYS - len(pairs)),
+            "pending_paired_days": pending_days,
+            "stale_paired_days": stale_days,
+            "modeled_cost_paired_days": modeled_days,
+            "unpaired_days": unpaired_days,
+            "classified_rows": len(rows),
+            "unavailable_rows": len(unavailable_rows),
+            "classification_coverage_pct": round(classification_coverage, 1),
+            "minimum_classification_coverage_pct": (
+                AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT),
+            "ai_policy_version": AI_DECISION_POLICY_VERSION,
+            "ai_policy_id": policy_id,
+            "model_counts": model_counts,
+            "approved_mean_net_pct": round(approved_mean, 3) if pairs else None,
+            "rejected_mean_net_pct": round(rejected_mean, 3) if pairs else None,
+            "mean_ai_lift_pct": round(net_mean, 3) if pairs else None,
+            "ai_lift_hac_95_pct": ([round(net_lo, 3), round(net_hi, 3)]
+                                    if pairs else None),
+            "mean_ai_excess_lift_pct": (round(ex_mean, 3) if excess_lifts else None),
+            "ai_excess_lift_hac_95_pct": (
+                [round(ex_lo, 3), round(ex_hi, 3)] if excess_lifts else None),
+            "grouping": "paired equal-weight approved-vs-rejected baskets per signal day",
+            "note": ("This tests the AI filter's incremental value. It does not prove "
+                     "the mechanical strategy itself is profitable and never unlocks trading."),
+        }
+
     async def manage_loop(self):
         await asyncio.sleep(12)
         while True:
@@ -1868,7 +3149,14 @@ class PennyStockPaperBot:
                     self.day_key = today
                     self.day_pnl = 0.0
                 is_open = self.market_open()
+                # Two separate clocks. The closing book exists for ten minutes a day and
+                # cannot be fetched afterwards; the outcome arithmetic can run whenever.
+                await self.refresh_session_calendar()
+                if self.closing_capture_due(now):
+                    self._last_closing_capture = now
+                    await self._capture_exit_quotes()
                 if now - self.last_outcome_update >= OUTCOME_UPDATE_SEC:
+                    await self._capture_exit_quotes()
                     await self._update_signal_outcomes()
 
                 # Pausing controls NEW entries only. Existing risk is always marked and
@@ -2022,6 +3310,13 @@ class PennyStockPaperBot:
             "persistence_error": "; ".join(x for x in (self.state_save_error, self.archive_error) if x),
             "state_save_error": self.state_save_error,
             "archive_error": self.archive_error,
+            # Measurement provenance, so the page can never show a return without
+            # showing what it was measured against.
+            "measurement_schema": MEASUREMENT_SCHEMA_VERSION,
+            "quote_capture_error": self.quote_capture_error,
+            "quote_feed": penny_quotes.feed_name(),
+            "quote_feed_description": penny_quotes.feed_description(),
+            "quote_feed_is_consolidated": penny_quotes.is_consolidated(),
             "last_scan": self.last_scan,
             "last_scan_started": self.last_scan_started,
             "last_full_scan": self.last_full_scan,
@@ -2039,6 +3334,7 @@ class PennyStockPaperBot:
             "signal_log": self.signal_log[:40],
             "signal_stats": self.signal_stats(),
             "forward_validation": self.forward_validation(),
+            "ai_value_audit": self.ai_value_audit(),
             "top_n": TOP_N,
             "regime": research.market_regime(),
             "edge_policy": research.edge_policy(),
@@ -2067,6 +3363,8 @@ class PennyStockPaperBot:
                      "After-hours, stale, locked, or internally suspect books are ADV proxies for "
                      "ranking only and never count as confirmations. Hard risk gates and "
                      "technical/catalyst confirmation run before the AI; the AI may veto but never "
-                     "promote a weak setup. Confirmed unvalidated candidates are never filled, but "
+                     "promote a weak setup. Confirmed AI rejections are retained as a non-trading "
+                     "control group, so the model's incremental value can be measured instead of "
+                     "assumed. Confirmed unvalidated candidates are never filled, but "
                      "cost-adjusted and IWM-relative results are measured at 1/5/10 later sessions."),
         }
