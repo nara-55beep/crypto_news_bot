@@ -200,51 +200,82 @@ def _as_price(value) -> float | None:
 
 
 _BEHAVIOUR_DIGESTS: dict = {}
-# CPython's default repr embeds the object's address. It is identity, never behaviour.
-_ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
+# Scrub only the conventional trailing ``at 0x...>`` identity marker. A blanket
+# ``0x...`` replacement also erased meaningful values such as bitmasks and hashes.
+_ADDRESS = re.compile(r"(?<= at )0x[0-9a-fA-F]+(?=>$)")
 
 
-def _semantic_value(value):
-    """Stable JSON-shaped representation of Python code constants and defaults."""
-    if isinstance(value, types.CodeType):
-        return {
-            "bytecode": value.co_code.hex(),
-            "constants": [_semantic_value(item) for item in value.co_consts],
-            "names": list(value.co_names),
-            "varnames": list(value.co_varnames),
-            "freevars": list(value.co_freevars),
-            "cellvars": list(value.co_cellvars),
-            "argcount": value.co_argcount,
-            "posonlyargcount": value.co_posonlyargcount,
-            "kwonlyargcount": value.co_kwonlyargcount,
-            "flags": value.co_flags,
-            "exception_table": getattr(value, "co_exceptiontable", b"").hex(),
-        }
+def _semantic_value(value, _seen: set[int] | None = None):
+    """Stable JSON-shaped representation of Python code constants and defaults.
+
+    A bare sentinel has no state and is therefore type-only. Ordinary objects may use
+    the same default repr while carrying behaviorally meaningful ``__dict__`` or slot
+    values; those are serialized explicitly so different thresholds cannot collapse to
+    one policy id. Cycles are represented by type rather than object identity.
+    """
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, bytes):
         return {"bytes": value.hex()}
-    if isinstance(value, (tuple, list)):
-        return [_semantic_value(item) for item in value]
-    if isinstance(value, (set, frozenset)):
-        items = [_semantic_value(item) for item in value]
-        return {"set": sorted(items, key=lambda item: json.dumps(
-            item, sort_keys=True, separators=(",", ":"), default=str))}
-    if isinstance(value, dict):
-        return {str(key): _semantic_value(item)
-                for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
-    # Anything else is described by its TYPE, and by its repr only when that repr is
-    # the class's own. object.__repr__ embeds id(), so a component using the ordinary
-    # sentinel-default idiom (_MISSING = object()) hashed to a different value in every
-    # process: the policy id would change on each restart, the evidence population would
-    # never accumulate, and the multiplicity count would grow without bound - silently,
-    # because nothing distinguishes "the selector changed" from "the object moved".
-    described = {"type": f"{type(value).__module__}.{type(value).__qualname__}"}
-    if type(value).__repr__ is not object.__repr__:
-        # A custom repr describes the VALUE, so it belongs in the digest - but scrub any
-        # address it happens to embed, since that is identity rather than behaviour.
-        described["repr"] = _ADDRESS.sub("0xX", repr(value))
-    return described
+    type_name = f"{type(value).__module__}.{type(value).__qualname__}"
+    seen = _seen if _seen is not None else set()
+    identity = id(value)
+    if identity in seen:
+        return {"cycle": type_name}
+    seen.add(identity)
+    try:
+        if isinstance(value, types.CodeType):
+            return {
+                "bytecode": value.co_code.hex(),
+                "constants": [_semantic_value(item, seen) for item in value.co_consts],
+                "names": list(value.co_names),
+                "varnames": list(value.co_varnames),
+                "freevars": list(value.co_freevars),
+                "cellvars": list(value.co_cellvars),
+                "argcount": value.co_argcount,
+                "posonlyargcount": value.co_posonlyargcount,
+                "kwonlyargcount": value.co_kwonlyargcount,
+                "flags": value.co_flags,
+                "exception_table": getattr(value, "co_exceptiontable", b"").hex(),
+            }
+        if isinstance(value, (tuple, list)):
+            return [_semantic_value(item, seen) for item in value]
+        if isinstance(value, (set, frozenset)):
+            items = [_semantic_value(item, seen) for item in value]
+            return {"set": sorted(items, key=lambda item: json.dumps(
+                item, sort_keys=True, separators=(",", ":"), default=str))}
+        if isinstance(value, dict):
+            return {str(key): _semantic_value(item, seen)
+                    for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
+
+        described = {"type": type_name}
+        state = {}
+        attributes = getattr(value, "__dict__", None)
+        if isinstance(attributes, dict) and attributes:
+            state["attributes"] = _semantic_value(attributes, seen)
+        slots = {}
+        for cls in type(value).__mro__:
+            names = cls.__dict__.get("__slots__", ())
+            names = (names,) if isinstance(names, str) else names
+            for name in names:
+                if name in ("__dict__", "__weakref__") or name in slots:
+                    continue
+                try:
+                    slots[name] = _semantic_value(getattr(value, name), seen)
+                except (AttributeError, TypeError):
+                    continue
+        if slots:
+            state["slots"] = {name: slots[name] for name in sorted(slots)}
+        if state:
+            described["state"] = state
+        elif type(value).__repr__ is not object.__repr__:
+            # Value types such as Decimal and Path have no Python-visible state, so
+            # retain their custom repr. Only the default-style trailing address is
+            # identity; other hexadecimal text can be meaningful behavior.
+            described["repr"] = _ADDRESS.sub("0xX", repr(value))
+        return described
+    finally:
+        seen.remove(identity)
 
 
 def _function_runtime_semantics(target) -> dict:

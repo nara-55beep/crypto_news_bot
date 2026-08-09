@@ -3619,6 +3619,19 @@ class TestSelectorDigestIsStable(unittest.TestCase):
         second = paper._behaviour_digest(self._with_default(Missing()))
         self.assertEqual(first, second)
 
+    def test_stateful_defaults_with_different_behavior_do_move_the_digest(self):
+        class Options:
+            pass
+
+        low = Options()
+        low.threshold = 1
+        high = Options()
+        high.threshold = 2
+        first = paper._behaviour_digest(self._with_default(low))
+        paper._BEHAVIOUR_DIGESTS.clear()
+        second = paper._behaviour_digest(self._with_default(high))
+        self.assertNotEqual(first, second)
+
     def test_a_custom_repr_still_distinguishes_values(self):
         """Dropping repr entirely would be over-correction: Decimal('1.5') and
         Decimal('2.5') are different behaviour, not different identity."""
@@ -3637,6 +3650,30 @@ class TestSelectorDigestIsStable(unittest.TestCase):
         self.assertEqual(paper._semantic_value(Addressed()),
                          paper._semantic_value(Addressed()))
         self.assertNotIn("0x0", paper._semantic_value(Addressed())["repr"][3:])
+
+    def test_meaningful_hexadecimal_state_is_not_scrubbed(self):
+        class HexValue:
+            def __init__(self, value):
+                self.value = value
+
+            def __repr__(self):
+                return f"<HexValue 0x{self.value:x}>"
+
+        low = paper._semantic_value(HexValue(0x1234))
+        high = paper._semantic_value(HexValue(0x5678))
+        self.assertNotEqual(low, high)
+        self.assertEqual(low["state"]["attributes"]["value"], 0x1234)
+
+    def test_cyclic_object_state_is_stable_without_using_identity(self):
+        class Node:
+            pass
+
+        first = Node()
+        first.self = first
+        second = Node()
+        second.self = second
+        self.assertEqual(paper._semantic_value(first),
+                         paper._semantic_value(second))
 
     def test_a_bare_object_is_described_by_type_alone(self):
         class Bare:
