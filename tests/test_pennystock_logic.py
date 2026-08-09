@@ -3458,6 +3458,102 @@ class TestAIValueAuditSampleAndInference(unittest.TestCase):
         self.assertEqual(audit["mean_ai_lift_pct"], 0.0)   # was +0.8 from the outages
         self.assertFalse(audit["auto_trade_allowed"])
 
+    def test_an_unclassified_stale_day_cannot_disappear_before_integrity_checks(self):
+        """Coverage filtering used to run before outcome checks, so an unresolved
+        fully-dark day vanished and the surviving sample could still look promising."""
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 1.0, 0.5))
+            rows.append(self._row(day, f"R{index}", "rejected", -1.0, -1.5))
+        missing = self._row("2025-12-01", "MISSING", "unavailable", 0.0, 0.0)
+        missing["outcomes"] = {}
+        missing["resolved"] = False
+        rows.append(missing)
+
+        audit = self._audit(rows)
+        self.assertGreater(audit["classification_coverage_pct"], 80.0)
+        self.assertEqual(audit["unclassified_days"], 1)
+        self.assertEqual(audit["stale_comparison_days"], 1)
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+        self.assertIn("missing outcomes", audit["reason"])
+
+    def test_completed_unclassified_days_enter_an_adverse_selection_bound(self):
+        """Dropping a dark day still selects the sample. A missing decision on a
+        +100% mechanical winner could have rejected that winner and held cash, so the
+        positive point estimate must survive that adverse assignment."""
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 1.0, 0.5))
+            rows.append(self._row(day, f"R{index}", "rejected", -1.0, -1.5))
+        rows.append(self._row("2026-04-01", "UNKNOWN-WINNER", "unavailable",
+                              100.0, 99.5))
+
+        audit = self._audit(rows)
+        bound = audit["classification_missing_bound"]
+        self.assertGreater(audit["classification_coverage_pct"], 80.0)
+        self.assertEqual(audit["mean_ai_lift_pct"], 1.0)
+        self.assertEqual(audit["unclassified_bound_days"], 1)
+        self.assertEqual(bound["days_bounded"], 1)
+        self.assertEqual(bound["bounded_series_days"], 61)
+        self.assertFalse(bound["clears_zero"])
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+        self.assertIn("missing decisions", audit["reason"])
+
+    def test_the_allowed_twenty_percent_missing_is_also_bounded(self):
+        """The coverage floor is not permission to score missing decisions as
+        rejections. At exactly 80%, avoiding one unavailable loser looks brilliant in
+        the point estimate but fails the adverse assignment."""
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 1.0, 0.5))
+            rows.extend(self._row(day, f"R{index}-{k}", "rejected", 0.0, -0.5)
+                        for k in range(3))
+            rows.append(self._row(day, f"U{index}", "unavailable", -100.0, -100.5))
+
+        audit = self._audit(rows)
+        bound = audit["classification_missing_bound"]
+        self.assertEqual(audit["classification_coverage_pct"], 80.0)
+        self.assertEqual(audit["unclassified_days"], 0)
+        self.assertEqual(audit["comparison_days"], 60)
+        self.assertGreater(audit["mean_ai_lift_pct"], 0)
+        self.assertEqual(audit["missing_decision_bound_days"], 60)
+        self.assertFalse(bound["clears_zero"])
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+
+    def test_the_missing_decision_bound_is_not_a_permanent_veto(self):
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 10.0, 9.5))
+            rows.append(self._row(day, f"R{index}", "rejected", -10.0, -10.5))
+        rows.append(self._row("2026-04-01", "UNKNOWN-FLAT", "unavailable",
+                              0.0, -0.5))
+
+        audit = self._audit(rows)
+        self.assertTrue(audit["classification_missing_bound"]["clears_zero"])
+        self.assertEqual(audit["status"], "AI_LIFT_PROMISING_NOT_VALIDATED")
+        self.assertFalse(audit["auto_trade_allowed"])
+
+    def test_missing_decision_bound_uses_the_worst_possible_subset(self):
+        self.assertEqual(paper.PennyStockPaperBot._minimum_selector_return(
+            [4.0], [-10.0, 20.0]), -3.0)
+        self.assertEqual(paper.PennyStockPaperBot._minimum_selector_return(
+            [], [-5.0, 10.0]), -5.0)
+
+    def test_an_unknown_selection_value_is_bounded_as_unavailable(self):
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 1.0, 0.5))
+            rows.append(self._row(day, f"R{index}", "rejected", -1.0, -1.5))
+        malformed = self._row("2026-04-01", "UNKNOWN-LABEL", "unavailable",
+                              100.0, 99.5)
+        malformed[paper.AI_SELECTION_FIELD] = ""
+        rows.append(malformed)
+
+        audit = self._audit(rows)
+        self.assertEqual(audit["unavailable_rows"], 1)
+        self.assertEqual(audit["missing_decision_bound_days"], 1)
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+
     def test_a_day_the_model_mostly_missed_is_excluded(self):
         """Five extra days at 20% coverage, while overall coverage stays above the
         global gate - so this isolates the per-day floor rather than the outer one."""
