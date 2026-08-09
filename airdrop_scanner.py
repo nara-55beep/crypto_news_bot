@@ -98,6 +98,69 @@ VALUE_RETENTION = 0.30
 # Share of small wallets lost to Sybil filters and minimum-size cutoffs.
 QUALIFICATION_RATE = 0.65
 
+# --- Cost model -------------------------------------------------------------
+# Below this a deposit stops clearing most allocation thresholds, so it buys the
+# gas without buying the eligibility. Sourced from the widely repeated $50-$100
+# starting guidance, halved because that figure assumes a whole plan not one farm.
+MIN_MEANINGFUL_DEPOSIT_USD = 25.0
+# Gas budget for roughly eight interactions spread over a farming period, which is
+# the cadence allocation formulas tend to reward. Estimates, not live quotes: they
+# rank chains correctly, which is what the planner needs, but a volatile fee day on
+# Ethereum can exceed this.
+CHAIN_GAS_BUDGET_USD = {
+    "Ethereum": 30.0,
+    "Bitcoin": 15.0,
+    "Cardano": 3.0,
+    "Base": 1.0, "Arbitrum": 1.5, "Optimism": 1.5, "Polygon": 1.0,
+    "zkSync Era": 2.0, "Zircuit": 1.5, "Berachain": 2.0, "Plasma": 1.5,
+    "Sui": 1.0, "TON": 1.0, "Solana": 0.5, "Hyperliquid L1": 0.5,
+    "Monad": 1.0, "CORE": 1.0, "Babylon Genesis": 2.0, "Binance": 1.0,
+}
+DEFAULT_GAS_BUDGET_USD = 6.0     # unknown or niche chain: assume mid-range
+# Beyond this the binding constraint stops being money and becomes time. Each farm
+# needs genuine repeat interaction over weeks to score, so a plan of thirty is a plan
+# nobody executes - and half-farmed wallets are exactly what Sybil filters discard.
+MAX_PRACTICAL_FARMS = 8
+
+
+def gas_budget_usd(chain: str) -> float:
+    return CHAIN_GAS_BUDGET_USD.get(chain, DEFAULT_GAS_BUDGET_USD)
+
+
+def cheapest_chain(protocol: dict) -> tuple[str, float]:
+    """Cheapest chain a protocol is deployed on, which is where you should farm it.
+
+    A multi-chain protocol usually credits activity on any of its deployments, so
+    paying Ethereum gas to farm something that also runs on Base is money burned for
+    no extra allocation.
+    """
+    chains = protocol.get("chains")
+    candidates = [c for c in chains if isinstance(c, str)] if isinstance(chains, list) else []
+    if not candidates:
+        single = _text(protocol.get("chain"))
+        candidates = [single] if single and single != "Multi-Chain" else []
+    if not candidates:
+        return "unknown", DEFAULT_GAS_BUDGET_USD
+    best = min(candidates, key=gas_budget_usd)
+    return best, gas_budget_usd(best)
+
+
+def cost_to_farm(protocol: dict,
+                 deposit_usd: float = MIN_MEANINGFUL_DEPOSIT_USD) -> dict:
+    """What one wallet must commit to farm this protocol at all."""
+    chain, gas = cheapest_chain(protocol)
+    deposit = max(deposit_usd, MIN_MEANINGFUL_DEPOSIT_USD)
+    return {
+        "farm_on_chain": chain,
+        "gas_usd": gas,
+        "deposit_usd": deposit,
+        "minimum_deposit_usd": MIN_MEANINGFUL_DEPOSIT_USD,
+        "total_usd": deposit + gas,
+        "minimum_total_usd": MIN_MEANINGFUL_DEPOSIT_USD + gas,
+        "recoverable_usd": deposit,      # the deposit comes back; the gas does not
+        "spent_usd": gas,
+    }
+
 
 def _number(value: Any) -> float:
     try:
@@ -280,29 +343,106 @@ def assumptions() -> dict:
     }
 
 
+def timing_view(months_tokenless: float) -> dict:
+    """What is actually knowable about when a drop might land.
+
+    No end date is reported because none exists. An unannounced airdrop has no
+    published deadline by definition, and DeFiLlama carries no date field beyond the
+    listing timestamp - it was checked rather than assumed. Inventing a countdown
+    would be the single most harmful thing this page could do, because a farmer who
+    believes a deadline will either rush a deposit or abandon a farm on a fiction.
+    What can be said is how long a protocol has run without a token, which is the
+    only honest proxy for how overdue one is.
+    """
+    if months_tokenless >= 24:
+        stage = "long overdue"
+        note = ("Running over two years with no token. Either a drop is close or the "
+                "team has chosen not to issue one.")
+    elif months_tokenless >= 12:
+        stage = "mature"
+        note = "Past the point where most protocols that intend to launch a token do so."
+    elif months_tokenless >= 6:
+        stage = "building"
+        note = "Typical window for points programmes to be running. Early enough to matter."
+    else:
+        stage = "early"
+        note = ("Very young. Farming now is cheap in competition but the wait could be "
+                "long, and young protocols are also the ones most likely to fail.")
+    return {
+        "months_without_token": round(months_tokenless, 1),
+        "stage": stage,
+        "note": note,
+        "deadline": None,
+        "deadline_note": ("No end date exists. Unannounced airdrops publish no "
+                          "deadline, and no public data source carries one. Any site "
+                          "showing a countdown for an unannounced drop is inventing it."),
+    }
+
+
+def probability_math(score: float) -> dict:
+    """The chance calculation written out, so it can be checked rather than trusted."""
+    drops = airdrop_probability(score)
+    fraction = max(0.0, min(100.0, score)) / 100.0
+    return {
+        "score_fraction": round(fraction, 4),
+        "formula_drops": (
+            f"P(protocol airdrops) = {P_AIRDROP_MIN} + "
+            f"({P_AIRDROP_MAX} - {P_AIRDROP_MIN}) x {fraction:.3f} = {drops:.3f}"),
+        "formula_paid": (
+            f"P(you are paid) = {drops:.3f} x {QUALIFICATION_RATE} "
+            f"(survive Sybil and size filters) = {drops * QUALIFICATION_RATE:.3f}"),
+        "formula_value": (
+            f"value if paid = allocation x {VALUE_RETENTION} "
+            f"(88% of airdropped tokens lose value within 3 months)"),
+        "caveat": ("The score-to-probability mapping is an assumption, not a measured "
+                   "base rate. It is the weakest link in this whole page."),
+    }
+
+
 def instructions(protocol: dict, bankroll_usd: float) -> list[str]:
     """Concrete steps for this protocol, sized to the bankroll."""
     name = _text(protocol.get("name")) or "this protocol"
-    site = _text(protocol.get("url"))
+    site = _text(protocol.get("url")) or "the link on defillama.com"
+    cost = cost_to_farm(protocol, bankroll_usd)
+    chain = cost["farm_on_chain"]
     chains = protocol.get("chains") if isinstance(protocol.get("chains"), list) else []
-    chain = _text(protocol.get("chain")) or (chains[0] if chains else "its chain")
-    per_wallet = max(20.0, bankroll_usd / 3.0)
+    category = _text(protocol.get("category")).lower()
+    action = {
+        "dexs": "swap a small amount, then add liquidity to a pool",
+        "lending": "supply an asset, then borrow a little against it and repay it",
+        "derivatives": "open a small position and close it",
+        "yield": "deposit into a vault and leave it there",
+        "restaking": "stake, then restake into an operator",
+        "cdp": "deposit collateral and mint a small amount of the stablecoin",
+        "prediction market": "place a few small bets on different markets",
+    }.get(category, "deposit and use the main product")
+
     steps = [
-        f"Open {name} only via {site or 'the link on defillama.com'} - navigate there "
-        f"yourself. Never use a link from a DM, reply, or ad; airdrop phishing is the "
-        f"single most common way farmers lose their whole balance.",
-        f"Bridge roughly ${per_wallet:,.0f} to {chain}. Keep a few dollars spare for gas.",
-        f"Use the core product - deposit, swap, lend or trade, whatever {name} actually "
-        f"does. Points are usually weighted to real usage, not to wallet count.",
-        "Return and interact across several separate weeks. Consistency over time is "
-        "what most allocation formulas reward; a single day of activity rarely counts.",
+        f"Budget ${cost['total_usd']:,.2f} for this one: ${cost['deposit_usd']:,.2f} "
+        f"deposited (you get this back) plus about ${cost['gas_usd']:,.2f} of gas "
+        f"(you do not).",
+        f"Farm it on {chain}" + (
+            f", the cheapest of its {len(chains)} chains - using Ethereum instead "
+            f"would burn roughly ${gas_budget_usd('Ethereum'):,.0f} of gas for the same "
+            f"allocation." if len(chains) > 1 and chain != "Ethereum" else "."),
+        f"Open {name} by typing {site} into the address bar yourself. Never use a link "
+        f"from a DM, reply, ad or search result - airdrop phishing is the most common "
+        f"way farmers lose their whole balance.",
+        f"Bridge about ${cost['deposit_usd']:,.2f} to {chain}, plus a few dollars of "
+        f"the native token for gas.",
+        f"Then {action}. Points are weighted to genuine usage of the core product, not "
+        f"to how many wallets touched it.",
+        "Come back and interact again across several separate weeks. Consistency over "
+        "time is what most allocation formulas reward; one day of activity rarely counts.",
         "Use ONE wallet. 85% of 2026 airdrops run Sybil detection, and multi-wallet "
         "farming now gets the whole cluster zeroed rather than multiplying anything.",
         "Never sign a transaction you did not initiate, and never enter a seed phrase. "
         "No genuine airdrop ever asks for one.",
+        "There is no deadline to race. Nothing here has an announced snapshot date, so "
+        "steady activity beats a rushed deposit.",
     ]
     if int(_number(protocol.get("audits"))) == 0:
-        steps.insert(1, "No audit is published for this protocol. Treat any deposit as "
+        steps.insert(2, "No audit is published for this protocol. Treat the deposit as "
                         "money you could lose to a contract bug, independent of whether "
                         "a token ever arrives.")
     return steps
@@ -320,7 +460,9 @@ def rank(protocols: list[dict], bankroll_usd: float = 100.0,
             continue
         score, signals = legitimacy_score(protocol, now)
         payoff = expected_value(protocol, score, deposit)
+        months = age_months(protocol, now)
         rows.append({
+            "_raw": protocol,
             "name": _text(protocol.get("name")),
             "slug": _text(protocol.get("slug")),
             "url": _text(protocol.get("url")),
@@ -329,13 +471,16 @@ def rank(protocols: list[dict], bankroll_usd: float = 100.0,
             "chain": _text(protocol.get("chain")),
             "chains": protocol.get("chains") if isinstance(protocol.get("chains"), list) else [],
             "tvl_usd": _number(protocol.get("tvl")),
-            "age_months": age_months(protocol, now),
+            "age_months": months,
             "audits": int(_number(protocol.get("audits"))),
             "score": round(score, 1),
             "risk_band": risk_band(score),
             "signals": signals,
             "expected": payoff,
-            "instructions": instructions(protocol, bankroll_usd),
+            "cost": cost_to_farm(protocol, deposit),
+            "timing": timing_view(months),
+            "probability_math": probability_math(score),
+            "instructions": instructions(protocol, deposit),
         })
     # Most reliable first. Legitimacy leads because the modelled payoff rests on
     # assumptions while the score rests on checkable facts; ordering by dollars would
@@ -348,6 +493,80 @@ def rank(protocols: list[dict], bankroll_usd: float = 100.0,
     for index, row in enumerate(rows):
         row["funded"] = index < wallets
     return rows[:limit]
+
+
+def build_plan(rows: list[dict], amount_usd: float) -> dict:
+    """Choose how many farms `amount_usd` actually covers, and size each one.
+
+    Two passes. First fit as many of the most reliable farms as possible at their
+    minimum viable cost, since breadth beats depth when allocation is logarithmic -
+    a second farm at the threshold is worth more than doubling the first deposit.
+    Then spread whatever is left over the chosen farms, because a deposit above the
+    threshold still earns more than one sitting at it.
+    """
+    amount_usd = max(0.0, _number(amount_usd))
+    chosen: list[dict] = []
+    spent = 0.0
+    for row in rows:                                   # already most-reliable-first
+        if len(chosen) >= MAX_PRACTICAL_FARMS:
+            break
+        minimum = row["cost"]["minimum_total_usd"]
+        if spent + minimum <= amount_usd:
+            chosen.append(row)
+            spent += minimum
+    if not chosen:
+        cheapest = min((r["cost"]["minimum_total_usd"] for r in rows), default=0.0)
+        return {
+            "amount_usd": amount_usd,
+            "farms": 0,
+            "affordable": False,
+            "cheapest_entry_usd": cheapest,
+            "shortfall_usd": max(0.0, cheapest - amount_usd),
+            "rows": [],
+        }
+
+    surplus = amount_usd - spent
+    extra_each = surplus / len(chosen)
+    plan_rows = []
+    total_gas = 0.0
+    for row in chosen:
+        deposit = MIN_MEANINGFUL_DEPOSIT_USD + extra_each
+        cost = cost_to_farm(row["_raw"], deposit)
+        payoff = expected_value(row["_raw"], row["score"], deposit)
+        total_gas += cost["gas_usd"]
+        # Steps quote real dollar amounts, so they must be rebuilt at the deposit
+        # this plan actually assigns - otherwise the walkthrough contradicts the
+        # plan above it.
+        plan_rows.append({**row, "cost": cost, "expected": payoff,
+                          "instructions": instructions(row["_raw"], deposit)})
+
+    expected = sum(r["expected"]["expected_usd"] for r in plan_rows)
+    upside = sum(r["expected"]["value_if_paid_usd"] for r in plan_rows)
+    p_none = 1.0
+    for r in plan_rows:
+        p_none *= r["expected"]["p_nothing"]
+    return {
+        "amount_usd": amount_usd,
+        "farms": len(plan_rows),
+        "affordable": True,
+        "deposit_each_usd": MIN_MEANINGFUL_DEPOSIT_USD + extra_each,
+        "gas_total_usd": total_gas,
+        "recoverable_usd": amount_usd - total_gas,
+        "expected_airdrop_usd": expected,
+        "expected_total_usd": amount_usd - total_gas + expected,
+        "upside_total_usd": amount_usd - total_gas + upside,
+        "probability_any_pays": 1.0 - p_none,
+        "probability_of_nothing": p_none,
+        "rows": plan_rows,
+        "capped_by_time": len(plan_rows) >= MAX_PRACTICAL_FARMS,
+        "max_practical_farms": MAX_PRACTICAL_FARMS,
+        "cap_note": (
+            f"Capped at {MAX_PRACTICAL_FARMS} farms. More money would fit more, but "
+            f"each farm needs real repeat interaction over weeks, and a half-farmed "
+            f"wallet is what Sybil filters discard. Past this the limit is your time, "
+            f"not your budget - deepen the existing farms instead."),
+        "horizon": "3-12 months; airdrop timing cannot be scheduled",
+    }
 
 
 def portfolio_view(rows: list[dict], bankroll_usd: float,
@@ -400,15 +619,24 @@ class AirdropRadar:
         self._universe: list[dict] = []
 
     def _reprice(self) -> None:
-        """Rebuild the ranking from the cached universe at the current bankroll."""
+        """Rebuild the ranking and the funding plan at the current investable amount."""
         rows = rank(self._universe, bankroll_usd=self.bankroll_usd)
+        plan = build_plan(rows, self.bankroll_usd)
+        funded = {id(row) for row in plan["rows"]}
+        # `_raw` is only needed to re-price inside build_plan; it must not reach the
+        # API payload, where it would multiply the response size for no reader value.
+        public_rows = [{**{k: v for k, v in row.items() if k != "_raw"},
+                        "funded": any(p["name"] == row["name"] for p in plan["rows"])}
+                       for row in rows]
         self.result = {
             **self.result,
             "bankroll_usd": self.bankroll_usd,
             "universe": len(self._universe),
             "candidates": len(rows),
-            "rows": rows,
-            "portfolio": portfolio_view(rows, self.bankroll_usd),
+            "rows": public_rows,
+            "plan": {**plan,
+                     "rows": [{k: v for k, v in r.items() if k != "_raw"}
+                              for r in plan["rows"]]},
             "assumptions": assumptions(),
         }
 
@@ -445,7 +673,7 @@ class AirdropRadar:
             "refresh_sec": REFRESH_SEC,
             **(self.result or {"rows": [], "candidates": 0, "universe": 0,
                                "bankroll_usd": self.bankroll_usd,
-                               "portfolio": portfolio_view([], self.bankroll_usd),
+                               "plan": build_plan([], self.bankroll_usd),
                                "assumptions": assumptions()}),
         }
 
@@ -464,14 +692,16 @@ async def scan(bankroll_usd: float = 100.0, limit: int = 40) -> dict:
     started = time.time()
     protocols = await fetch_protocols()
     rows = rank(protocols, bankroll_usd=bankroll_usd, limit=limit)
+    plan = build_plan(rows, bankroll_usd)
     return {
         "generated_at": time.time(),
         "scan_seconds": round(time.time() - started, 2),
         "universe": len(protocols),
         "candidates": len(rows),
         "bankroll_usd": bankroll_usd,
-        "rows": rows,
-        "portfolio": portfolio_view(rows, bankroll_usd),
+        "rows": [{k: v for k, v in r.items() if k != "_raw"} for r in rows],
+        "plan": {**plan, "rows": [{k: v for k, v in r.items() if k != "_raw"}
+                                  for r in plan["rows"]]},
         "assumptions": assumptions(),
         "method": ("Ranks DeFiLlama protocols that hold real TVL in a user-facing "
                    "category and have no token yet. Read-only public data."),
