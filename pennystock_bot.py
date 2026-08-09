@@ -1217,6 +1217,14 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
     verdict = (ai.get("verdict") or "").upper()
     conviction = str(ai.get("conviction") or "").lower()
     hard = hard_risk_reason(d)
+    # Preserve the decision that existed immediately before the AI.  Without this the
+    # forward log contains only names the model approved, so it can measure returns but
+    # can never answer whether the model improved them relative to the same mechanical
+    # opportunity set it rejected.  Hard-rejected/unknown setups are not controls.
+    mechanical_action = (
+        mechanical_setup(d, r)
+        if not hard and trade >= 55 and d.technical_known else ""
+    )
 
     if hard:
         action, why = "NO TRADE", hard
@@ -1229,7 +1237,7 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
         # Momentum confirms a real event; it is no longer allowed to impersonate one.
         # This is deliberately stricter than v1 because the v1 price-only audit showed
         # -0.87% gross expectancy in the untouched test before costs.
-        setup = mechanical_setup(d, r)
+        setup = mechanical_action
         strong_setup, buy_setup = setup == "STRONG BUY", setup == "BUY"
         if not (strong_setup or buy_setup):
             if comp >= 38 and not dated_catalyst:
@@ -1286,6 +1294,7 @@ def signal_from(d: "Dossier", r: dict, ai: dict | None) -> dict:
     target1_pct = risk_pct * 1.5
     target2_pct = risk_pct * 2.5
     return {"action": action, "candidate_action": candidate_action, "why": why,
+            "mechanical_action": mechanical_action,
             "entry": round(px, 4), "stop": stop,
             "target1": round(px * (1 + target1_pct / 100.0), 4),
             "target2": round(px * (1 + target2_pct / 100.0), 4),

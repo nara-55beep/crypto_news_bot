@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import glob
+import hashlib
 import json
 import math
 import os
@@ -124,6 +125,21 @@ MISSING_OUTCOME_ASSUMPTION_PCT = -100.0
 # never quietly change a statistic.
 SIGNAL_ARCHIVE_PATH = os.path.join(config.DATA_DIR, "pennystock_signal_archive.jsonl")
 SIGNAL_ENGINE_VERSION = 6
+# The live verdict must contain only AI-approved signals, but the question "does the AI
+# add value?" requires the mechanically identical names it rejected.  Both cohorts are
+# recorded under one durable measurement path and separated by an explicit role.  Rows
+# written before this field existed are the original approved population and therefore
+# remain primary for backward compatibility.
+EVIDENCE_ROLE_FIELD = "evidence_role"
+PRIMARY_EVIDENCE_ROLE = "live_ai_approved"
+CONTROL_EVIDENCE_ROLE = "mechanical_ai_control"
+AI_SELECTION_FIELD = "ai_selection"
+AI_VALUE_MIN_PAIRED_DAYS = 60
+AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT = 80.0
+# A model/prompt selector is part of the tested rule.  Keep this separate from both the
+# mechanical engine and price-measurement schema so an AI-policy edit cannot pool its
+# outcomes with an older policy and call the mixture evidence.
+AI_DECISION_POLICY_VERSION = 1
 # The STRATEGY and the MEASUREMENT are versioned separately, on purpose. Repairing a
 # broken cost model must not restart the strategy's evidence clock, and bumping the
 # strategy must not silently re-bless outcomes computed under a cost model since found
@@ -166,6 +182,24 @@ def _as_price(value) -> float | None:
     except (TypeError, ValueError):
         return None
     return out if out > 0 else None
+
+
+def ai_decision_policy_id() -> str:
+    """Stable identity of the actual LLM selector used by this process.
+
+    A manual version is not enough: prompts and preferred/fallback models are easy to
+    edit without remembering a counter.  Hashing both makes a changed selector start a
+    new comparison population automatically rather than pool two policies.
+    """
+    payload = {
+        "version": AI_DECISION_POLICY_VERSION,
+        "system_prompt": research.SYSTEM_PROMPT,
+        "model_chain": list(research.AI_MODEL_CHAIN),
+        "preferred_model": getattr(config, "PENNY_AI_MODEL", None),
+        "require_ai_confirm": bool(research.REQUIRE_AI_CONFIRM),
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _as_pct(value) -> float | None:
@@ -533,7 +567,14 @@ class PennyStockPaperBot:
         for b in board:
             ticker = b["ticker"]
             sig = b.get("signal") or {}
-            candidate = sig.get("candidate_action") in ("BUY", "STRONG BUY")
+            # Confirmation belongs to the pre-AI mechanical opportunity set.  Using
+            # the post-AI action made every veto disappear before it could become a
+            # measured control.  The approved path is unchanged; rejected names are
+            # confirmed only for research and can never reach _open().
+            mechanical_action = (sig.get("mechanical_action")
+                                 or sig.get("candidate_action") or "")
+            candidate = mechanical_action in ("BUY", "STRONG BUY")
+            live_candidate = sig.get("candidate_action") in ("BUY", "STRONG BUY")
             executable_observation = bool(
                 b.get("quote_reliable")
                 and str(b.get("market_state") or "").upper() == "REGULAR"
@@ -581,6 +622,7 @@ class PennyStockPaperBot:
                 "first_seen": first_seen, "last_seen": now,
                 "first_price": first_price, "last_price": price,
                 "catalyst_key": catalyst_key,
+                "mechanical_action": mechanical_action,
                 "candidate_action": sig.get("candidate_action"),
                 "executable_observation": executable_observation,
                 "reset_reason": reset_reason,
@@ -597,7 +639,7 @@ class PennyStockPaperBot:
             b["confirmation"] = confirmation
             sig["confirmed"] = confirmed
             sig["confirmation_observations"] = hits
-            if candidate and not confirmed:
+            if candidate and not confirmed and live_candidate:
                 if not executable_observation:
                     sig["why"] = (
                         "research candidate only; waiting for a fresh, plausible "
@@ -1544,7 +1586,22 @@ class PennyStockPaperBot:
         rows = list(self._evidence.values()) if self._evidence else list(self.signal_log)
         return [x for x in rows
                 if x.get("engine_version") == SIGNAL_ENGINE_VERSION
-                and x.get(SIGNAL_DAY_FIELD)]
+                and x.get(SIGNAL_DAY_FIELD)
+                and x.get(EVIDENCE_ROLE_FIELD, PRIMARY_EVIDENCE_ROLE)
+                == PRIMARY_EVIDENCE_ROLE]
+
+    def mechanical_evidence_rows(self) -> list[dict]:
+        """All pre-AI eligible rows, including the non-trading AI control group.
+
+        This is deliberately separate from ``evidence_rows``: adding a control row must
+        never change the live strategy's forward mean, evidence clock, or gate.
+        """
+        rows = list(self._evidence.values()) if self._evidence else list(self.signal_log)
+        return [x for x in rows
+                if x.get("engine_version") == SIGNAL_ENGINE_VERSION
+                and x.get(SIGNAL_DAY_FIELD)
+                and x.get(EVIDENCE_ROLE_FIELD, PRIMARY_EVIDENCE_ROLE)
+                in (PRIMARY_EVIDENCE_ROLE, CONTROL_EVIDENCE_ROLE)]
 
     def _proxy_cost_share(self, admitted_days: set[str]) -> float:
         """Share of admitted rows whose cost was an ADV proxy rather than a real quote.
@@ -2158,25 +2215,44 @@ class PennyStockPaperBot:
             self.quote_capture_error = f"entry quote capture: {error}"
 
     def _record_signals(self, board):
-        """Log every actionable signal with the price at the time, so we can later
-        MEASURE whether these calls beat random instead of assuming they do."""
+        """Log the whole confirmed pre-AI opportunity set.
+
+        Approved rows remain the only live-rule evidence.  AI WATCH/AVOID rows are a
+        non-trading control measured with the exact same entry, exit and archive code.
+        Otherwise the model selects the sample and its rejected counterfactual vanishes,
+        making its incremental value impossible to test.
+        """
         now = time.time()
         signal_day = datetime.fromtimestamp(now, NY).strftime("%Y-%m-%d")
         for b in board:
             act = b["signal"]["action"]
             candidate_action = b["signal"].get("candidate_action", act)
+            mechanical_action = (b["signal"].get("mechanical_action")
+                                 or candidate_action)
             confirmed = bool((b.get("confirmation") or {}).get("confirmed"))
             executable_snapshot = bool(
                 b.get("quote_reliable")
                 and str(b.get("market_state") or "").upper() == "REGULAR"
                 and not b.get("spread_estimated")
             )
-            if candidate_action in ("BUY", "STRONG BUY") and confirmed and executable_snapshot:
+            if mechanical_action in ("BUY", "STRONG BUY") and confirmed and executable_snapshot:
                 # One observation per ticker/session. Repeated adaptive scans are
                 # correlated duplicates, not independent evidence of accuracy.
                 if any(x.get("ticker") == b["ticker"] and x.get(SIGNAL_DAY_FIELD) == signal_day
                        for x in self.signal_log):
                     continue
+                ai = b.get("ai") or {}
+                verdict = str(ai.get("verdict") or "").upper()
+                # signal_from() is the authoritative pre-policy selector. Repeating
+                # the verdict rule here would create two AI gates that could drift.
+                ai_approved = candidate_action in ("BUY", "STRONG BUY")
+                ai_selection = (
+                    "approved" if ai_approved
+                    else "rejected" if verdict in ("WATCH", "AVOID")
+                    else "unavailable"
+                )
+                evidence_role = (PRIMARY_EVIDENCE_ROLE if ai_approved
+                                 else CONTROL_EVIDENCE_ROLE)
                 self.signal_log = self._retained_signals()
                 self.signal_log.insert(0, {
                     "id": uuid.uuid4().hex[:10], "t": now, SIGNAL_DAY_FIELD: signal_day,
@@ -2185,6 +2261,11 @@ class PennyStockPaperBot:
                     "strategy_id": research.LIVE_STRATEGY_ID,
                     "ticker": b["ticker"], "action": act,
                     "candidate_action": candidate_action,
+                    "mechanical_action": mechanical_action,
+                    EVIDENCE_ROLE_FIELD: evidence_role,
+                    AI_SELECTION_FIELD: ai_selection,
+                    "ai_policy_version": AI_DECISION_POLICY_VERSION,
+                    "ai_policy_id": ai_decision_policy_id(),
                     "confirmed": True,
                     "confirmation_observations": (b.get("confirmation") or {}).get("observations"),
                     "executed": act in ("BUY", "STRONG BUY"),
@@ -2218,8 +2299,8 @@ class PennyStockPaperBot:
                     "adverse_sec_items": b.get("adverse_sec_items") or [],
                     "news_snapshot": b.get("news_snapshot") or [],
                     "ai_model": b.get("ai_model") or "",
-                    "ai_verdict": (b.get("ai") or {}).get("verdict"),
-                    "ai_conviction": (b.get("ai") or {}).get("conviction"),
+                    "ai_verdict": ai.get("verdict"),
+                    "ai_conviction": ai.get("conviction"),
                     "outcomes": {}, "resolved": False,
                 })
                 self._evidence[str(self.signal_log[0].get("id"))] = self.signal_log[0]
@@ -2719,7 +2800,13 @@ class PennyStockPaperBot:
         stats = {}
         for horizon in SIGNAL_HORIZONS:
             book = self.daily_baskets(str(horizon))
-            values = [x.get("outcomes", {}).get(str(horizon)) for x in self.signal_log]
+            # The signal log also holds AI-rejected controls. This display describes
+            # the live approved rule, so controls must not leak into it any more than
+            # they leak into daily_baskets/forward_validation.
+            values = [x.get("outcomes", {}).get(str(horizon))
+                      for x in self.signal_log
+                      if x.get(EVIDENCE_ROLE_FIELD, PRIMARY_EVIDENCE_ROLE)
+                      == PRIMARY_EVIDENCE_ROLE]
             values = [x for x in values if isinstance(x, dict)]
             returns = [float(x.get("net_return_pct", x.get("return_pct", 0))) for x in values]
             excess = [float(x["net_excess_return_pct"]) for x in values
@@ -2875,6 +2962,181 @@ class PennyStockPaperBot:
             "feasibility": planning,
             "grouping": "equal-weight basket per signal day",
             "uncertainty": "Newey-West HAC, 5-lag, 95% interval",
+        }
+
+    def ai_value_audit(self, horizon: str = "5") -> dict:
+        """Does the AI improve the same mechanical setups it reviews?
+
+        The unit is a paired signal day: at least one mechanically eligible name was
+        approved and at least one was rejected, every member resolved, and every round
+        trip used observed entry/exit books.  Pairing removes the day's common market
+        move before estimating the AI lift.  This audit can reject or flag a promising
+        AI filter; it can never authorize trading or prove the underlying strategy is
+        profitable.
+        """
+        horizon = str(horizon)
+        policy_id = ai_decision_policy_id()
+        eligible_rows = [r for r in self.mechanical_evidence_rows()
+                         if int(r.get("ai_policy_version") or 0)
+                         == AI_DECISION_POLICY_VERSION
+                         and r.get("ai_policy_id") == policy_id]
+        rows = [r for r in eligible_rows
+                if r.get(AI_SELECTION_FIELD) in ("approved", "rejected")]
+        unavailable_rows = [r for r in eligible_rows
+                            if r.get(AI_SELECTION_FIELD) == "unavailable"]
+        classification_coverage = (
+            100.0 * len(rows) / len(eligible_rows) if eligible_rows else 0.0
+        )
+        model_counts: dict[str, int] = {}
+        for row in rows:
+            model = str(row.get("ai_model") or "unknown")
+            model_counts[model] = model_counts.get(model, 0) + 1
+        by_day: dict[str, list[dict]] = {}
+        for row in rows:
+            by_day.setdefault(str(row[SIGNAL_DAY_FIELD]), []).append(row)
+
+        today = datetime.now(NY).date()
+        need = int(horizon) + HORIZON_GRACE_SESSIONS
+        sessions = self._recent_sessions()
+        fallback_days = math.ceil(need * 7 / 5) + 2
+
+        def is_mature(day: str) -> bool:
+            try:
+                parsed = datetime.strptime(day, "%Y-%m-%d").date()
+            except ValueError:
+                return True
+            if sessions:
+                return sum(1 for session in sessions if session > parsed) >= need
+            return (today - parsed).days >= fallback_days
+
+        pairs: list[dict] = []
+        pending_days = stale_days = modeled_days = unpaired_days = 0
+        for day in sorted(by_day):
+            members = by_day[day]
+            approved = [r for r in members
+                        if r.get(AI_SELECTION_FIELD) == "approved"]
+            rejected = [r for r in members
+                        if r.get(AI_SELECTION_FIELD) == "rejected"]
+            if not approved or not rejected:
+                unpaired_days += 1
+                continue
+            outcomes = [(r.get("outcomes") or {}).get(horizon) for r in members]
+            if not all(isinstance(out, dict)
+                       and out.get("net_return_pct") is not None for out in outcomes):
+                if is_mature(day):
+                    stale_days += 1
+                else:
+                    pending_days += 1
+                continue
+            if not all(self.outcome_is_evidentiary(out) for out in outcomes):
+                modeled_days += 1
+                continue
+
+            def group_mean(group: list[dict], field: str) -> float | None:
+                values = [(r.get("outcomes") or {}).get(horizon, {}).get(field)
+                          for r in group]
+                if not values or any(value is None for value in values):
+                    return None
+                return sum(float(value) for value in values) / len(values)
+
+            approved_net = group_mean(approved, "net_return_pct")
+            rejected_net = group_mean(rejected, "net_return_pct")
+            approved_excess = group_mean(approved, "net_excess_return_pct")
+            rejected_excess = group_mean(rejected, "net_excess_return_pct")
+            if approved_net is None or rejected_net is None:
+                continue
+            pairs.append({
+                "day": day,
+                "approved_members": len(approved),
+                "rejected_members": len(rejected),
+                "approved_net_pct": approved_net,
+                "rejected_net_pct": rejected_net,
+                "net_lift_pct": approved_net - rejected_net,
+                "excess_lift_pct": (
+                    approved_excess - rejected_excess
+                    if approved_excess is not None and rejected_excess is not None
+                    else None),
+            })
+
+        net_lifts = [pair["net_lift_pct"] for pair in pairs]
+        excess_lifts = [pair["excess_lift_pct"] for pair in pairs
+                        if pair["excess_lift_pct"] is not None]
+        net_mean, net_lo, net_hi = self._hac_mean_ci(net_lifts)
+        ex_mean, ex_lo, ex_hi = self._hac_mean_ci(excess_lifts)
+        approved_mean = (sum(pair["approved_net_pct"] for pair in pairs) / len(pairs)
+                         if pairs else 0.0)
+        rejected_mean = (sum(pair["rejected_net_pct"] for pair in pairs) / len(pairs)
+                         if pairs else 0.0)
+
+        if self.archive_error:
+            status = "DATA_INCOMPLETE"
+            reason = f"evidence integrity problem: {self.archive_error}"
+        elif (eligible_rows and classification_coverage
+              < AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT):
+            status = "DATA_INCOMPLETE"
+            reason = (
+                f"AI classified only {classification_coverage:.1f}% of mechanically "
+                f"eligible rows; need at least "
+                f"{AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT:.0f}% so API/model failures "
+                f"cannot select the measured sample"
+            )
+        elif stale_days or modeled_days:
+            status = "DATA_INCOMPLETE"
+            reason = (
+                f"{stale_days} matured paired day(s) have missing outcomes and "
+                f"{modeled_days} paired day(s) lack observed execution costs"
+            )
+        elif (len(pairs) < AI_VALUE_MIN_PAIRED_DAYS
+              or len(excess_lifts) < AI_VALUE_MIN_PAIRED_DAYS):
+            status = "COLLECTING"
+            reason = (
+                f"need {AI_VALUE_MIN_PAIRED_DAYS} completed paired AI-control days; "
+                f"have {len(pairs)} net / {len(excess_lifts)} IWM-relative"
+            )
+        elif net_lo > 0 and ex_lo > 0:
+            status = "AI_LIFT_PROMISING_NOT_VALIDATED"
+            reason = (
+                "AI-approved setups beat same-day AI-rejected mechanical controls "
+                "after observed costs; an independent frozen-rule audit is still required"
+            )
+        else:
+            status = "NO_MEASURED_AI_EDGE"
+            reason = (
+                "the paired after-cost AI lift is non-positive or its dependence-robust "
+                "95% interval crosses zero"
+            )
+
+        return {
+            "status": status,
+            "auto_trade_allowed": False,
+            "reason": reason,
+            "horizon_sessions": int(horizon),
+            "paired_days": len(pairs),
+            "minimum_paired_days": AI_VALUE_MIN_PAIRED_DAYS,
+            "paired_days_remaining": max(0, AI_VALUE_MIN_PAIRED_DAYS - len(pairs)),
+            "pending_paired_days": pending_days,
+            "stale_paired_days": stale_days,
+            "modeled_cost_paired_days": modeled_days,
+            "unpaired_days": unpaired_days,
+            "classified_rows": len(rows),
+            "unavailable_rows": len(unavailable_rows),
+            "classification_coverage_pct": round(classification_coverage, 1),
+            "minimum_classification_coverage_pct": (
+                AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT),
+            "ai_policy_version": AI_DECISION_POLICY_VERSION,
+            "ai_policy_id": policy_id,
+            "model_counts": model_counts,
+            "approved_mean_net_pct": round(approved_mean, 3) if pairs else None,
+            "rejected_mean_net_pct": round(rejected_mean, 3) if pairs else None,
+            "mean_ai_lift_pct": round(net_mean, 3) if pairs else None,
+            "ai_lift_hac_95_pct": ([round(net_lo, 3), round(net_hi, 3)]
+                                    if pairs else None),
+            "mean_ai_excess_lift_pct": (round(ex_mean, 3) if excess_lifts else None),
+            "ai_excess_lift_hac_95_pct": (
+                [round(ex_lo, 3), round(ex_hi, 3)] if excess_lifts else None),
+            "grouping": "paired equal-weight approved-vs-rejected baskets per signal day",
+            "note": ("This tests the AI filter's incremental value. It does not prove "
+                     "the mechanical strategy itself is profitable and never unlocks trading."),
         }
 
     async def manage_loop(self):
@@ -3072,6 +3334,7 @@ class PennyStockPaperBot:
             "signal_log": self.signal_log[:40],
             "signal_stats": self.signal_stats(),
             "forward_validation": self.forward_validation(),
+            "ai_value_audit": self.ai_value_audit(),
             "top_n": TOP_N,
             "regime": research.market_regime(),
             "edge_policy": research.edge_policy(),
@@ -3100,6 +3363,8 @@ class PennyStockPaperBot:
                      "After-hours, stale, locked, or internally suspect books are ADV proxies for "
                      "ranking only and never count as confirmations. Hard risk gates and "
                      "technical/catalyst confirmation run before the AI; the AI may veto but never "
-                     "promote a weak setup. Confirmed unvalidated candidates are never filled, but "
+                     "promote a weak setup. Confirmed AI rejections are retained as a non-trading "
+                     "control group, so the model's incremental value can be measured instead of "
+                     "assumed. Confirmed unvalidated candidates are never filled, but "
                      "cost-adjusted and IWM-relative results are measured at 1/5/10 later sessions."),
         }

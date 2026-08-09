@@ -3157,3 +3157,177 @@ class TestArchiveRepairIsNonDestructive(unittest.TestCase):
         bot._save()                                           # drains the good event
         self.assertNotEqual(bot.quarantine_error, "")         # block survives salvage
         self.assertEqual(bot.forward_validation()["status"], "DATA_INCOMPLETE")
+
+
+class TestAIIncrementalValueAudit(unittest.TestCase):
+    """The model needs a measured control group before anyone can call it edge."""
+
+    @staticmethod
+    def _rank():
+        return {
+            "composite": 80.0, "hype": 75.0, "quality": 75.0,
+            "tradeability": 95.0, "technical": 80.0, "catalyst": 70.0,
+        }
+
+    @staticmethod
+    def _row(day, sid, selection, net, excess, outcome=True):
+        role = (paper.PRIMARY_EVIDENCE_ROLE if selection == "approved"
+                else paper.CONTROL_EVIDENCE_ROLE)
+        return {
+            "id": sid, paper.SIGNAL_DAY_FIELD: day,
+            "engine_version": paper.SIGNAL_ENGINE_VERSION,
+            "ticker": sid, paper.EVIDENCE_ROLE_FIELD: role,
+            paper.AI_SELECTION_FIELD: selection,
+            "ai_policy_version": paper.AI_DECISION_POLICY_VERSION,
+            "ai_policy_id": paper.ai_decision_policy_id(),
+            "outcomes": ({"5": measured_outcome(net, excess)} if outcome else {}),
+            "resolved": outcome,
+        }
+
+    def test_ai_veto_preserves_the_pre_ai_mechanical_setup(self):
+        signal = research.signal_from(
+            complete_dossier(), self._rank(),
+            {"verdict": "AVOID", "conviction": "high", "score": 10},
+        )
+        self.assertEqual(signal["mechanical_action"], "STRONG BUY")
+        self.assertEqual(signal["candidate_action"], "AVOID")
+        self.assertEqual(signal["action"], "AVOID")
+
+    def test_prompt_change_gets_a_new_ai_policy_population(self):
+        original = paper.ai_decision_policy_id()
+        with mock.patch.object(research, "SYSTEM_PROMPT",
+                               research.SYSTEM_PROMPT + "\nchanged"):
+            changed = paper.ai_decision_policy_id()
+        self.assertNotEqual(original, changed)
+
+    def test_vetoed_setup_is_confirmed_for_measurement_but_never_promoted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            signal = research.signal_from(
+                complete_dossier(), self._rank(),
+                {"verdict": "AVOID", "conviction": "high", "score": 10},
+            )
+            board = [{
+                "ticker": "VETO", "price": 2.0, "quote_reliable": True,
+                "market_state": "REGULAR", "spread_estimated": False,
+                "catalyst_key": "same", "signal": signal,
+            }]
+            bot._update_setup_states(board, now=100.0)
+            bot._update_setup_states(board, now=150.0)
+        self.assertTrue(board[0]["confirmation"]["confirmed"])
+        self.assertEqual(board[0]["signal"]["action"], "AVOID")
+
+    def test_vetoed_setup_is_archived_as_control_not_live_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            signal = research.signal_from(
+                complete_dossier(), self._rank(),
+                {"verdict": "AVOID", "conviction": "high", "score": 10},
+            )
+            board = [{
+                "ticker": "VETO", "rank": 1, "price": 2.0,
+                "composite": 80.0, "hype": 75.0, "quality": 75.0,
+                "tradeability": 95.0, "technical": 80.0, "catalyst": 70.0,
+                "spread_pct": 1.0, "spread_estimated": False,
+                "market_state": "REGULAR", "quote_reliable": True,
+                "bid": 1.99, "ask": 2.01, "quote_age_min": 1.0,
+                "confirmation": {"confirmed": True, "observations": 2},
+                "signal": signal,
+                "ai": {"verdict": "AVOID", "conviction": "high", "score": 10},
+            }]
+            bot._record_signals(board)
+            self.assertEqual(len(bot.signal_log), 1)
+            row = bot.signal_log[0]
+            self.assertEqual(row[paper.EVIDENCE_ROLE_FIELD],
+                             paper.CONTROL_EVIDENCE_ROLE)
+            self.assertEqual(row[paper.AI_SELECTION_FIELD], "rejected")
+            self.assertEqual(bot.evidence_rows(), [])
+            self.assertEqual(len(bot.mechanical_evidence_rows()), 1)
+
+    def test_control_rows_do_not_contaminate_the_live_profitability_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            approved = self._row("2026-01-02", "APPROVED", "approved", 2.0, 1.5)
+            rejected = self._row("2026-01-02", "REJECTED", "rejected", -50.0, -50.5)
+            bot._evidence = {approved["id"]: approved, rejected["id"]: rejected}
+            bot.signal_log = [approved, rejected]
+            book = bot.daily_baskets("5")
+        self.assertEqual(book["logged_rows"], 1)
+        self.assertEqual(book["baskets"][0]["members"], 1)
+        self.assertEqual(book["baskets"][0]["net_pct"], 2.0)
+
+    def test_paired_forward_audit_can_measure_ai_lift_without_unlocking_trading(self):
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.extend((
+                    self._row(day, f"A{index}", "approved", 2.0, 1.5),
+                    self._row(day, f"R{index}", "rejected", -1.0, -1.5),
+                ))
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["status"], "AI_LIFT_PROMISING_NOT_VALIDATED")
+        self.assertEqual(audit["paired_days"], paper.AI_VALUE_MIN_PAIRED_DAYS)
+        self.assertEqual(audit["mean_ai_lift_pct"], 3.0)
+        self.assertFalse(audit["auto_trade_allowed"])
+
+    def test_mature_missing_control_blocks_a_positive_ai_claim(self):
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.extend((
+                    self._row(day, f"A{index}", "approved", 2.0, 1.5),
+                    self._row(day, f"R{index}", "rejected", -1.0, -1.5),
+                ))
+            stale_day = "2026-03-15"
+            rows.extend((
+                self._row(stale_day, "STALE-A", "approved", 2.0, 1.5),
+                self._row(stale_day, "STALE-R", "rejected", 0.0, 0.0,
+                          outcome=False),
+            ))
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            later_sessions = [date(2026, 3, 16) + timedelta(days=i)
+                              for i in range(20)]
+            with mock.patch.object(bot, "_recent_sessions",
+                                   return_value=later_sessions):
+                audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+        self.assertEqual(audit["stale_paired_days"], 1)
+        self.assertFalse(audit["auto_trade_allowed"])
+
+    def test_ai_failures_cannot_select_a_pretty_available_sample(self):
+        from datetime import date, timedelta
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = isolated_bot(tmp)
+            rows = []
+            start = date(2026, 1, 1)
+            for index in range(paper.AI_VALUE_MIN_PAIRED_DAYS):
+                day = (start + timedelta(days=index)).isoformat()
+                rows.extend((
+                    self._row(day, f"A{index}", "approved", 2.0, 1.5),
+                    self._row(day, f"R{index}", "rejected", -1.0, -1.5),
+                ))
+            # 31 failures beside 120 classified rows puts coverage below 80%.
+            for index in range(31):
+                row = self._row(
+                    (start + timedelta(days=index)).isoformat(),
+                    f"U{index}", "unavailable", 0.0, 0.0, outcome=False)
+                rows.append(row)
+            bot._evidence = {row["id"]: row for row in rows}
+            bot.signal_log = rows
+            audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+        self.assertLess(audit["classification_coverage_pct"], 80.0)
