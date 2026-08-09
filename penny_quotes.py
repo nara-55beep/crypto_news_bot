@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -57,6 +58,15 @@ QUOTE_TIMEOUT_SEC = 10
 # Alpaca accepts a comma-separated symbol list; keep requests small enough to stay well
 # inside URL limits when a lot of names are being tracked at once.
 MAX_SYMBOLS_PER_REQUEST = 100
+# The full-universe pass is a cheap discovery layer, not execution evidence. Delayed
+# SIP is deliberately used there: unlike free real-time IEX it covers the consolidated
+# listed tape, while the later dossier/entry path still requires a fresh venue quote.
+UNIVERSE_FEED = "delayed_sip"
+UNIVERSE_BATCH_SIZE = 250
+ASSET_CACHE_SEC = 6 * 60 * 60
+UNIVERSE_SCAN_CACHE_SEC = 10 * 60
+_ASSET_CACHE: tuple[float, list[dict], dict] = (0.0, [], {})
+_UNIVERSE_SCAN_CACHE: tuple[float, list[dict], dict] = (0.0, [], {})
 
 
 def feed_name() -> str:
@@ -347,6 +357,221 @@ async def latest_quotes(symbols) -> tuple[dict, str]:
                     out[seen["ticker"]] = seen
             await asyncio.sleep(0.2)
     return out, "; ".join(errors)
+
+
+def eligible_listed_assets(payload) -> tuple[list[dict], dict]:
+    """Active, tradable, exchange-listed US equities plus honest exclusion counts.
+
+    Alpaca's assets endpoint is the master list. OTC rows are present in that list but
+    its free market-data API cannot quote them, so counting them and naming the
+    exclusion is more honest than silently pretending the universe never contained
+    them. Warrants/units are left in when Alpaca marks them tradable US equities; the
+    later security/liquidity gates decide whether they are usable.
+    """
+    rows = [row for row in (payload or []) if isinstance(row, dict)]
+    active_us = [row for row in rows
+                 if str(row.get("status") or "").lower() == "active"
+                 and str(row.get("class") or "").lower() == "us_equity"]
+    otc = [row for row in active_us
+           if str(row.get("exchange") or "").upper() == "OTC"]
+    non_otc = [row for row in active_us
+               if str(row.get("exchange") or "").upper() not in ("", "OTC")]
+    eligible = [row for row in non_otc
+                if bool(row.get("tradable")) and str(row.get("symbol") or "").strip()]
+    eligible.sort(key=lambda row: str(row.get("symbol") or ""))
+    return eligible, {
+        "assets_returned": len(rows),
+        "active_us_equities": len(active_us),
+        "otc_excluded": len(otc),
+        "nontradable_or_unlisted_excluded": len(non_otc) - len(eligible),
+        "active_listed_tradable": len(eligible),
+    }
+
+
+def snapshot_screen_row(symbol: str, snapshot: dict, asset: dict | None = None) -> dict | None:
+    """Turn one Alpaca snapshot into a cheap first-stage screening observation."""
+    if not isinstance(snapshot, dict):
+        return None
+    trade = snapshot.get("latestTrade") or {}
+    minute = snapshot.get("minuteBar") or {}
+    day = snapshot.get("dailyBar") or {}
+    previous = snapshot.get("prevDailyBar") or {}
+
+    def positive(*values):
+        for value in values:
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                continue
+            if number > 0:
+                return number
+        return 0.0
+
+    price = positive(trade.get("p"), minute.get("c"), day.get("c"))
+    if price <= 0:
+        return None
+    prior = positive(previous.get("c"))
+    volume = positive(day.get("v"))
+    quote = snapshot.get("latestQuote") or {}
+    bid, ask = positive(quote.get("bp")), positive(quote.get("ap"))
+    spread = None
+    if bid > 0 and ask > bid:
+        mid = (bid + ask) / 2.0
+        spread = (ask - bid) / mid * 100.0 if mid else None
+    change = (price / prior - 1.0) * 100.0 if prior > 0 else 0.0
+    info = asset or {}
+    return {
+        "ticker": str(symbol or "").strip().upper(),
+        "name": str(info.get("name") or ""),
+        "exchange": str(info.get("exchange") or ""),
+        "price": round(price, 6),
+        "previous_close": round(prior, 6) if prior else None,
+        "change_pct": round(change, 4),
+        "day_volume": int(volume),
+        "dollar_volume": round(volume * price, 2),
+        "bid": round(bid, 6) if bid else None,
+        "ask": round(ask, 6) if ask else None,
+        "spread_pct": round(spread, 4) if spread is not None else None,
+        "trade_at": str(trade.get("t") or ""),
+        "feed": UNIVERSE_FEED,
+    }
+
+
+def select_market_candidates(rows, limit: int, catalysts=()) -> list[str]:
+    """Interleave independent discovery views so one sort cannot crowd out the rest."""
+    by_symbol = {str(row.get("ticker") or "").upper(): row
+                 for row in (rows or []) if isinstance(row, dict) and row.get("ticker")}
+    catalyst_set = {str(symbol).upper() for symbol in (catalysts or [])}
+    catalyst_rows = [row for symbol, row in by_symbol.items() if symbol in catalyst_set]
+    buckets = [
+        sorted(catalyst_rows, key=lambda row: -float(row.get("dollar_volume") or 0)),
+        sorted(by_symbol.values(), key=lambda row: -float(row.get("change_pct") or 0)),
+        sorted(by_symbol.values(), key=lambda row: -float(row.get("day_volume") or 0)),
+        sorted((row for row in by_symbol.values() if row.get("spread_pct") is not None),
+               key=lambda row: float(row.get("spread_pct") or 1e9)),
+    ]
+    selected, seen = [], set()
+    for index in range(max((len(bucket) for bucket in buckets), default=0)):
+        for bucket in buckets:
+            if index >= len(bucket):
+                continue
+            symbol = str(bucket[index].get("ticker") or "").upper()
+            if symbol and symbol not in seen:
+                selected.append(symbol)
+                seen.add(symbol)
+                if len(selected) >= max(0, int(limit)):
+                    return selected
+    return selected
+
+
+async def active_listed_assets(force: bool = False) -> tuple[list[dict], dict, str]:
+    """Fetch Alpaca's active listed/tradable master universe, cached for six hours."""
+    global _ASSET_CACHE
+    created, cached, cached_counts = _ASSET_CACHE
+    if not force and cached and time.time() - created < ASSET_CACHE_SEC:
+        return [dict(row) for row in cached], dict(cached_counts), ""
+    if not configured():
+        return [], {}, "alpaca universe unavailable: credentials or aiohttp missing"
+    url = trading_url() + "/v2/assets"
+    params = {"status": "active", "asset_class": "us_equity"}
+    timeout = aiohttp.ClientTimeout(total=QUOTE_TIMEOUT_SEC * 3)
+    try:
+        async with aiohttp.ClientSession(headers=_headers(), timeout=timeout) as session:
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    return [], {}, f"assets HTTP {response.status}: {(await response.text())[:120]}"
+                payload = await response.json()
+    except Exception as e:
+        return [], {}, f"assets {type(e).__name__}: {str(e)[:120]}"
+    eligible, counts = eligible_listed_assets(payload)
+    if eligible:
+        _ASSET_CACHE = (time.time(), [dict(row) for row in eligible], dict(counts))
+    return eligible, counts, ""
+
+
+async def market_wide_penny_scan(min_price: float, max_price: float,
+                                 force: bool = False) -> tuple[list[dict], dict, str]:
+    """Request one delayed consolidated snapshot for every active listed asset.
+
+    This is the exhaustive CHEAP pass. It does not claim every name received a usable
+    price, and it does not pretend a delayed snapshot is executable. Coverage telemetry
+    reports requested, returned, priced and penny-range counts separately. The later
+    dossier and entry paths remain responsible for fresh data and hard risk gates.
+    """
+    global _UNIVERSE_SCAN_CACHE
+    created, cached_rows, cached_coverage = _UNIVERSE_SCAN_CACHE
+    if (not force and cached_rows
+            and time.time() - created < UNIVERSE_SCAN_CACHE_SEC):
+        return [dict(row) for row in cached_rows], dict(cached_coverage), ""
+    started = time.time()
+    assets, counts, asset_error = await active_listed_assets(force=force)
+    if not assets:
+        coverage = {**counts, "status": "FAILED", "error": asset_error,
+                    "last_attempt_at": started}
+        return [], coverage, asset_error
+
+    feed = UNIVERSE_FEED
+    url = str(config.ALPACA_DATA_URL).rstrip("/") + "/v2/stocks/snapshots"
+    asset_by_symbol = {str(row.get("symbol") or "").upper(): row for row in assets}
+    symbols = list(asset_by_symbol)
+    snapshots: dict[str, dict] = {}
+    errors: list[str] = []
+    request_count = 0
+    timeout = aiohttp.ClientTimeout(total=QUOTE_TIMEOUT_SEC * 3)
+    async with aiohttp.ClientSession(headers=_headers(), timeout=timeout) as session:
+        for start in range(0, len(symbols), UNIVERSE_BATCH_SIZE):
+            batch = symbols[start:start + UNIVERSE_BATCH_SIZE]
+            request_count += 1
+            try:
+                async with session.get(url, params={"symbols": ",".join(batch),
+                                                    "feed": feed}) as response:
+                    if response.status != 200:
+                        errors.append(f"batch {request_count} HTTP {response.status}: "
+                                      f"{(await response.text())[:100]}")
+                        continue
+                    payload = await response.json()
+            except Exception as e:
+                errors.append(f"batch {request_count} {type(e).__name__}: {str(e)[:90]}")
+                continue
+            for symbol, snapshot in (payload or {}).items():
+                if isinstance(snapshot, dict):
+                    snapshots[str(symbol).upper()] = snapshot
+            await asyncio.sleep(0.08)
+
+    priced, pennies = [], []
+    for symbol, snapshot in snapshots.items():
+        row = snapshot_screen_row(symbol, snapshot, asset_by_symbol.get(symbol))
+        if row is None:
+            continue
+        priced.append(row)
+        if float(min_price) < float(row["price"]) < float(max_price):
+            pennies.append(row)
+    returned = len(snapshots)
+    requested = len(symbols)
+    coverage = {
+        **counts,
+        "status": "COMPLETE" if not errors else "PARTIAL",
+        "provider": "alpaca",
+        "feed": feed,
+        "feed_description": "15-minute delayed consolidated SIP discovery feed",
+        "symbols_requested": requested,
+        "snapshots_returned": returned,
+        "snapshot_coverage_pct": round(returned / requested * 100.0, 2) if requested else 0.0,
+        "priced_assets": len(priced),
+        "penny_price_matches": len(pennies),
+        "request_batches": request_count,
+        "min_price": float(min_price),
+        "max_price": float(max_price),
+        "otc_supported": False,
+        "otc_reason": "Alpaca OTC market data requires a broker-partner subscription",
+        "last_completed_at": time.time(),
+        "duration_sec": round(time.time() - started, 2),
+        "error": "; ".join(errors[:4]),
+    }
+    if pennies and not errors:
+        _UNIVERSE_SCAN_CACHE = (time.time(), [dict(row) for row in pennies],
+                                dict(coverage))
+    return pennies, coverage, coverage["error"]
 
 
 def percentile(values: list[float], pct: float) -> float | None:

@@ -2153,7 +2153,7 @@ class TestExecutionRealisticMeasurement(unittest.TestCase):
         self.assertIn("1", row["outcomes"])             # earlier horizons still resolve
 
     def test_the_engine_version_is_untouched_by_a_measurement_repair(self):
-        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 6)
+        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 7)
         self.assertEqual(paper.MEASUREMENT_SCHEMA_VERSION, 2)
 
 
@@ -2986,7 +2986,7 @@ class TestEventsAreValidatedBeforeAnyWrite(unittest.TestCase):
     def test_the_engine_version_and_trading_block_are_untouched(self):
         tmp = tempfile.mkdtemp()
         bot = self._bot(tmp)
-        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 6)
+        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 7)
         self.assertFalse(bot.forward_validation()["auto_trade_allowed"])
 
 
@@ -3582,7 +3582,7 @@ def f(a):
 
     def test_fingerprinting_does_not_touch_the_engine_or_unlock_trading(self):
         bot = isolated_bot(tempfile.mkdtemp())
-        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 6)
+        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 7)
         self.assertFalse(bot.ai_value_audit("5")["auto_trade_allowed"])
         self.assertFalse(bot.forward_validation("5")["auto_trade_allowed"])
 
@@ -4183,4 +4183,4 @@ class TestAIValueAuditSampleAndInference(unittest.TestCase):
             rows.append(self._row(day, f"R{index}", "rejected", -5.0, -6.0))
         audit = self._audit(rows)
         self.assertFalse(audit["auto_trade_allowed"])
-        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 6)
+        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 7)

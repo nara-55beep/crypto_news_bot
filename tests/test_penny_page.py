@@ -48,6 +48,13 @@ class TestPennyPage(unittest.TestCase):
         self.assertIn("Incremental AI value", PENNY_HTML)
         self.assertIn("completed_signal_days_required", PENNY_HTML)
 
+    def test_market_wide_coverage_is_visible_and_honest_about_deep_scoring(self):
+        self.assertIn('id="universe"', PENNY_HTML)
+        self.assertIn("Every active tradable non-OTC U.S. equity", PENNY_HTML)
+        self.assertIn("Penny-price matches", PENNY_HTML)
+        self.assertIn("Deep dossiers", PENNY_HTML)
+        self.assertIn("OTC excluded", PENNY_HTML)
+
     def test_page_contains_no_common_utf8_mojibake(self):
         self.assertNotIn("â", PENNY_HTML)
         self.assertNotIn("Â", PENNY_HTML)
