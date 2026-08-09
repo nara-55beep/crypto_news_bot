@@ -3587,6 +3587,219 @@ def f(a):
         self.assertFalse(bot.forward_validation("5")["auto_trade_allowed"])
 
 
+class TestSelectorDigestIsStable(unittest.TestCase):
+    """A behaviour digest must describe behaviour, never object identity.
+
+    CPython's default repr embeds id(), so a selector component written with the
+    ordinary sentinel-default idiom hashed differently in every process. The policy id
+    would then change on each restart: the evidence population could never accumulate
+    60 days, and the multiplicity count would grow without bound - silently, because
+    nothing distinguishes "the selector changed" from "the object moved".
+    """
+
+    def setUp(self):
+        paper._BEHAVIOUR_DIGESTS.clear()
+
+    tearDown = setUp
+
+    @staticmethod
+    def _with_default(default):
+        namespace = {}
+        exec(compile("def build(d, override=None):\n    return d\n",
+                     "<nosource>", "exec"), namespace)
+        namespace["build"].__defaults__ = (default,)
+        return namespace["build"]
+
+    def test_a_sentinel_default_does_not_move_the_digest(self):
+        class Missing:
+            pass
+
+        first = paper._behaviour_digest(self._with_default(Missing()))
+        paper._BEHAVIOUR_DIGESTS.clear()
+        second = paper._behaviour_digest(self._with_default(Missing()))
+        self.assertEqual(first, second)
+
+    def test_a_custom_repr_still_distinguishes_values(self):
+        """Dropping repr entirely would be over-correction: Decimal('1.5') and
+        Decimal('2.5') are different behaviour, not different identity."""
+        import decimal
+
+        low = paper._semantic_value(decimal.Decimal("1.5"))
+        high = paper._semantic_value(decimal.Decimal("2.5"))
+        self.assertNotEqual(low, high)
+        self.assertIn("1.5", low["repr"])
+
+    def test_an_address_inside_a_custom_repr_is_scrubbed(self):
+        class Addressed:
+            def __repr__(self):
+                return f"<Addressed at 0x{id(self):x}>"
+
+        self.assertEqual(paper._semantic_value(Addressed()),
+                         paper._semantic_value(Addressed()))
+        self.assertNotIn("0x0", paper._semantic_value(Addressed())["repr"][3:])
+
+    def test_a_bare_object_is_described_by_type_alone(self):
+        class Bare:
+            pass
+
+        described = paper._semantic_value(Bare())
+        self.assertNotIn("repr", described)
+        self.assertIn("Bare", described["type"])
+        # a different class is still a different description
+        class Other:
+            pass
+        self.assertNotEqual(described, paper._semantic_value(Other()))
+
+    def test_the_policy_id_is_identical_in_a_fresh_interpreter(self):
+        """The end-to-end property: restarting the process must not start a new
+        comparison population."""
+        import subprocess
+
+        repo = os.path.dirname(os.path.abspath(paper.__file__))
+        script = (f"import sys; sys.path.insert(0, r'{repo}')\n"
+                  "import pennystock_paper as p; print(p.ai_decision_policy_id())")
+        runs = {subprocess.run([sys.executable, "-c", script], capture_output=True,
+                               text=True).stdout.strip() for _ in range(2)}
+        self.assertEqual(runs, {paper.ai_decision_policy_id()})
+
+    def test_semantic_bytecode_still_reaches_constants_and_closures(self):
+        """The stability fix must not weaken the fallback it sits inside."""
+        namespace = {}
+        exec(compile('def a():\n    return "ALPHA"\ndef b():\n    return "BETA"\n',
+                     "<nosource>", "exec"), namespace)
+        self.assertNotEqual(paper._behaviour_digest(namespace["a"]),
+                            paper._behaviour_digest(namespace["b"]))
+        maker = {}
+        exec(compile("def mk(t):\n    def f(x, k=t):\n        return x + k\n"
+                     "    return f\n", "<nosource>", "exec"), maker)
+        first = paper._behaviour_digest(maker["mk"](1))
+        paper._BEHAVIOUR_DIGESTS.clear()
+        self.assertNotEqual(first, paper._behaviour_digest(maker["mk"](2)))
+
+    def test_a_component_with_neither_source_nor_code_still_fails_closed(self):
+        with self.assertRaises(TypeError):
+            paper._behaviour_digest(object())
+
+
+class TestSelectorFingerprintScope(unittest.TestCase):
+    """The id must move for every operational selector change and for nothing else."""
+
+    def setUp(self):
+        self.base = paper.ai_decision_policy_id()
+
+    def _moves(self, patcher):
+        with patcher:
+            return paper.ai_decision_policy_id() != self.base
+
+    def test_cache_reuse_thresholds_and_capacity_are_tracked(self):
+        for name, value in (("AI_MATERIAL_PRICE_PCT", 99.0),
+                            ("AI_MATERIAL_SCORE_POINTS", 99.0),
+                            ("AI_CACHE_MAX_NAMES", 3),
+                            ("AI_DEEP_DIVE", 1)):
+            with self.subTest(setting=name):
+                self.assertTrue(self._moves(mock.patch.object(paper, name, value)))
+
+    def test_the_cache_and_call_path_behaviour_is_tracked(self):
+        cases = {
+            "cache lookup": mock.patch.object(
+                paper.PennyStockPaperBot, "_cached_ai",
+                lambda self, d, score: (None, "", False, "")),
+            "cache store": mock.patch.object(
+                paper.PennyStockPaperBot, "_store_ai", lambda *a, **k: None),
+            "cache key": mock.patch.object(
+                paper.PennyStockPaperBot, "_catalyst_key",
+                staticmethod(lambda d: "constant")),
+            "response extractor": mock.patch.object(
+                research, "_extract_json", lambda raw: {}),
+            "model call": mock.patch.object(
+                research, "_call_ai_long", lambda system, user: ""),
+            "analysis pipeline": mock.patch.object(
+                research, "analyse_dossier", lambda d: {}),
+        }
+        for label, patcher in cases.items():
+            with self.subTest(component=label):
+                self.assertTrue(self._moves(patcher))
+
+    def test_prompt_inputs_are_tracked(self):
+        """effective_spread and catalyst_alignment are printed into the dossier the
+        model reads, so changing either changes the selector's input."""
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "effective_spread", lambda d: (1.0, False))))
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "catalyst_alignment", lambda d: {})))
+
+    def test_measurement_logic_stays_out_of_the_selector_id(self):
+        """Repairing how outcomes are MEASURED must not discard the selector's
+        evidence population - it is a different question about the same rows."""
+        cases = {
+            "exit_leg": mock.patch.object(
+                paper.PennyStockPaperBot, "exit_leg",
+                classmethod(lambda cls, *a, **k: None)),
+            "outcome_is_evidentiary": mock.patch.object(
+                paper.PennyStockPaperBot, "outcome_is_evidentiary",
+                staticmethod(lambda outcome: True)),
+            "daily_baskets": mock.patch.object(
+                paper.PennyStockPaperBot, "daily_baskets",
+                lambda self, horizon="5": {}),
+            "hac interval": mock.patch.object(
+                paper.PennyStockPaperBot, "_hac_mean_ci",
+                staticmethod(lambda values, max_lag=5: (0.0, 0.0, 0.0))),
+            "adverse bound": mock.patch.object(
+                paper.PennyStockPaperBot, "_minimum_selector_return",
+                staticmethod(lambda approved, unavailable: 0.0)),
+            "completed sessions": mock.patch.object(
+                paper.PennyStockPaperBot, "completed_sessions",
+                staticmethod(lambda dates, now_ny=None: 0)),
+            "measurement schema": mock.patch.object(
+                paper, "MEASUREMENT_SCHEMA_VERSION", 99),
+        }
+        for label, patcher in cases.items():
+            with self.subTest(component=label):
+                self.assertFalse(self._moves(patcher))
+
+
+class TestPriorPolicyPopulationsStaySeparate(unittest.TestCase):
+    """Evidence from a previous selector counts as a tested policy but never joins
+    the current comparison."""
+
+    @staticmethod
+    def _row(day, sid, selection, net, excess, policy_id, version=None):
+        role = (paper.PRIMARY_EVIDENCE_ROLE if selection == "approved"
+                else paper.CONTROL_EVIDENCE_ROLE)
+        return {
+            "id": sid, paper.SIGNAL_DAY_FIELD: day, "ticker": sid,
+            "engine_version": paper.SIGNAL_ENGINE_VERSION,
+            paper.EVIDENCE_ROLE_FIELD: role,
+            paper.AI_SELECTION_FIELD: selection,
+            "ai_policy_version": (paper.AI_DECISION_POLICY_VERSION
+                                  if version is None else version),
+            "ai_policy_id": policy_id,
+            "outcomes": {"5": measured_outcome(net, excess)}, "resolved": True,
+        }
+
+    def test_legacy_fingerprints_are_counted_but_not_pooled(self):
+        current = paper.ai_decision_policy_id()
+        rows = []
+        for index in range(paper.AI_VALUE_MIN_COMPARISON_DAYS):
+            day = (date(2026, 1, 1) + timedelta(days=index)).isoformat()
+            rows.append(self._row(day, f"A{index}", "approved", 2.0, 1.0, current))
+            rows.append(self._row(day, f"R{index}", "rejected", 0.0, -1.0, current))
+        # rows recorded under three earlier fingerprints, and one earlier policy version
+        rows += [self._row("2026-01-01", f"OLD{k}", "approved", 99.0, 99.0,
+                           f"legacy-{k}") for k in range(3)]
+        rows += [self._row("2026-01-01", "OLDV", "approved", 99.0, 99.0, current,
+                           version=paper.AI_DECISION_POLICY_VERSION - 1)]
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot._evidence = {row["id"]: row for row in rows}
+        bot.signal_log = rows
+        audit = bot.ai_value_audit("5")
+        self.assertEqual(audit["ai_policies_tested"], 5)     # 1 current + 4 prior
+        self.assertEqual(audit["comparison_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        self.assertEqual(audit["mean_ai_lift_pct"], 1.0)     # the +99% rows never enter
+        self.assertFalse(audit["auto_trade_allowed"])
+
+
 class TestMissingDecisionBound(unittest.TestCase):
     """The adverse bound must be the exact minimum over every assignment of the
     decisions that were never recorded - not a heuristic that happens to look low."""

@@ -29,6 +29,7 @@ import inspect
 import json
 import math
 import os
+import re
 import textwrap
 import time
 import types
@@ -199,6 +200,8 @@ def _as_price(value) -> float | None:
 
 
 _BEHAVIOUR_DIGESTS: dict = {}
+# CPython's default repr embeds the object's address. It is identity, never behaviour.
+_ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
 
 
 def _semantic_value(value):
@@ -230,8 +233,18 @@ def _semantic_value(value):
     if isinstance(value, dict):
         return {str(key): _semantic_value(item)
                 for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
-    return {"type": f"{type(value).__module__}.{type(value).__qualname__}",
-            "repr": repr(value)}
+    # Anything else is described by its TYPE, and by its repr only when that repr is
+    # the class's own. object.__repr__ embeds id(), so a component using the ordinary
+    # sentinel-default idiom (_MISSING = object()) hashed to a different value in every
+    # process: the policy id would change on each restart, the evidence population would
+    # never accumulate, and the multiplicity count would grow without bound - silently,
+    # because nothing distinguishes "the selector changed" from "the object moved".
+    described = {"type": f"{type(value).__module__}.{type(value).__qualname__}"}
+    if type(value).__repr__ is not object.__repr__:
+        # A custom repr describes the VALUE, so it belongs in the digest - but scrub any
+        # address it happens to embed, since that is identity rather than behaviour.
+        described["repr"] = _ADDRESS.sub("0xX", repr(value))
+    return described
 
 
 def _function_runtime_semantics(target) -> dict:
