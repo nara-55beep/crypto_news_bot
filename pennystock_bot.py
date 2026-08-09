@@ -53,12 +53,12 @@ _PENNY_UNIVERSE_CACHE: tuple[float, set[str]] = (0.0, set())
 PENNY_UNIVERSE_TTL_SEC = 15 * 60
 
 # Research authorization belongs to an exact implementation, not to the broad idea of
-# "buying penny stocks".  Version 4 requires a time-aligned headline AND an official,
-# non-adverse SEC 8-K.  The previous implementation was named as though SEC confirmation
-# were mandatory but still let an arbitrary fresh Yahoo headline qualify by itself.
-# Changing the identifier is intentional: evidence for an older implementation must
-# never unlock this one.
-LIVE_STRATEGY_ID = "live_sec_news_align_v4"
+# "buying penny stocks". Version 5 keeps v4's time-aligned headline AND official,
+# non-adverse SEC 8-K requirement, and changes discovery to a market-wide listed-asset
+# snapshot instead of treating three capped mover lists as the universe. Changing the
+# identifier is intentional: a wider population is a different strategy population,
+# so evidence for the narrower implementation must never unlock this one.
+LIVE_STRATEGY_ID = "live_sec_news_align_marketwide_v5"
 
 # A provider's regularMarketTime timestamps the last trade, not the bid/ask update.  It
 # is still the best freshness evidence available on the free feed, so keep the window

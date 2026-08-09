@@ -131,7 +131,7 @@ MISSING_OUTCOME_ASSUMPTION_PCT = -100.0
 # Append-only evidence. The hot log is capped for memory; this is not, so retention can
 # never quietly change a statistic.
 SIGNAL_ARCHIVE_PATH = os.path.join(config.DATA_DIR, "pennystock_signal_archive.jsonl")
-SIGNAL_ENGINE_VERSION = 6
+SIGNAL_ENGINE_VERSION = 7
 # The live verdict must contain only AI-approved signals, but the question "does the AI
 # add value?" requires the mechanically identical names it rejected.  Both cohorts are
 # recorded under one durable measurement path and separated by an explicit role.  Rows
@@ -488,6 +488,7 @@ class PennyStockPaperBot:
         self.history: list[dict] = []
         self.log: list[dict] = []
         self.watchlist: list[dict] = []      # latest AI verdicts, incl. the rejects
+        self.universe_coverage: dict = {}
         self.status = "idle"
         self.last_scan = 0.0
         self.last_scan_started = 0.0
@@ -550,6 +551,7 @@ class PennyStockPaperBot:
                     "positions": {k: asdict(v) for k, v in self.pos.items()},
                     "history": self.history[:200], "log": self.log[:120],
                     "watchlist": self.watchlist[:30],
+                    "universe_coverage": self.universe_coverage,
                     "day_key": self.day_key, "day_pnl": self.day_pnl,
                     "scan_count": self.scan_count,
                     "signal_log": self._retained_signals(),
@@ -608,6 +610,9 @@ class PennyStockPaperBot:
                 and isinstance(row.get("signal"), dict)
                 and row["signal"].get("strategy_id") == research.LIVE_STRATEGY_ID
             ]
+            self.universe_coverage = (d.get("universe_coverage")
+                                      if isinstance(d.get("universe_coverage"), dict)
+                                      else {})
             self.day_key = str(d.get("day_key", ""))
             self.day_pnl = float(d.get("day_pnl", 0.0))
             self.scan_count = int(d.get("scan_count", 0))
@@ -710,6 +715,25 @@ class PennyStockPaperBot:
         if self.last_full_scan <= 0 or now - self.last_full_scan >= FULL_SCAN_SEC:
             return "full"
         return "pulse"
+
+    @staticmethod
+    def _interleave_candidates(*buckets, limit: int) -> list[str]:
+        """Merge discovery sources without letting one ranking own every slot."""
+        clean = [[str(symbol).strip().upper() for symbol in (bucket or [])
+                  if str(symbol).strip()] for bucket in buckets]
+        selected, seen = [], set()
+        for index in range(max((len(bucket) for bucket in clean), default=0)):
+            for bucket in clean:
+                if index >= len(bucket):
+                    continue
+                symbol = bucket[index]
+                if symbol in seen:
+                    continue
+                selected.append(symbol)
+                seen.add(symbol)
+                if len(selected) >= max(0, int(limit)):
+                    return selected
+        return selected
 
     @staticmethod
     def _catalyst_key(d) -> str:
@@ -2111,11 +2135,12 @@ class PennyStockPaperBot:
             await self._scan_locked(mode)
 
     async def _scan_locked(self, mode: str = "full"):
-        """Screen wide -> score everything -> rank -> AI-review the top -> signal -> trade.
+        """Snapshot every listed asset -> deep-score candidates -> rank -> AI review.
 
-        Only the top few get an AI call: the free tier has a daily token budget, and
-        spending it on the 40th-ranked name is waste. Everything still gets a
-        mechanical score, so the leaderboard is complete.
+        Every active listed/tradable symbol gets the cheap first-stage snapshot on a
+        full scan. Only the interleaved SEC/mover/volume/spread candidates get expensive
+        Yahoo fundamentals and mechanical scoring, and only mechanically eligible names
+        get an AI call. The separate coverage telemetry keeps those stages explicit.
         """
         mode = "pulse" if mode == "pulse" else "full"
         started = time.time()
@@ -2124,8 +2149,59 @@ class PennyStockPaperBot:
         self.status = f"{mode} screening the market..."
         try:
             pool = SCREEN_POOL if mode == "full" else PULSE_SCREEN_POOL
-            fresh = await asyncio.to_thread(research.screen, pool)
-            if mode == "pulse":
+            if mode == "full":
+                # The old "wide" scan only deep-scored 60 names returned by three
+                # Yahoo sorts. Now every active listed/tradable asset gets a cheap
+                # consolidated snapshot first. Expensive fundamentals/SEC/AI work is
+                # still reserved for an interleaved candidate set; doing thousands of
+                # Yahoo dossiers every two minutes would be slower than the market and
+                # would immediately trip provider limits.
+                self.status = "requesting a snapshot for every active listed US equity..."
+                market_result, yahoo_result, catalyst_result = await asyncio.gather(
+                    penny_quotes.market_wide_penny_scan(
+                        research.MIN_PRICE, research.MAX_PRICE),
+                    asyncio.to_thread(research.screen, pool),
+                    asyncio.to_thread(
+                        research.sec_edgar.current_8k_tickers,
+                        research.FRESH_NEWS_HOURS),
+                    return_exceptions=True,
+                )
+                if isinstance(market_result, Exception):
+                    market_rows, coverage, market_error = [], {
+                        "status": "FAILED",
+                        "error": f"{type(market_result).__name__}: {str(market_result)[:120]}",
+                    }, str(market_result)
+                else:
+                    market_rows, coverage, market_error = market_result
+                yahoo_fresh = ([] if isinstance(yahoo_result, Exception)
+                               else list(yahoo_result or []))
+                catalyst_symbols = ([] if isinstance(catalyst_result, Exception)
+                                    else list(catalyst_result or []))
+                market_fresh = penny_quotes.select_market_candidates(
+                    market_rows, pool, catalysts=catalyst_symbols)
+                fresh = self._interleave_candidates(
+                    yahoo_fresh, market_fresh, limit=pool)
+                coverage = dict(coverage or {})
+                coverage.update({
+                    "deep_score_cap": pool,
+                    "deep_score_target": len(fresh),
+                    "yahoo_in_play_candidates": len(yahoo_fresh),
+                    "market_wide_candidates": len(market_fresh),
+                    "fresh_sec_catalyst_symbols": len(catalyst_symbols),
+                    "strategy_id": research.LIVE_STRATEGY_ID,
+                    "engine_version": SIGNAL_ENGINE_VERSION,
+                })
+                if isinstance(yahoo_result, Exception):
+                    yahoo_error = f"Yahoo discovery {type(yahoo_result).__name__}: {str(yahoo_result)[:90]}"
+                    coverage["error"] = "; ".join(
+                        value for value in (coverage.get("error"), yahoo_error) if value)
+                    if not market_rows:
+                        raise RuntimeError(yahoo_error)
+                if market_error and not yahoo_fresh:
+                    raise RuntimeError(str(market_error))
+                self.universe_coverage = coverage
+            else:
+                fresh = await asyncio.to_thread(research.screen, pool)
                 # Keep confirming prior candidates while reserving most of the pulse
                 # for fresh movers returned by the live screener.
                 priority = [
@@ -2134,7 +2210,7 @@ class PennyStockPaperBot:
                     in ("BUY", "STRONG BUY")
                 ]
                 syms = list(dict.fromkeys(priority + fresh))[:PULSE_SCORE_LIMIT]
-            else:
+            if mode == "full":
                 syms = fresh
         except Exception as e:
             self.last_error = f"screen: {type(e).__name__}: {str(e)[:90]}"
@@ -2173,6 +2249,12 @@ class PennyStockPaperBot:
 
         scored.sort(key=lambda x: -x[0])
         top = scored[:TOP_N]
+        if mode == "full":
+            self.universe_coverage.update({
+                "deep_scored": len(scored),
+                "leaderboard_count": len(top),
+                "last_deep_scan_completed_at": time.time(),
+            })
 
         # ---- 2) AI deep-dive on the best few ----
         board = []
@@ -2274,6 +2356,15 @@ class PennyStockPaperBot:
         self.scan_failures = 0
         self.provider_backoff_until = 0.0
         self.last_error = ""
+        if mode == "full":
+            self.status = (
+                f"market-wide pass complete: "
+                f"{int(self.universe_coverage.get('symbols_requested') or 0):,} listed requested, "
+                f"{int(self.universe_coverage.get('penny_price_matches') or 0):,} penny-price matches, "
+                f"{len(scored)} deep-scored"
+            )
+        else:
+            self.status = f"pulse scan complete: {len(scored)} deep-scored"
         # The entry book has to be taken at confirmation; it cannot be fetched later.
         await self._capture_entry_quotes(board)
         self._record_signals(board)
@@ -3763,6 +3854,7 @@ class PennyStockPaperBot:
             "max_portfolio_risk_pct": MAX_PORTFOLIO_RISK_PCT,
             "open_count": len(self.pos), "max_open": MAX_OPEN,
             "scan_count": self.scan_count,
+            "universe_coverage": self.universe_coverage,
             "evidence_clock": self._evidence_clock(),
             "persistence_error": "; ".join(x for x in (self.state_save_error, self.archive_error) if x),
             "state_save_error": self.state_save_error,
@@ -3800,7 +3892,9 @@ class PennyStockPaperBot:
             "history": self.history[:40],
             "log": self.log[:25],
             "last_error": self.last_error,
-            "rules": (f"always-on adaptive scans ({HOT_SCAN_SEC}s hot / {REGULAR_SCAN_SEC}s regular / "
+            "rules": (f"market-wide listed-universe pass every {FULL_SCAN_SEC // 60}m in active "
+                      f"sessions ({CLOSED_SCAN_SEC // 60}m while closed), plus "
+                      f"adaptive deep scans ({HOT_SCAN_SEC}s hot / {REGULAR_SCAN_SEC}s regular / "
                       f"{EXTENDED_SCAN_SEC}s extended / {CLOSED_SCAN_SEC}s closed); "
                       f"official non-adverse 8-K + headline aligned within "
                       f"{research.CATALYST_ALIGNMENT_HOURS:.0f}h; "

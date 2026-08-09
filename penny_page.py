@@ -60,6 +60,10 @@ button,a{font:inherit}a{color:inherit;text-decoration:none}
 .evidence-value{margin:9px 0 4px;font-size:18px;font-weight:750;letter-spacing:-.02em}.evidence-copy{min-height:38px;overflow-wrap:anywhere;color:var(--muted);font-size:11.5px;line-height:1.55}
 .progress{height:6px;margin-top:12px;overflow:hidden;border-radius:99px;background:#1b2634}.progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .35s ease}
 .progress-meta{display:flex;justify-content:space-between;gap:12px;margin-top:7px;color:#8795a7;font:10px/1.3 var(--mono)}
+.universe{margin-bottom:16px;padding:15px;border:1px solid var(--line2);border-radius:15px;background:linear-gradient(110deg,#101a25,#0c121a)}
+.universe-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}.universe-head h2{margin:0;color:var(--soft);font-size:12px;letter-spacing:.06em;text-transform:uppercase}.universe-head p{margin:4px 0 0;color:var(--muted);font-size:11px}
+.coverage-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.coverage-stat{min-width:0;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:#0b1119}.coverage-stat span{display:block;color:var(--muted);font:700 9px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase}.coverage-stat b{display:block;margin-top:5px;overflow-wrap:anywhere;color:var(--text);font:750 16px/1.15 var(--mono)}
+.coverage-note{margin-top:10px;color:#8f9eb0;font-size:10.5px;line-height:1.55}.coverage-note.bad{color:#ff9fac}
 
 .workspace{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}.span-12{grid-column:span 12}.span-7{grid-column:span 7}.span-5{grid-column:span 5}.span-6{grid-column:span 6}
 .card{min-width:0;border:1px solid var(--line);border-radius:15px;background:rgba(13,18,26,.96);box-shadow:0 12px 32px rgba(0,0,0,.12);overflow:hidden}
@@ -91,8 +95,8 @@ td{padding:11px;border-bottom:1px solid #17212d;color:#c9d4e1;vertical-align:top
 .held{margin-left:5px;padding:1px 5px;border:1px solid #245173;border-radius:5px;color:#8dc9ff;font:8.5px/1.2 var(--mono)}
 details.why{margin-top:7px}details.why summary{color:#8493a6;font-size:10px;cursor:pointer}.reason{display:grid;gap:5px;margin-top:6px}.rline{display:grid;grid-template-columns:70px 1fr;gap:6px;font-size:10.5px}.rkey{color:var(--muted);text-transform:uppercase}.rvalue{color:#bfccd9}.rvalue.bull{color:#7ee0b3}.rvalue.bear{color:#ff9daa}
 
-@media(max-width:1240px){.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}.span-7,.span-5{grid-column:span 12}}
-@media(max-width:860px){.page{padding:10px 9px 42px}.topbar{display:block;padding:17px}.actions{justify-content:flex-start;margin-top:14px}.systembar{margin-top:10px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.evidence-grid{grid-template-columns:1fr}.span-6{grid-column:span 12}.metric .value{font-size:19px}.card-head{align-items:flex-start}.statusline{font-size:11px}}
+@media(max-width:1240px){.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}.coverage-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.span-7,.span-5{grid-column:span 12}}
+@media(max-width:860px){.page{padding:10px 9px 42px}.topbar{display:block;padding:17px}.actions{justify-content:flex-start;margin-top:14px}.systembar{margin-top:10px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.evidence-grid{grid-template-columns:1fr}.coverage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.span-6{grid-column:span 12}.metric .value{font-size:19px}.card-head,.universe-head{align-items:flex-start}.statusline{font-size:11px}}
 @media(max-width:520px){.topbar,.systembar,.metrics,.evidence-grid,.workspace,.card{width:100%;max-width:100%;min-width:0}.actions{display:grid;grid-template-columns:1fr;width:100%}.actions .btn{display:block;width:100%;min-width:0;text-align:center}.metrics{grid-template-columns:minmax(0,1fr);gap:7px}.metric{padding:11px}.workspace{gap:10px}.brand{min-width:0}.evidence{max-width:100%;overflow:hidden}.chip{max-width:calc(50vw - 14px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
@@ -120,6 +124,7 @@ details.why{margin-top:7px}details.why summary{color:#8493a6;font-size:10px;curs
   <div class="alerts" id="alerts"></div>
   <section class="metrics" id="stats" aria-label="Account and scanner summary"></section>
   <section class="evidence-grid" id="evidence" aria-label="Validation progress"></section>
+  <section class="universe" id="universe" aria-label="Market universe coverage"></section>
 
   <section class="workspace">
     <article class="card span-5">
@@ -166,8 +171,8 @@ function table(head,rows,size=''){
     head.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function statusClass(status){
-  if(['PROMISING_NOT_VALIDATED','AI_LIFT_PROMISING_NOT_VALIDATED','RESOLVABLE_NOW'].includes(status)) return 'good';
-  if(['REJECTED','NO_MEASURED_AI_EDGE','INFEASIBLE_WITHIN_HORIZON','DATA_INCOMPLETE'].includes(status)) return 'bad';
+  if(['PROMISING_NOT_VALIDATED','AI_LIFT_PROMISING_NOT_VALIDATED','RESOLVABLE_NOW','COMPLETE'].includes(status)) return 'good';
+  if(['REJECTED','NO_MEASURED_AI_EDGE','INFEASIBLE_WITHIN_HORIZON','DATA_INCOMPLETE','PARTIAL','FAILED'].includes(status)) return 'bad';
   return 'wait';
 }
 function progressCard(title,value,copy,current,required,status){
@@ -191,6 +196,18 @@ function evidencePanel(s){
   return progressCard('Forward strategy evidence',(number(fv.signal_days))+' / '+number(fv.minimum_signal_days||60)+' days',fv.reason||'Waiting for complete signal-day outcomes.',fv.signal_days,fv.minimum_signal_days||60,fv.status||'COLLECTING')+
     progressCard('Incremental AI value',(number(av.comparison_days))+' / '+number(av.minimum_comparison_days||60)+' days',av.reason||'Waiting for complete AI-versus-mechanical days.',av.comparison_days,av.minimum_comparison_days||60,av.status||'COLLECTING')+
     progressCard('Validation power',power.value,power.copy,clock.completed_signal_days,clock.completed_signal_days_required||60,power.status);
+}
+function renderUniverse(s){
+  const c=s.universe_coverage||{};
+  if(!c.last_completed_at){
+    $('universe').innerHTML='<div class="universe-head"><div><h2>Market-wide universe coverage</h2><p>The first exhaustive listed-market snapshot is pending.</p></div><span class="badge wait">PENDING</span></div>';
+    return;
+  }
+  const status=c.status||'UNKNOWN';
+  const item=(label,value)=>'<div class="coverage-stat"><span>'+esc(label)+'</span><b>'+esc(value)+'</b></div>';
+  $('universe').innerHTML='<div class="universe-head"><div><h2>Market-wide universe coverage</h2><p>Every active tradable non-OTC U.S. equity is requested in the cheap first stage; only candidates receive expensive deep analysis.</p></div><span class="badge '+statusClass(status)+'">'+esc(status)+'</span></div>'+
+    '<div class="coverage-grid">'+item('Active listed',number(c.active_listed_tradable).toLocaleString())+item('Snapshots returned',number(c.snapshots_returned).toLocaleString()+' / '+number(c.symbols_requested).toLocaleString())+item('Snapshot coverage',number(c.snapshot_coverage_pct).toFixed(2)+'%')+item('Penny-price matches',number(c.penny_price_matches).toLocaleString())+item('Deep dossiers',number(c.deep_scored).toLocaleString()+' / '+number(c.penny_price_matches).toLocaleString())+item('OTC excluded',number(c.otc_excluded).toLocaleString())+'</div>'+
+    '<div class="coverage-note '+(c.error?'bad':'')+'">Discovery feed: '+esc(c.feed_description||c.feed||'unknown')+'. Delayed snapshots find the broad universe; confirmation and fills still require fresh regular-session execution quotes. '+esc(c.error||c.otc_reason||'')+'</div>';
 }
 function scoreBar(value){
   if(value===undefined||value===null||value==='') return '';
@@ -269,7 +286,7 @@ function renderHistoryAndLog(s){
   const rows=s.history||[];$('history').innerHTML=rows.length?table(['Ticker','Qty','Entry','Exit','P&L','Why','Spread'],rows.map(h=>'<tr><td class="ticker">'+esc(h.ticker)+'</td>'+td(h.qty)+td('$'+h.entry)+td('$'+h.exit)+'<td class="mono '+(number(h.pnl)>=0?'green':'red')+'">'+signedMoney(h.pnl)+'<div class="muted">'+esc(h.pnl_pct)+'%</div></td>'+td(h.reason)+td(money(-number(h.spread_cost)))+'</tr>'),'medium'):'<div class="empty"><strong>No closed trades yet</strong>Completed paper outcomes will appear here.</div>';
   $('log').innerHTML=(s.log||[]).map(item=>'<div class="'+esc(item.kind||'')+'">'+esc(item.msg)+'</div>').join('')||'<div class="empty">No scanner activity yet.</div>';
 }
-function render(s){renderHeader(s);renderStats(s);renderPositions(s);renderSignals(s);renderLeaderboard(s);renderValidation(s);renderHistoryAndLog(s);}
+function render(s){renderHeader(s);renderStats(s);renderUniverse(s);renderPositions(s);renderSignals(s);renderLeaderboard(s);renderValidation(s);renderHistoryAndLog(s);}
 async function load(){try{const response=await fetch('/api/penny/state',{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);const state=await response.json();const hash=JSON.stringify(state);if(hash===lastHash)return;lastHash=hash;render(state);}catch(error){$('alerts').innerHTML='<div class="alert">Dashboard connection lost. Retrying automatically.</div>';}}
 async function toggleBot(){const response=await fetch('/api/penny/state');const state=await response.json();await fetch('/api/penny/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!state.enabled})});lastHash='';load();}
 async function resetBot(){if(!confirm('Reset the AI penny-stock paper account to $100?'))return;await fetch('/api/penny/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});lastHash='';load();}

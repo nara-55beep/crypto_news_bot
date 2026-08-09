@@ -286,7 +286,7 @@ remain slower because there is no executable opportunity to miss.
 ## Exact-strategy execution contract
 
 Research approval no longer transfers between strategies. The live scanner identifies
-itself as `live_sec_news_align_v4`; the policy loader and the final fill path both require the
+itself as `live_sec_news_align_marketwide_v5`; the policy loader and the final fill path both require the
 validated policy to name that exact implementation. A future validation of
 `profitable_earnings_beat`, for example, cannot unlock the unrelated composite/AI
 scanner. Mismatches fail closed as `STRATEGY_MISMATCH` while candidates continue to be
@@ -490,3 +490,21 @@ The strategy and signal-engine identifiers changed, so older prospective observa
 cannot silently mix with v4. This is an evidence-integrity and false-positive reduction,
 not proof of profitability. The reproducible policy remains `REJECTED`, and v4 starts a
 new forward sample at zero.
+
+## Market-wide discovery correction: v5
+
+The old full scan did not scan the full market: three Yahoo sorts supplied at most 60
+names for deep scoring. Calling the resulting top-20 board a market scan overstated its
+coverage. `live_sec_news_align_marketwide_v5` now requests a delayed consolidated
+snapshot for every active, tradable, non-OTC U.S. equity in Alpaca's master asset list,
+then identifies the full $0.10-$5 price population before selecting expensive dossiers.
+
+The stages remain separate and visible: assets requested, snapshots returned, priced
+assets, penny-price matches, deep dossiers, and leaderboard rows. SEC candidates,
+movers, volume leaders and tight books are interleaved so one ranking cannot own every
+deep-analysis slot. Real-time confirmation still requires a fresh execution-feed book;
+the delayed universe snapshot can discover a name but can never confirm or fill it.
+
+OTC is explicitly excluded because Alpaca restricts OTC market data to broker partners.
+This is broader discovery, not proof of edge. It changes the sampled population, so the
+signal engine moves to 7 and forward evidence restarts rather than pooling v4 and v5.
