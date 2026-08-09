@@ -51,9 +51,12 @@ class TestPennyPage(unittest.TestCase):
     def test_market_wide_coverage_is_visible_and_honest_about_deep_scoring(self):
         self.assertIn('id="universe"', PENNY_HTML)
         self.assertIn("Every active tradable non-OTC U.S. equity", PENNY_HTML)
-        self.assertIn("Penny-price matches", PENNY_HTML)
+        self.assertIn("Continuous all-symbol scanner", PENNY_HTML)
+        self.assertIn("continuous_target_sec||30", PENNY_HTML)
+        self.assertIn("Universe passes", PENNY_HTML)
         self.assertIn("Deep dossiers", PENNY_HTML)
-        self.assertIn("OTC excluded", PENNY_HTML)
+        self.assertIn("OTC unavailable", PENNY_HTML)
+        self.assertIn("Next deep scan", PENNY_HTML)
 
     def test_page_contains_no_common_utf8_mojibake(self):
         self.assertNotIn("â", PENNY_HTML)

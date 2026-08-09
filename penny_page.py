@@ -200,14 +200,14 @@ function evidencePanel(s){
 function renderUniverse(s){
   const c=s.universe_coverage||{};
   if(!c.last_completed_at){
-    $('universe').innerHTML='<div class="universe-head"><div><h2>Market-wide universe coverage</h2><p>The first exhaustive listed-market snapshot is pending.</p></div><span class="badge wait">PENDING</span></div>';
+    $('universe').innerHTML='<div class="universe-head"><div><h2>Continuous all-symbol scanner</h2><p>The first exhaustive listed-market pass starts with the bot and is running now.</p></div><span class="badge wait">STARTING</span></div>';
     return;
   }
   const status=c.status||'UNKNOWN';
   const item=(label,value)=>'<div class="coverage-stat"><span>'+esc(label)+'</span><b>'+esc(value)+'</b></div>';
-  $('universe').innerHTML='<div class="universe-head"><div><h2>Market-wide universe coverage</h2><p>Every active tradable non-OTC U.S. equity is requested in the cheap first stage; only candidates receive expensive deep analysis.</p></div><span class="badge '+statusClass(status)+'">'+esc(status)+'</span></div>'+
-    '<div class="coverage-grid">'+item('Active listed',number(c.active_listed_tradable).toLocaleString())+item('Snapshots returned',number(c.snapshots_returned).toLocaleString()+' / '+number(c.symbols_requested).toLocaleString())+item('Snapshot coverage',number(c.snapshot_coverage_pct).toFixed(2)+'%')+item('Penny-price matches',number(c.penny_price_matches).toLocaleString())+item('Deep dossiers',number(c.deep_scored).toLocaleString()+' / '+number(c.penny_price_matches).toLocaleString())+item('OTC excluded',number(c.otc_excluded).toLocaleString())+'</div>'+
-    '<div class="coverage-note '+(c.error?'bad':'')+'">Discovery feed: '+esc(c.feed_description||c.feed||'unknown')+'. Delayed snapshots find the broad universe; confirmation and fills still require fresh regular-session execution quotes. '+esc(c.error||c.otc_reason||'')+'</div>';
+  $('universe').innerHTML='<div class="universe-head"><div><h2>Continuous all-symbol scanner</h2><p>Every active tradable non-OTC U.S. equity is requested every '+number(c.continuous_target_sec||30)+' seconds. Deep dossiers and AI are reserved for the strongest candidates.</p></div><span class="badge '+statusClass(status)+'">'+esc(c.scan_in_progress?'SCANNING NOW':status)+'</span></div>'+
+    '<div class="coverage-grid">'+item('Active listed',number(c.active_listed_tradable).toLocaleString())+item('Last pass',number(c.snapshots_returned).toLocaleString()+' / '+number(c.symbols_requested).toLocaleString())+item('Coverage',number(c.snapshot_coverage_pct).toFixed(2)+'%')+item('Penny matches',number(c.combined_penny_price_matches||c.penny_price_matches).toLocaleString())+item('Universe passes',number(c.continuous_passes).toLocaleString())+item('Next pass',c.scan_in_progress?'Now':number(c.next_pass_in_sec)+'s')+item('Deep dossiers',number(c.deep_scored).toLocaleString())+item('OTC unavailable',number(c.otc_excluded).toLocaleString())+'</div>'+
+    '<div class="coverage-note '+(c.error?'bad':'')+'">Last feed: '+esc(c.feed_description||c.feed||'unknown')+'. Real-time IEX sweeps run between delayed consolidated full-tape baselines. A snapshot pass covers every supported symbol; expensive dossiers are a second stage, not the universe count. '+esc(c.error||c.otc_reason||'')+'</div>';
 }
 function scoreBar(value){
   if(value===undefined||value===null||value==='') return '';
@@ -237,7 +237,7 @@ function renderStats(s){
   $('stats').innerHTML=metric('Equity',money(s.equity),'gold')+metric('Net P&L',signedMoney(pnl),pnl>=0?'green':'red')+
     metric('Cash',money(s.balance))+metric('Open positions',number(s.open_count)+' / '+number(s.max_open))+
     metric('Closed trades',number(s.trades))+metric('Win rate',s.trades?esc(s.win_rate)+'%':'No outcomes')+
-    metric('Scans',number(s.scan_count))+metric('Next scan',s.scan_in_progress?'Running now':number(s.next_scan_in_sec)+'s');
+    metric('Deep scans',number(s.scan_count))+metric('Next deep scan',s.scan_in_progress?'Running now':number(s.next_scan_in_sec)+'s');
   $('evidence').innerHTML=evidencePanel(s);
 }
 function renderPositions(s){

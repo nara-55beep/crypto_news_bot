@@ -52,6 +52,7 @@ except Exception:                                   # optional at import time
 FEED_DESCRIPTIONS = {
     "iex": "IEX only - single venue, NOT the consolidated NBBO",
     "sip": "SIP - consolidated tape (all venues)",
+    "delayed_sip": "15-minute delayed consolidated SIP discovery feed",
     "yfinance": "Yahoo delayed/blended book - not an execution feed",
 }
 QUOTE_TIMEOUT_SEC = 10
@@ -63,10 +64,14 @@ MAX_SYMBOLS_PER_REQUEST = 100
 # listed tape, while the later dossier/entry path still requires a fresh venue quote.
 UNIVERSE_FEED = "delayed_sip"
 UNIVERSE_BATCH_SIZE = 250
+# Four simultaneous requests turn a ~53-request, 13,000-symbol pass into a prompt
+# startup operation without approaching Alpaca's request ceiling. The caller spaces
+# complete passes; this only controls work inside one pass.
+UNIVERSE_REQUEST_CONCURRENCY = 4
 ASSET_CACHE_SEC = 6 * 60 * 60
 UNIVERSE_SCAN_CACHE_SEC = 10 * 60
 _ASSET_CACHE: tuple[float, list[dict], dict] = (0.0, [], {})
-_UNIVERSE_SCAN_CACHE: tuple[float, list[dict], dict] = (0.0, [], {})
+_UNIVERSE_SCAN_CACHE: dict[str, tuple[float, list[dict], dict]] = {}
 
 
 def feed_name() -> str:
@@ -388,7 +393,8 @@ def eligible_listed_assets(payload) -> tuple[list[dict], dict]:
     }
 
 
-def snapshot_screen_row(symbol: str, snapshot: dict, asset: dict | None = None) -> dict | None:
+def snapshot_screen_row(symbol: str, snapshot: dict, asset: dict | None = None,
+                        feed: str = UNIVERSE_FEED) -> dict | None:
     """Turn one Alpaca snapshot into a cheap first-stage screening observation."""
     if not isinstance(snapshot, dict):
         return None
@@ -433,7 +439,7 @@ def snapshot_screen_row(symbol: str, snapshot: dict, asset: dict | None = None) 
         "ask": round(ask, 6) if ask else None,
         "spread_pct": round(spread, 4) if spread is not None else None,
         "trade_at": str(trade.get("t") or ""),
-        "feed": UNIVERSE_FEED,
+        "feed": str(feed or UNIVERSE_FEED).lower(),
     }
 
 
@@ -490,8 +496,9 @@ async def active_listed_assets(force: bool = False) -> tuple[list[dict], dict, s
 
 
 async def market_wide_penny_scan(min_price: float, max_price: float,
-                                 force: bool = False) -> tuple[list[dict], dict, str]:
-    """Request one delayed consolidated snapshot for every active listed asset.
+                                 force: bool = False,
+                                 feed: str | None = None) -> tuple[list[dict], dict, str]:
+    """Request one snapshot for every active listed asset.
 
     This is the exhaustive CHEAP pass. It does not claim every name received a usable
     price, and it does not pretend a delayed snapshot is executable. Coverage telemetry
@@ -499,48 +506,68 @@ async def market_wide_penny_scan(min_price: float, max_price: float,
     dossier and entry paths remain responsible for fresh data and hard risk gates.
     """
     global _UNIVERSE_SCAN_CACHE
-    created, cached_rows, cached_coverage = _UNIVERSE_SCAN_CACHE
+    selected_feed = str(feed or UNIVERSE_FEED).strip().lower()
+    created, cached_rows, cached_coverage = _UNIVERSE_SCAN_CACHE.get(
+        selected_feed, (0.0, [], {}))
     if (not force and cached_rows
             and time.time() - created < UNIVERSE_SCAN_CACHE_SEC):
         return [dict(row) for row in cached_rows], dict(cached_coverage), ""
     started = time.time()
-    assets, counts, asset_error = await active_listed_assets(force=force)
+    # Refresh the slower-changing master list on consolidated baseline passes. IEX
+    # passes bypass their own snapshot cache but reuse the six-hour asset cache, which
+    # avoids spending two extra asset-list requests every minute.
+    assets, counts, asset_error = await active_listed_assets(
+        force=bool(force and selected_feed == UNIVERSE_FEED))
     if not assets:
         coverage = {**counts, "status": "FAILED", "error": asset_error,
                     "last_attempt_at": started}
         return [], coverage, asset_error
 
-    feed = UNIVERSE_FEED
     url = str(config.ALPACA_DATA_URL).rstrip("/") + "/v2/stocks/snapshots"
     asset_by_symbol = {str(row.get("symbol") or "").upper(): row for row in assets}
     symbols = list(asset_by_symbol)
     snapshots: dict[str, dict] = {}
     errors: list[str] = []
-    request_count = 0
+    batches = [symbols[start:start + UNIVERSE_BATCH_SIZE]
+               for start in range(0, len(symbols), UNIVERSE_BATCH_SIZE)]
+    request_count = len(batches)
     timeout = aiohttp.ClientTimeout(total=QUOTE_TIMEOUT_SEC * 3)
-    async with aiohttp.ClientSession(headers=_headers(), timeout=timeout) as session:
-        for start in range(0, len(symbols), UNIVERSE_BATCH_SIZE):
-            batch = symbols[start:start + UNIVERSE_BATCH_SIZE]
-            request_count += 1
+    semaphore = asyncio.Semaphore(UNIVERSE_REQUEST_CONCURRENCY)
+
+    async def fetch_batch(session, batch_number: int, batch: list[str]):
+        async with semaphore:
             try:
-                async with session.get(url, params={"symbols": ",".join(batch),
-                                                    "feed": feed}) as response:
+                async with session.get(
+                    url,
+                    params={"symbols": ",".join(batch), "feed": selected_feed},
+                ) as response:
                     if response.status != 200:
-                        errors.append(f"batch {request_count} HTTP {response.status}: "
-                                      f"{(await response.text())[:100]}")
-                        continue
+                        return {}, (f"batch {batch_number} HTTP {response.status}: "
+                                    f"{(await response.text())[:100]}")
                     payload = await response.json()
             except Exception as e:
-                errors.append(f"batch {request_count} {type(e).__name__}: {str(e)[:90]}")
-                continue
-            for symbol, snapshot in (payload or {}).items():
-                if isinstance(snapshot, dict):
-                    snapshots[str(symbol).upper()] = snapshot
-            await asyncio.sleep(0.08)
+                return {}, (f"batch {batch_number} {type(e).__name__}: "
+                            f"{str(e)[:90]}")
+            return {
+                str(symbol).upper(): snapshot
+                for symbol, snapshot in (payload or {}).items()
+                if isinstance(snapshot, dict)
+            }, ""
+
+    async with aiohttp.ClientSession(headers=_headers(), timeout=timeout) as session:
+        results = await asyncio.gather(*(
+            fetch_batch(session, index, batch)
+            for index, batch in enumerate(batches, start=1)
+        ))
+    for returned_rows, error in results:
+        snapshots.update(returned_rows)
+        if error:
+            errors.append(error)
 
     priced, pennies = [], []
     for symbol, snapshot in snapshots.items():
-        row = snapshot_screen_row(symbol, snapshot, asset_by_symbol.get(symbol))
+        row = snapshot_screen_row(
+            symbol, snapshot, asset_by_symbol.get(symbol), feed=selected_feed)
         if row is None:
             continue
         priced.append(row)
@@ -552,8 +579,8 @@ async def market_wide_penny_scan(min_price: float, max_price: float,
         **counts,
         "status": "COMPLETE" if not errors else "PARTIAL",
         "provider": "alpaca",
-        "feed": feed,
-        "feed_description": "15-minute delayed consolidated SIP discovery feed",
+        "feed": selected_feed,
+        "feed_description": feed_description(selected_feed),
         "symbols_requested": requested,
         "snapshots_returned": returned,
         "snapshot_coverage_pct": round(returned / requested * 100.0, 2) if requested else 0.0,
@@ -569,8 +596,8 @@ async def market_wide_penny_scan(min_price: float, max_price: float,
         "error": "; ".join(errors[:4]),
     }
     if pennies and not errors:
-        _UNIVERSE_SCAN_CACHE = (time.time(), [dict(row) for row in pennies],
-                                dict(coverage))
+        _UNIVERSE_SCAN_CACHE[selected_feed] = (
+            time.time(), [dict(row) for row in pennies], dict(coverage))
     return pennies, coverage, coverage["error"]
 
 

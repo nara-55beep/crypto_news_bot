@@ -75,7 +75,7 @@ class _Session:
 class TestMarketWidePennyUniverse(unittest.TestCase):
     def setUp(self):
         penny_quotes._ASSET_CACHE = (0.0, [], {})
-        penny_quotes._UNIVERSE_SCAN_CACHE = (0.0, [], {})
+        penny_quotes._UNIVERSE_SCAN_CACHE = {}
 
     def test_master_list_counts_otc_and_nontradable_exclusions(self):
         eligible, counts = penny_quotes.eligible_listed_assets([
@@ -181,7 +181,6 @@ class TestMarketWidePennyUniverse(unittest.TestCase):
             "ticker": "A1", "change_pct": 25, "day_volume": 1_000,
             "dollar_volume": 2_000, "spread_pct": 2,
         }]
-        market_scan = mock.AsyncMock(return_value=(market_rows, coverage, ""))
         scored = {
             "composite": 50, "hype": 50, "technical": 50, "catalyst": 0,
             "quality": 50, "tradeability": 50, "hype_why": [],
@@ -195,8 +194,6 @@ class TestMarketWidePennyUniverse(unittest.TestCase):
 
         async def run(bot):
             with (
-                mock.patch.object(penny_quotes, "market_wide_penny_scan",
-                                  new=market_scan),
                 mock.patch.object(research, "screen", return_value=["Y1"]),
                 mock.patch.object(research.sec_edgar, "current_8k_tickers",
                                   return_value={"A1"}),
@@ -222,15 +219,100 @@ class TestMarketWidePennyUniverse(unittest.TestCase):
             bot = paper.PennyStockPaperBot(
                 state_path=os.path.join(tmp, "state.json"),
                 archive_path=os.path.join(tmp, "archive.jsonl"))
+            bot._universe_rows = market_rows
+            bot.universe_coverage = coverage
             asyncio.run(run(bot))
 
-        market_scan.assert_awaited_once_with(research.MIN_PRICE, research.MAX_PRICE)
         self.assertEqual(bot.universe_coverage["symbols_requested"], 13_026)
         self.assertEqual(bot.universe_coverage["deep_score_target"], 2)
         self.assertEqual(bot.universe_coverage["deep_scored"], 2)
         self.assertEqual({row["ticker"] for row in bot.watchlist}, {"Y1", "A1"})
         self.assertIn("13,026 listed requested", bot.status)
         self.assertEqual(bot.universe_coverage["engine_version"], 7)
+
+    def test_continuous_refresh_uses_requested_feed_and_keeps_deep_telemetry(self):
+        market_rows = [{
+            "ticker": "LIVE", "price": 1.25, "change_pct": 5,
+            "day_volume": 20_000, "dollar_volume": 25_000,
+            "feed": "iex",
+        }]
+        coverage = {
+            "status": "COMPLETE", "feed": "iex",
+            "symbols_requested": 13_000, "snapshots_returned": 12_000,
+            "penny_price_matches": 1, "last_completed_at": 100.0,
+        }
+
+        async def run(bot, market_scan):
+            with mock.patch.object(
+                penny_quotes, "market_wide_penny_scan", new=market_scan
+            ):
+                await bot._refresh_universe_once("iex")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = paper.PennyStockPaperBot(
+                state_path=os.path.join(tmp, "state.json"),
+                archive_path=os.path.join(tmp, "archive.jsonl"))
+            bot.universe_coverage = {"deep_scored": 42, "continuous_passes": 7}
+            market_scan = mock.AsyncMock(return_value=(market_rows, coverage, ""))
+            asyncio.run(run(bot, market_scan))
+
+        market_scan.assert_awaited_once_with(
+            research.MIN_PRICE, research.MAX_PRICE, force=True, feed="iex")
+        self.assertEqual([row["ticker"] for row in bot._universe_rows], ["LIVE"])
+        self.assertEqual(bot.universe_coverage["continuous_passes"], 8)
+        self.assertEqual(bot.universe_coverage["continuous_target_sec"], 30)
+        self.assertEqual(bot.universe_coverage["deep_scored"], 42)
+
+    def test_continuous_loop_runs_first_pass_before_its_first_sleep(self):
+        calls, waits = [], []
+
+        async def refresh(feed):
+            calls.append(feed)
+
+        async def stop_after_first_pass(delay):
+            waits.append(delay)
+            raise asyncio.CancelledError
+
+        async def run(bot):
+            with mock.patch.object(bot, "_refresh_universe_once", side_effect=refresh):
+                with mock.patch.object(paper.asyncio, "sleep", side_effect=stop_after_first_pass):
+                    with self.assertRaises(asyncio.CancelledError):
+                        await bot._continuous_universe_loop()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = paper.PennyStockPaperBot(
+                state_path=os.path.join(tmp, "state.json"),
+                archive_path=os.path.join(tmp, "archive.jsonl"))
+            asyncio.run(run(bot))
+
+        self.assertEqual(calls, ["delayed_sip"])
+        self.assertEqual(len(waits), 1)
+        self.assertGreater(waits[0], 0)
+        self.assertLessEqual(waits[0], paper.UNIVERSE_TARGET_CYCLE_SEC)
+
+    def test_recent_full_tape_pass_rotates_next_continuous_pass_to_iex(self):
+        calls = []
+
+        async def refresh(feed):
+            calls.append(feed)
+
+        async def stop_after_first_pass(_delay):
+            raise asyncio.CancelledError
+
+        async def run(bot):
+            with mock.patch.object(bot, "_refresh_universe_once", side_effect=refresh):
+                with mock.patch.object(paper.asyncio, "sleep", side_effect=stop_after_first_pass):
+                    with self.assertRaises(asyncio.CancelledError):
+                        await bot._continuous_universe_loop()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = paper.PennyStockPaperBot(
+                state_path=os.path.join(tmp, "state.json"),
+                archive_path=os.path.join(tmp, "archive.jsonl"))
+            bot._last_delayed_universe_scan = paper.time.time()
+            asyncio.run(run(bot))
+
+        self.assertEqual(calls, ["iex"])
 
 
 if __name__ == "__main__":
