@@ -413,7 +413,9 @@ function render(s){
     + 'AI filter audit: <b>'+esc(av.status||'COLLECTING')+'</b> &mdash; '
     + esc(av.reason||'waiting for complete AI-versus-mechanical days')+'; '
     + (av.comparison_days||0)+' / '+(av.minimum_comparison_days||60)+' comparison days. '
-    + (av.unclassified_days ? '<b>'+av.unclassified_days+' day(s) excluded: the model classified too little of them to call the result a decision.</b> ' : '')
+    + (av.unclassified_days ? '<b>'+av.unclassified_days+' day(s) excluded from the point estimate because the model classified too little of them.</b> ' : '')
+    + ((av.classification_missing_bound||{}).days_bounded
+        ? av.classification_missing_bound.days_bounded+' completed day(s) contain missing AI decisions. They are assigned to the most adverse possible approve/reject combination; adjusted lower bound '+av.classification_missing_bound.multiplicity_adjusted_low_pct+'%. ' : '')
     + (av.ai_policies_tested>1 ? '<b>'+av.ai_policies_tested+' AI policies have been tested</b>, so the bound shown is Bonferroni-corrected for that search. ' : '')
     + ((av.ai_portfolio_concentration||{}).mean_selected_names!=null
         ? 'The AI holds '+(av.ai_portfolio_concentration.mean_selected_names)+' of '+(av.ai_portfolio_concentration.mean_mechanical_names)+' names on average ('+(av.ai_portfolio_concentration.single_name_days||0)+' single-name day(s), '+(av.ai_portfolio_concentration.cash_days||0)+' cash day(s)), so part of any difference is concentration rather than selection. ' : '')

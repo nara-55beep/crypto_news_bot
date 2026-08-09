@@ -2877,6 +2877,27 @@ class PennyStockPaperBot:
         z = NormalDist().inv_cdf(1.0 - (0.05 / tests) / 2.0)
         return mean - z * se
 
+    @staticmethod
+    def _minimum_selector_return(approved: list[float], unavailable: list[float]) -> float:
+        """Worst return compatible with the decisions that were not recorded.
+
+        Classified approvals are fixed.  Each unavailable name could have been
+        approved or rejected; for any chosen count the worst subset is the names with
+        the lowest returns.  Trying every such count therefore gives the exact lower
+        bound for the equal-weight selector portfolio.  With no fixed approvals, cash
+        at 0% is also a possible decision.
+        """
+        fixed = [float(value) for value in approved]
+        unknown = sorted(float(value) for value in unavailable)
+        candidates = [sum(fixed) / len(fixed) if fixed else 0.0]
+        total = sum(fixed)
+        count = len(fixed)
+        for value in unknown:
+            total += value
+            count += 1
+            candidates.append(total / count)
+        return min(candidates)
+
     def forward_validation(self, horizon: str = "5") -> dict:
         """Prospective evidence for v2, grouped by signal day to avoid fake sample size.
 
@@ -2999,9 +3020,11 @@ class PennyStockPaperBot:
 
         ``mean(approved) - mean(rejected)`` is not the capital policy: it gives the two
         labels equal weight regardless of group size and drops all-approved/all-skipped
-        days. Instead, every eligible day compares the equal-weight AI-selected
-        portfolio (0% cash when it selects nothing) with the equal-weight portfolio of
-        every pre-AI mechanical name. Every member must resolve with observed costs.
+        days. Instead, every sufficiently classified day compares the equal-weight
+        AI-selected portfolio (0% cash when it selects nothing) with the equal-weight
+        portfolio of every pre-AI mechanical name. Missing classifications receive an
+        adverse selection bound even when the day is excluded from the point estimate.
+        Every member must resolve with observed costs.
 
         This can reject or flag a promising selector; it can never authorize trading
         or prove that the selected portfolio itself is profitable.
@@ -3014,8 +3037,11 @@ class PennyStockPaperBot:
                          and r.get("ai_policy_id") == policy_id]
         rows = [r for r in eligible_rows
                 if r.get(AI_SELECTION_FIELD) in ("approved", "rejected")]
+        # Anything outside the two classified decisions is unavailable. Treating a
+        # missing or future value as neither classified nor unavailable would lower
+        # coverage while also omitting it from the adverse decision bound.
         unavailable_rows = [r for r in eligible_rows
-                            if r.get(AI_SELECTION_FIELD) == "unavailable"]
+                            if r.get(AI_SELECTION_FIELD) not in ("approved", "rejected")]
         classification_coverage = (
             100.0 * len(rows) / len(eligible_rows) if eligible_rows else 0.0
         )
@@ -3048,6 +3074,8 @@ class PennyStockPaperBot:
         pending_days = stale_days = modeled_days = 0
         mixed_days = all_approved_days = all_skipped_days = 0
         unclassified_days = unclassified_rows = benchmark_inconsistent_days = 0
+        unclassified_bound_days = missing_decision_bound_days = 0
+        bounded_daily_lifts: list[float] = []
         for day in sorted(by_day):
             members = by_day[day]
             approved = [r for r in members
@@ -3055,7 +3083,7 @@ class PennyStockPaperBot:
             rejected = [r for r in members
                         if r.get(AI_SELECTION_FIELD) == "rejected"]
             unavailable = [r for r in members
-                           if r.get(AI_SELECTION_FIELD) == "unavailable"]
+                           if r.get(AI_SELECTION_FIELD) not in ("approved", "rejected")]
             # A day the model barely saw is an OUTAGE, not a decision. Scoring a fully
             # unavailable day as "the selector chose cash" credits it with the whole
             # negative of the mechanical basket - so a model failure during a losing
@@ -3068,7 +3096,10 @@ class PennyStockPaperBot:
             if day_coverage < AI_VALUE_MIN_DAY_CLASSIFICATION_PCT:
                 unclassified_days += 1
                 unclassified_rows += len(unavailable)
-                continue
+            # Outcome integrity is checked BEFORE a low-coverage day can be excluded
+            # from the point estimate.  Otherwise a fully unclassified halted or
+            # delisted name disappears before stale/modeled counters see it, allowing
+            # the audit to call the surviving days promising.
             outcomes = [(r.get("outcomes") or {}).get(horizon) for r in members]
             if not all(isinstance(out, dict)
                        and out.get("net_return_pct") is not None for out in outcomes):
@@ -3094,6 +3125,32 @@ class PennyStockPaperBot:
             rejected_net = group_mean(rejected, "net_return_pct")
             approved_excess = group_mean(approved, "net_excess_return_pct")
             if mechanical_net is None:
+                continue
+
+            # Every unavailable decision is unknown, including the permitted minority
+            # on a day that meets the coverage floor. Treating that name as a rejection
+            # can manufacture lift when it later loses. The point estimate retains the
+            # deployed cash result on otherwise usable days, but the positive gate uses
+            # the worst approve/reject assignment for every unavailable name.
+            if unavailable:
+                approved_values = [
+                    float((r.get("outcomes") or {})[horizon]["net_return_pct"])
+                    for r in approved
+                ]
+                unavailable_values = [
+                    float((r.get("outcomes") or {})[horizon]["net_return_pct"])
+                    for r in unavailable
+                ]
+                worst_ai_net = self._minimum_selector_return(
+                    approved_values, unavailable_values)
+                bounded_daily_lifts.append(worst_ai_net - mechanical_net)
+                missing_decision_bound_days += 1
+
+            if day_coverage < AI_VALUE_MIN_DAY_CLASSIFICATION_PCT:
+                # The point estimate cannot pretend the model made decisions it never
+                # made. But dropping the day from every calculation would select the
+                # sample, so its adverse assignment remains in bounded_daily_lifts.
+                unclassified_bound_days += 1
                 continue
 
             # When the selector approves nothing the deployed policy holds cash. Net
@@ -3135,6 +3192,9 @@ class PennyStockPaperBot:
                     and abs(excess_lift - net_lift) > AI_VALUE_BENCHMARK_TOLERANCE_PCT):
                 benchmark_inconsistent_days += 1
 
+            if not unavailable:
+                bounded_daily_lifts.append(net_lift)
+
             comparisons.append({
                 "day": day,
                 "mechanical_members": len(members),
@@ -3168,6 +3228,12 @@ class PennyStockPaperBot:
             for r in self.mechanical_evidence_rows() if r.get("ai_policy_id")})
         net_lo_adj = self._multiplicity_adjusted_low(net_mean, net_lo, policies_tested)
         ex_lo_adj = self._multiplicity_adjusted_low(ex_mean, ex_lo, policies_tested)
+        bounded_mean, bounded_lo, bounded_hi = self._hac_mean_ci(
+            bounded_daily_lifts, max_lag=hac_lag)
+        bounded_lo_adj = self._multiplicity_adjusted_low(
+            bounded_mean, bounded_lo, policies_tested)
+        missing_decision_bound_clears = bool(
+            bounded_daily_lifts and bounded_lo_adj > 0)
         ai_mean = (sum(item["ai_portfolio_net_pct"] for item in comparisons)
                    / len(comparisons) if comparisons else 0.0)
         mechanical_mean = (sum(item["mechanical_net_pct"] for item in comparisons)
@@ -3211,7 +3277,17 @@ class PennyStockPaperBot:
                 f"{AI_VALUE_BENCHMARK_TOLERANCE_PCT}pp; in a same-day portfolio "
                 f"difference the benchmark must cancel, so the rows are inconsistent"
             )
-        elif net_lo_adj > 0 and ex_lo_adj > 0:
+        elif missing_decision_bound_days and not missing_decision_bound_clears:
+            status = "DATA_INCOMPLETE"
+            reason = (
+                f"{missing_decision_bound_days} completed day(s) contain unavailable "
+                "AI decisions; assigning every missing decision in the most adverse "
+                "way leaves the multiplicity-"
+                f"adjusted lower bound at {bounded_lo_adj:.3f}%, so missing decisions "
+                "can still explain the apparent lift"
+            )
+        elif (net_lo_adj > 0 and ex_lo_adj > 0
+              and missing_decision_bound_clears):
             status = "AI_LIFT_PROMISING_NOT_VALIDATED"
             reason = (
                 "the actual AI-selected portfolio beat the full same-day mechanical "
@@ -3248,6 +3324,8 @@ class PennyStockPaperBot:
             # hold cash, which would credit the selector for an API outage.
             "unclassified_days": unclassified_days,
             "unclassified_rows": unclassified_rows,
+            "unclassified_bound_days": unclassified_bound_days,
+            "missing_decision_bound_days": missing_decision_bound_days,
             "minimum_day_classification_pct": AI_VALUE_MIN_DAY_CLASSIFICATION_PCT,
             "classified_rows": len(rows),
             "unavailable_rows": len(unavailable_rows),
@@ -3276,6 +3354,22 @@ class PennyStockPaperBot:
                 round(net_lo_adj, 3) if comparisons else None),
             "ai_excess_lift_multiplicity_adjusted_low_pct": (
                 round(ex_lo_adj, 3) if excess_lifts else None),
+            "classification_missing_bound": {
+                "days_bounded": missing_decision_bound_days,
+                "low_coverage_days_bounded": unclassified_bound_days,
+                "bounded_series_days": len(bounded_daily_lifts),
+                "bounded_mean_ai_lift_pct": (
+                    round(bounded_mean, 3) if bounded_daily_lifts else None),
+                "bounded_hac_95_pct": (
+                    [round(bounded_lo, 3), round(bounded_hi, 3)]
+                    if bounded_daily_lifts else None),
+                "multiplicity_adjusted_low_pct": (
+                    round(bounded_lo_adj, 3) if bounded_daily_lifts else None),
+                "clears_zero": missing_decision_bound_clears,
+                "assumption": (
+                    "each unavailable AI decision is assigned to the approve/reject "
+                    "combination producing the lowest equal-weight portfolio return"),
+            },
             "benchmark_inconsistent_days": benchmark_inconsistent_days,
             "benchmark_leg_is_independent": False,
             "benchmark_leg_note": (
