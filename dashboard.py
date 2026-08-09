@@ -46,6 +46,7 @@ import news_reactor_bot
 import news_sniper_bot
 import cross_arb_paper
 import cryptal_maker_paper
+import airdrop_scanner
 import fv_track_paper
 import trend_breakout_paper
 import ainews_paper
@@ -103,6 +104,7 @@ NEWSAI = news_reactor_bot.NewsReactorBot()   # News Reactor: AI reads the feed, 
 SNIPER = news_sniper_bot.NewsSniperBot()     # News Sniper: NO-AI rules engine, reacts instantly
 CROSSARB = cross_arb_paper.CrossArbBot()     # Cross-exchange arbitrage: Binance vs Hyperliquid, hedged
 CRYPTALMAKER = cryptal_maker_paper.CryptalMakerPaperBot()  # passive Cryptal spot + Binance hedge (paper)
+AIRDROPS = airdrop_scanner.AirdropRadar(100.0)  # Airdrop Radar: tokenless protocols ranked for a small bankroll
 FVTRACK = fv_track_paper.FVTrackBot()        # Fair-value tracking: Lighter follower vs leader consensus (zero-fee edge)
 TREND = trend_breakout_paper.TrendBreakoutBot()  # Crypto Trend Breakout + ATR risk (daily, BTC/ETH/SOL, Goodman)
 AINEWS = ainews_paper.AINewsBot()            # AI News Trading Bot (Google News RSS -> LLM sentiment -> BTC position)
@@ -1701,6 +1703,21 @@ async def _cryptal_maker_reset(request: web.Request):
     return web.json_response(CRYPTALMAKER.reset())
 
 
+# ---- AIRDROP RADAR (read-only DeFiLlama scan, no wallet or key involved) ----
+async def _airdrops_state(request: web.Request):
+    return web.json_response(AIRDROPS.state())
+
+
+async def _airdrops_bankroll(request: web.Request):
+    body = await request.json()
+    return web.json_response(AIRDROPS.set_bankroll(body.get("bankroll_usd", 100.0)))
+
+
+async def _airdrops_refresh(request: web.Request):
+    await AIRDROPS.refresh()
+    return web.json_response({"ok": True, "error": AIRDROPS.error})
+
+
 # ---- FAIR-VALUE TRACKING (Lighter follower vs leader consensus, zero-fee) ---
 async def _fv_state(request: web.Request):
     s = FVTRACK.state()
@@ -3087,6 +3104,77 @@ PAPER_HTML = r"""<!doctype html>
   .poly-row:hover{background:#0d131d}
   .poly-title{color:#8793a5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .poly-num{font-variant-numeric:tabular-nums}
+
+  /* ---- Airdrop Radar: golden call-to-action + featured panel ---- */
+  .airdrop-btn{
+    position:relative;overflow:hidden;cursor:pointer;border:1px solid #fcd34d;
+    border-radius:999px;padding:6px 18px;margin-left:6px;
+    font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.14em;
+    text-transform:uppercase;color:#3b2503;
+    background:linear-gradient(100deg,#b45309,#f59e0b 22%,#fde68a 46%,#f59e0b 70%,#b45309);
+    background-size:220% 100%;
+    animation:airdropSweep 3.4s linear infinite,airdropGlow 1.9s ease-in-out infinite alternate;
+    box-shadow:0 0 14px rgba(245,158,11,.55),0 2px 10px rgba(0,0,0,.35)
+  }
+  .airdrop-btn:hover{filter:brightness(1.12)}
+  .airdrop-btn::after{
+    content:"";position:absolute;top:0;left:-60%;width:38%;height:100%;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.75),transparent);
+    transform:skewX(-20deg);animation:airdropSheen 3.4s ease-in-out infinite
+  }
+  @keyframes airdropSweep{0%{background-position:0% 0}100%{background-position:220% 0}}
+  @keyframes airdropGlow{
+    from{box-shadow:0 0 10px rgba(245,158,11,.42),0 2px 10px rgba(0,0,0,.35)}
+    to{box-shadow:0 0 26px rgba(253,224,71,.85),0 2px 10px rgba(0,0,0,.35)}
+  }
+  @keyframes airdropSheen{0%,62%{left:-60%}100%{left:130%}}
+  .airdrop-featured{
+    grid-column:1/-1!important;border:3px solid transparent!important;
+    background:
+      linear-gradient(#0b0906,#0b0906) padding-box,
+      linear-gradient(110deg,#b45309,#f59e0b,#fde68a,#f59e0b,#b45309) border-box!important;
+    background-size:100% 100%,300% 300%!important;
+    animation:airdropBorderFlow 5s linear infinite;
+    box-shadow:0 0 22px rgba(245,158,11,.34),0 14px 34px rgba(0,0,0,.34)!important;
+    scroll-margin-top:70px
+  }
+  .airdrop-featured .bhead{
+    background:linear-gradient(90deg,rgba(120,63,4,.62),#0d0a06 48%,rgba(146,64,14,.42));
+    border-bottom-color:#a16207
+  }
+  @keyframes airdropBorderFlow{
+    0%{background-position:0 0,0% 50%}
+    50%{background-position:0 0,100% 50%}
+    100%{background-position:0 0,0% 50%}
+  }
+  .airdrop-flash{animation:airdropFlash 1.1s ease-out 2}
+  @keyframes airdropFlash{
+    0%{box-shadow:0 0 0 0 rgba(253,224,71,.85)}
+    100%{box-shadow:0 0 0 22px rgba(253,224,71,0)}
+  }
+  .ad-row{
+    display:grid;grid-template-columns:minmax(140px,1.5fr) 96px 84px 96px 92px minmax(150px,1fr);
+    gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid #1a1408;
+    font-family:var(--bin);font-size:11px
+  }
+  .ad-head{
+    position:sticky;top:0;z-index:1;background:#120d05;color:#b3873f;
+    text-transform:uppercase;letter-spacing:.08em;font-size:9px
+  }
+  .ad-row:hover{background:#140f06}
+  .ad-name{color:#fcd34d;font-weight:600;text-decoration:none}
+  .ad-name:hover{text-decoration:underline}
+  .ad-band{font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;letter-spacing:.06em}
+  .ad-STRONG{background:#052e16;color:#4ade80;border:1px solid #166534}
+  .ad-MODERATE{background:#1c1917;color:#fbbf24;border:1px solid #78350f}
+  .ad-SPECULATIVE{background:#2a1207;color:#fb923c;border:1px solid #7c2d12}
+  .ad-HIGHRISK{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d}
+  .ad-steps{padding:10px 14px;background:#0a0805;border-bottom:1px solid #1a1408}
+  .ad-steps li{margin:5px 0;color:#c9b58a;font-size:11px;line-height:1.5}
+  .ad-warn{background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;padding:8px 12px;font-size:11px;line-height:1.5}
+  @media (prefers-reduced-motion:reduce){
+    .airdrop-btn,.airdrop-btn::after,.airdrop-featured,.airdrop-flash{animation:none}
+  }
 </style>
 </head>
 <body>
@@ -3096,11 +3184,13 @@ PAPER_HTML = r"""<!doctype html>
     <a class="nav" href="/ict">ICT Lab →</a>
     <a class="nav" href="/funding">Funding Bot →</a>
     <a class="nav" href="http://127.0.0.1:8100" target="_blank" rel="noopener">Research Bot ↗</a>
+    <button class="airdrop-btn" id="airdrop-btn" onclick="showAirdrops()" title="Airdrop Radar - tokenless protocols ranked for a small bankroll">✦ Airdrops</button>
     <span class="sub">multiple paper strategies, one page · simulated fills on real Lighter data · no real money</span>
     <span class="spacer"></span>
     <span class="sub" id="px">BTC —</span>
   </div>
   <div id="wrap">
+    <div class="bot airdrop-featured" id="airdrops-panel"></div>
     <div class="bot cryptal-featured" id="cryptalmaker-panel"></div>
     <div class="bot pinned" id="lucidcont-panel" style="grid-column:1/-1;border:3px solid #22c55e;box-shadow:0 0 18px rgba(34,197,94,.55)"></div>
     <div class="bot pinned" id="lucidpass-panel" style="grid-column:1/-1;border:3px solid #facc15;box-shadow:0 0 18px rgba(250,204,21,.6)"></div>
@@ -3420,6 +3510,91 @@ PAPER_HTML = r"""<!doctype html>
     return s.history.map(t=>'<div class="posrow" style="padding:6px 14px"><div class="top">'+
       '<span class="src">Cryptal maker cycle</span><span style="color:'+(t.pnl>=0?'var(--green)':'var(--red)')+';font-weight:600">'+fmt(t.pnl)+'</span></div>'+
       '<div class="det"><span>spot '+px1(t.buy)+' -> '+px1(t.sell)+'</span><span>hedge close '+px1(t.hedge_close)+'</span><span>'+fmt(t.return_bps)+' bps</span></div></div>').join('');
+  }
+  async function loadAirdrops(){
+    let s; try{ s=await(await fetch('/api/airdrops/state')).json(); }catch(e){ return; }
+    const el=$('airdrops-panel'); if(!el) return;
+    const rows=s.rows||[], p=s.portfolio||{}, a=s.assumptions||{};
+    if(s.error && !rows.length){
+      el.innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">Airdrop Radar</span></div>'+
+        '<div class="empty">scan failed: '+esc(s.error)+'</div>'; return;
+    }
+    if(!rows.length){
+      el.innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">Airdrop Radar</span></div>'+
+        '<div class="empty">first scan running...</div>'; return;
+    }
+    const money=v=>'$'+Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0});
+    const head='<div class="bhead"><span class="dot on"></span><span class="bname">Airdrop Radar</span>'+
+      '<span class="badge" style="background:#78350f;color:#fde68a;border-color:#a16207">GOLD</span>'+
+      '<span class="badge">READ ONLY</span>'+
+      '<span class="badge">'+rows.length+' / '+Number(s.universe||0).toLocaleString()+' protocols</span>'+
+      '<span class="spacer"></span><span class="sub">scanned in '+Number(s.scan_seconds||0).toFixed(2)+'s</span></div>';
+
+    const plan='<div style="padding:10px 14px;background:#0d0a05;border-bottom:1px solid #1a1408">'+
+      '<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center">'+
+      '<span class="sub">bankroll</span><b style="color:#fcd34d">'+money(p.bankroll_usd)+'</b>'+
+      '<span class="sub">split across</span><b style="color:#fcd34d">'+(p.farms||0)+' farms</b>'+
+      '<span class="sub">expected total</span><b style="color:#4ade80">'+money(p.expected_total_usd)+
+        ' ('+Number(p.expected_multiple||0).toFixed(2)+'x)</b>'+
+      '<span class="sub">if all land</span><b style="color:#4ade80">'+money(p.upside_total_usd)+'</b>'+
+      '<span class="sub">chance of nothing</span><b style="color:#f87171">'+
+        Math.round((p.probability_of_nothing||0)*100)+'%</b>'+
+      '<span class="spacer"></span>'+
+      '<input id="ad-bank" type="number" min="10" step="10" value="'+Number(p.bankroll_usd||100)+
+        '" style="width:90px;background:#0a0805;border:1px solid #78350f;color:#fcd34d;padding:4px 8px;border-radius:6px">'+
+      '<button class="btn" onclick="setAirdropBankroll()">Re-price</button>'+
+      '<button class="btn reset" onclick="refreshAirdrops()">Rescan</button></div>'+
+      '<div class="sub" style="margin-top:7px">'+esc(p.capital_note||'')+' Horizon: '+esc(p.horizon||'')+'</div></div>';
+
+    const warn='<div class="ad-warn"><b>Read this before depositing anything.</b> '+
+      'These are ranked candidates, not confirmed airdrops - a high score means the protocol looks real, '+
+      'not that a token is coming. The projection is a model, not a measurement: '+esc(a.caveat||'')+' '+
+      'It assumes only '+Math.round((a.value_retention||0)*100)+'% of any allocation keeps its value ('+
+      esc(a.value_retention_basis||'')+') and that '+Math.round((1-(a.qualification_rate||0))*100)+
+      '% of small wallets are filtered out ('+esc(a.qualification_basis||'')+').</div>';
+
+    const th='<div class="ad-row ad-head"><span>protocol</span><span>risk</span><span>score</span>'+
+      '<span>TVL</span><span>expected</span><span>category / chain</span></div>';
+
+    const body=rows.slice(0,14).map((r,i)=>{
+      const e=r.expected||{};
+      const band=(r.risk_band||'').replace(' ','');
+      const link=r.url?'<a class="ad-name" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.name)+'</a>'
+                      :'<span class="ad-name">'+esc(r.name)+'</span>';
+      return '<div class="ad-row" onclick="toggleAirdropSteps('+i+')" style="cursor:pointer">'+
+        link+
+        '<span><span class="ad-band ad-'+esc(band)+'">'+esc(r.risk_band||'')+'</span></span>'+
+        '<span class="poly-num">'+Number(r.score||0).toFixed(0)+'</span>'+
+        '<span class="poly-num">'+money(r.tvl_usd)+'</span>'+
+        '<span class="poly-num" style="color:#4ade80">$'+Number(e.expected_usd||0).toFixed(2)+'</span>'+
+        '<span class="poly-title">'+esc(r.category||'')+' &middot; '+esc(r.chain||'')+'</span></div>'+
+        '<div class="ad-steps" id="ad-steps-'+i+'" style="display:none">'+
+        '<div class="sub" style="margin-bottom:6px">'+esc((r.signals||[]).join(' &middot; '))+'</div>'+
+        '<div class="sub" style="margin-bottom:6px">If it lands: <b style="color:#4ade80">$'+
+          Number(e.realistic_if_it_lands_usd||0).toFixed(2)+'</b> on a $'+Number(e.deposit_usd||0).toFixed(0)+
+          ' deposit &middot; modelled chance '+Math.round((e.probability||0)*100)+'%</div>'+
+        '<ol class="ad-steps">'+(r.instructions||[]).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol></div>';
+    }).join('');
+
+    el.innerHTML=head+plan+warn+th+body;
+  }
+  function toggleAirdropSteps(i){
+    const d=$('ad-steps-'+i); if(d) d.style.display = d.style.display==='none' ? 'block' : 'none';
+  }
+  function showAirdrops(){
+    const el=$('airdrops-panel'); if(!el) return;
+    el.scrollIntoView({behavior:'smooth',block:'start'});
+    el.classList.remove('airdrop-flash'); void el.offsetWidth; el.classList.add('airdrop-flash');
+  }
+  async function setAirdropBankroll(){
+    const v=Number(($('ad-bank')||{}).value||100);
+    await fetch('/api/airdrops/bankroll',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({bankroll_usd:v})});
+    loadAirdrops();
+  }
+  async function refreshAirdrops(){
+    await fetch('/api/airdrops/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    loadAirdrops();
   }
   async function loadCryptalMaker(){
     let s; try{ s=await(await fetch('/api/cryptalmaker/state')).json(); }catch(e){ return; }
@@ -4645,7 +4820,7 @@ PAPER_HTML = r"""<!doctype html>
   async function toggleCOT(){ let s; try{s=await(await fetch('/api/cotbot/state')).json();}catch(e){return;} await fetch('/api/cotbot/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadCOT(); }
   async function resetCOT(){ if(!confirm('Reset the COT paper account?'))return; await fetch('/api/cotbot/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadCOT(); }
 
-  function loadAll(){ loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
+  function loadAll(){ loadAirdrops(); loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
   loadAll(); setInterval(loadAll, 2000);
 </script>
 </body>
@@ -4737,6 +4912,9 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.post("/api/arb/toggle", _arb_toggle),
         web.post("/api/arb/reset", _arb_reset),
         web.post("/api/arb/lev", _arb_lev),
+        web.get("/api/airdrops/state", _airdrops_state),
+        web.post("/api/airdrops/bankroll", _airdrops_bankroll),
+        web.post("/api/airdrops/refresh", _airdrops_refresh),
         web.get("/api/cryptalmaker/state", _cryptal_maker_state),
         web.post("/api/cryptalmaker/toggle", _cryptal_maker_toggle),
         web.post("/api/cryptalmaker/reset", _cryptal_maker_reset),
@@ -4893,6 +5071,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
     CROSSARB.attach(market, WHALES)             # cross-exchange arb: Binance + Hyperliquid prices
     asyncio.create_task(CROSSARB.manage_loop()) # cross-exchange arb: watch gap, hedge, converge
     asyncio.create_task(CRYPTALMAKER.manage_loop()) # Cryptal maker fill -> Binance delta hedge (paper)
+    asyncio.create_task(AIRDROPS.manage_loop())  # Airdrop Radar: rescan DeFiLlama for tokenless protocols
     FVTRACK.attach(market, WHALES)              # fair-value tracking: leaders' consensus vs Lighter
     asyncio.create_task(FVTRACK.manage_loop())  # fair-value tracking: trade Lighter's deviation -> FV
     TREND.attach(market)                        # Crypto Trend Breakout + ATR (daily, BTC/ETH/SOL)
