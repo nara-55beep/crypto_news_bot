@@ -31,6 +31,7 @@ import time
 import uuid
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta, timezone
+from statistics import NormalDist
 from zoneinfo import ZoneInfo
 
 import config
@@ -136,6 +137,14 @@ CONTROL_EVIDENCE_ROLE = "mechanical_ai_control"
 AI_SELECTION_FIELD = "ai_selection"
 AI_VALUE_MIN_COMPARISON_DAYS = 60
 AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT = 80.0
+# The same floor applied per DAY. A global 80% is satisfied while individual days are
+# entirely unclassified, and a day the model never saw is an outage - not a decision to
+# hold cash - so scoring it as one credits the selector for an API failure.
+AI_VALUE_MIN_DAY_CLASSIFICATION_PCT = 80.0
+# Members of one signal day share IWM's horizon return, so in a same-day difference of
+# two portfolios the benchmark cancels exactly. Divergence beyond this is not a second
+# result; it means the day's rows disagree about the benchmark.
+AI_VALUE_BENCHMARK_TOLERANCE_PCT = 0.10
 # A model/prompt selector is part of the tested rule.  Keep this separate from both the
 # mechanical engine and price-measurement schema so an AI-policy edit cannot pool its
 # outcomes with an older policy and call the mixture evidence.
@@ -2851,6 +2860,23 @@ class PennyStockPaperBot:
         se = math.sqrt(max(0.0, long_run_var) / n)
         return mean, mean - 1.96 * se, mean + 1.96 * se
 
+    @staticmethod
+    def _multiplicity_adjusted_low(mean: float, low: float, tests: int) -> float:
+        """The lower bound widened for the number of policies that have been tried.
+
+        Searching over selectors and reporting the nominal 95% interval of whichever one
+        currently looks best is how a tuned prompt becomes an "edge". The standard error
+        is recovered from the nominal bound and re-applied at a Bonferroni alpha, so one
+        tested policy leaves the interval untouched and each further one widens it.
+        """
+        if tests <= 1:
+            return low
+        se = (mean - low) / 1.96
+        if se <= 0:
+            return low
+        z = NormalDist().inv_cdf(1.0 - (0.05 / tests) / 2.0)
+        return mean - z * se
+
     def forward_validation(self, horizon: str = "5") -> dict:
         """Prospective evidence for v2, grouped by signal day to avoid fake sample size.
 
@@ -3021,6 +3047,7 @@ class PennyStockPaperBot:
         comparisons: list[dict] = []
         pending_days = stale_days = modeled_days = 0
         mixed_days = all_approved_days = all_skipped_days = 0
+        unclassified_days = unclassified_rows = benchmark_inconsistent_days = 0
         for day in sorted(by_day):
             members = by_day[day]
             approved = [r for r in members
@@ -3029,6 +3056,19 @@ class PennyStockPaperBot:
                         if r.get(AI_SELECTION_FIELD) == "rejected"]
             unavailable = [r for r in members
                            if r.get(AI_SELECTION_FIELD) == "unavailable"]
+            # A day the model barely saw is an OUTAGE, not a decision. Scoring a fully
+            # unavailable day as "the selector chose cash" credits it with the whole
+            # negative of the mechanical basket - so a model failure during a losing
+            # stretch manufactures positive lift out of an API error. The global
+            # coverage gate cannot catch this: 90% overall coverage still allows whole
+            # days to be dark. The floor is applied to each day as well.
+            classified_members = len(approved) + len(rejected)
+            day_coverage = (100.0 * classified_members / len(members)
+                            if members else 0.0)
+            if day_coverage < AI_VALUE_MIN_DAY_CLASSIFICATION_PCT:
+                unclassified_days += 1
+                unclassified_rows += len(unavailable)
+                continue
             outcomes = [(r.get("outcomes") or {}).get(horizon) for r in members]
             if not all(isinstance(out, dict)
                        and out.get("net_return_pct") is not None for out in outcomes):
@@ -3083,6 +3123,18 @@ class PennyStockPaperBot:
             else:
                 mixed_days += 1
 
+            net_lift = ai_net - mechanical_net
+            excess_lift = (ai_excess - mechanical_excess
+                           if ai_excess is not None and mechanical_excess is not None
+                           else None)
+            # Not a second result. Every member of a signal day shares IWM's horizon
+            # return, so in a difference of two same-day portfolios the benchmark
+            # cancels and this equals net_lift by construction. A divergence therefore
+            # says the day's rows disagree about the benchmark, which is a data problem.
+            if (excess_lift is not None
+                    and abs(excess_lift - net_lift) > AI_VALUE_BENCHMARK_TOLERANCE_PCT):
+                benchmark_inconsistent_days += 1
+
             comparisons.append({
                 "day": day,
                 "mechanical_members": len(members),
@@ -3092,18 +3144,30 @@ class PennyStockPaperBot:
                 "ai_portfolio_net_pct": ai_net,
                 "mechanical_net_pct": mechanical_net,
                 "rejected_net_pct": rejected_net,
-                "net_lift_pct": ai_net - mechanical_net,
-                "excess_lift_pct": (
-                    ai_excess - mechanical_excess
-                    if ai_excess is not None and mechanical_excess is not None
-                    else None),
+                "net_lift_pct": net_lift,
+                "excess_lift_pct": excess_lift,
+                "classification_coverage_pct": round(day_coverage, 1),
             })
 
         net_lifts = [item["net_lift_pct"] for item in comparisons]
         excess_lifts = [item["excess_lift_pct"] for item in comparisons
                         if item["excess_lift_pct"] is not None]
-        net_mean, net_lo, net_hi = self._hac_mean_ci(net_lifts)
-        ex_mean, ex_lo, ex_hi = self._hac_mean_ci(excess_lifts)
+        # Consecutive signal days share sessions at a multi-session horizon, so the lift
+        # series is overlapping and carries dependence out to horizon-1 lags. A fixed
+        # 5-lag bandwidth truncates that at horizon 10 and reports an interval narrower
+        # than the data supports.
+        hac_lag = max(5, int(horizon) - 1)
+        net_mean, net_lo, net_hi = self._hac_mean_ci(net_lifts, max_lag=hac_lag)
+        ex_mean, ex_lo, ex_hi = self._hac_mean_ci(excess_lifts, max_lag=hac_lag)
+        # Every AI policy that has ever accumulated evidence is a separate test of the
+        # same question. An uncorrected 95% interval on the k-th one tried is not a 95%
+        # interval; the promising branch therefore has to clear a Bonferroni-corrected
+        # bound rather than the nominal one.
+        policies_tested = len({
+            (int(r.get("ai_policy_version") or 0), str(r.get("ai_policy_id") or ""))
+            for r in self.mechanical_evidence_rows() if r.get("ai_policy_id")})
+        net_lo_adj = self._multiplicity_adjusted_low(net_mean, net_lo, policies_tested)
+        ex_lo_adj = self._multiplicity_adjusted_low(ex_mean, ex_lo, policies_tested)
         ai_mean = (sum(item["ai_portfolio_net_pct"] for item in comparisons)
                    / len(comparisons) if comparisons else 0.0)
         mechanical_mean = (sum(item["mechanical_net_pct"] for item in comparisons)
@@ -3139,18 +3203,30 @@ class PennyStockPaperBot:
                 f"days; have {len(comparisons)} net / "
                 f"{len(excess_lifts)} IWM-relative"
             )
-        elif net_lo > 0 and ex_lo > 0:
+        elif benchmark_inconsistent_days:
+            status = "DATA_INCOMPLETE"
+            reason = (
+                f"{benchmark_inconsistent_days} comparison day(s) have members that "
+                f"disagree about IWM's horizon return by more than "
+                f"{AI_VALUE_BENCHMARK_TOLERANCE_PCT}pp; in a same-day portfolio "
+                f"difference the benchmark must cancel, so the rows are inconsistent"
+            )
+        elif net_lo_adj > 0 and ex_lo_adj > 0:
             status = "AI_LIFT_PROMISING_NOT_VALIDATED"
             reason = (
                 "the actual AI-selected portfolio beat the full same-day mechanical "
-                "portfolio after observed costs; an independent frozen-rule audit is "
-                "still required"
+                "portfolio after observed costs"
+                + (f", and survives correcting for the {policies_tested} AI policies "
+                   f"tested" if policies_tested > 1 else "")
+                + "; an independent frozen-rule audit is still required"
             )
         else:
             status = "NO_MEASURED_AI_EDGE"
             reason = (
                 "the capital-aware after-cost AI lift is non-positive or its "
-                "dependence-robust 95% interval crosses zero"
+                "dependence-robust interval crosses zero"
+                + (f" once corrected for the {policies_tested} AI policies tested"
+                   if policies_tested > 1 else "")
             )
 
         return {
@@ -3168,6 +3244,11 @@ class PennyStockPaperBot:
             "mixed_selection_days": mixed_days,
             "all_approved_days": all_approved_days,
             "all_skipped_days": all_skipped_days,
+            # Days the model barely saw. Excluded rather than scored as a decision to
+            # hold cash, which would credit the selector for an API outage.
+            "unclassified_days": unclassified_days,
+            "unclassified_rows": unclassified_rows,
+            "minimum_day_classification_pct": AI_VALUE_MIN_DAY_CLASSIFICATION_PCT,
             "classified_rows": len(rows),
             "unavailable_rows": len(unavailable_rows),
             "classification_coverage_pct": round(classification_coverage, 1),
@@ -3187,6 +3268,36 @@ class PennyStockPaperBot:
             "mean_ai_excess_lift_pct": (round(ex_mean, 3) if excess_lifts else None),
             "ai_excess_lift_hac_95_pct": (
                 [round(ex_lo, 3), round(ex_hi, 3)] if excess_lifts else None),
+            "hac_max_lag": hac_lag,
+            # How many selectors have been tried, and the bound the promising branch
+            # actually has to clear once that search is priced in.
+            "ai_policies_tested": policies_tested,
+            "ai_lift_multiplicity_adjusted_low_pct": (
+                round(net_lo_adj, 3) if comparisons else None),
+            "ai_excess_lift_multiplicity_adjusted_low_pct": (
+                round(ex_lo_adj, 3) if excess_lifts else None),
+            "benchmark_inconsistent_days": benchmark_inconsistent_days,
+            "benchmark_leg_is_independent": False,
+            "benchmark_leg_note": (
+                "Members of one signal day share IWM's horizon return, so it cancels in "
+                "a same-day difference of two portfolios: the IWM-relative lift equals "
+                "the net lift by construction. It is a consistency check, not a second "
+                "confirmation."),
+            # The AI portfolio is not the mechanical basket's risk. A one-name selection
+            # measured against a twenty-name basket is a concentration change as much as
+            # a skill claim, so the sizes are reported next to the lift.
+            "ai_portfolio_concentration": {
+                "mean_selected_names": (
+                    round(sum(item["approved_members"] for item in comparisons)
+                          / len(comparisons), 2) if comparisons else None),
+                "mean_mechanical_names": (
+                    round(sum(item["mechanical_members"] for item in comparisons)
+                          / len(comparisons), 2) if comparisons else None),
+                "single_name_days": sum(1 for item in comparisons
+                                        if item["approved_members"] == 1),
+                "cash_days": sum(1 for item in comparisons
+                                 if item["approved_members"] == 0),
+            },
             "grouping": ("equal-weight AI-selected portfolio versus the full "
                          "equal-weight mechanical basket per signal day; 0% cash when "
                          "AI selects nothing"),

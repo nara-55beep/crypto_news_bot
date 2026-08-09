@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 from unittest import mock
 
 import penny_quotes
@@ -3401,3 +3402,203 @@ class TestAIIncrementalValueAudit(unittest.TestCase):
             audit = bot.ai_value_audit("5")
         self.assertEqual(audit["status"], "DATA_INCOMPLETE")
         self.assertLess(audit["classification_coverage_pct"], 80.0)
+
+
+class TestAIValueAuditSampleAndInference(unittest.TestCase):
+    """The lift must come from decisions the model actually made, priced against the
+    search that produced it."""
+
+    START = date(2026, 1, 1)
+
+    @staticmethod
+    def _row(day, sid, selection, net, excess, policy_id=None):
+        role = (paper.PRIMARY_EVIDENCE_ROLE if selection == "approved"
+                else paper.CONTROL_EVIDENCE_ROLE)
+        return {
+            "id": sid, paper.SIGNAL_DAY_FIELD: day, "ticker": sid,
+            "engine_version": paper.SIGNAL_ENGINE_VERSION,
+            paper.EVIDENCE_ROLE_FIELD: role,
+            paper.AI_SELECTION_FIELD: selection,
+            "ai_policy_version": paper.AI_DECISION_POLICY_VERSION,
+            "ai_policy_id": policy_id or paper.ai_decision_policy_id(),
+            "outcomes": {"5": measured_outcome(net, excess)}, "resolved": True,
+        }
+
+    def _audit(self, rows, horizon="5"):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot._evidence = {row["id"]: row for row in rows}
+        bot.signal_log = list(rows)
+        return bot.ai_value_audit(horizon)
+
+    def _days(self):
+        return [(self.START + timedelta(days=i)).isoformat()
+                for i in range(paper.AI_VALUE_MIN_COMPARISON_DAYS)]
+
+    def test_a_total_outage_day_is_not_a_decision_to_hold_cash(self):
+        """A model outage on a losing day used to be scored as the selector choosing
+        cash, so an API failure during a bad stretch manufactured positive lift.
+
+        The global 80% coverage gate cannot catch it: overall coverage stays at 90%
+        while six whole days are dark.
+        """
+        rows = []
+        for index, day in enumerate(self._days()):
+            if index % 10 == 0:                      # 6 of 60 days: nothing classified
+                rows.append(self._row(day, f"U{index}a", "unavailable", -8.0, -8.0))
+                rows.append(self._row(day, f"U{index}b", "unavailable", -8.0, -8.0))
+            else:
+                rows.append(self._row(day, f"A{index}", "approved", 0.0, 0.0))
+                rows.append(self._row(day, f"R{index}", "rejected", 0.0, 0.0))
+        audit = self._audit(rows)
+        self.assertGreater(audit["classification_coverage_pct"], 80.0)
+        self.assertEqual(audit["unclassified_days"], 6)
+        self.assertEqual(audit["unclassified_rows"], 12)
+        self.assertEqual(audit["all_skipped_days"], 0)     # never a "cash" decision
+        self.assertEqual(audit["comparison_days"], 54)
+        self.assertEqual(audit["mean_ai_lift_pct"], 0.0)   # was +0.8 from the outages
+        self.assertFalse(audit["auto_trade_allowed"])
+
+    def test_a_day_the_model_mostly_missed_is_excluded(self):
+        """Five extra days at 20% coverage, while overall coverage stays above the
+        global gate - so this isolates the per-day floor rather than the outer one."""
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 1.0, 0.5))
+            rows.append(self._row(day, f"R{index}", "rejected", 0.0, -0.5))
+        for index in range(5):
+            day = (self.START + timedelta(days=500 + index)).isoformat()
+            rows.append(self._row(day, f"PA{index}", "approved", 9.0, 8.5))
+            rows.extend(self._row(day, f"PU{index}-{k}", "unavailable", 9.0, 8.5)
+                        for k in range(4))           # 1 of 5 classified = 20%
+        audit = self._audit(rows)
+        self.assertGreater(audit["classification_coverage_pct"],
+                           audit["minimum_classification_coverage_pct"])
+        self.assertEqual(audit["unclassified_days"], 5)
+        self.assertEqual(audit["comparison_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        # the excluded days' +9% approvals never reach the reported lift
+        self.assertEqual(audit["mean_ai_lift_pct"], 0.5)
+
+    def test_a_day_meeting_the_floor_still_counts_with_its_baseline_intact(self):
+        """The unavailable name stays in the mechanical basket - it was in the
+        opportunity set - it just cannot be an AI decision."""
+        rows = []
+        for day in self._days():
+            rows.extend((
+                self._row(day, f"A{day}", "approved", 3.0, 2.0),
+                self._row(day, f"R{day}-1", "rejected", 0.0, -1.0),
+                self._row(day, f"R{day}-2", "rejected", 0.0, -1.0),
+                self._row(day, f"R{day}-3", "rejected", 0.0, -1.0),
+                self._row(day, f"U{day}", "unavailable", -3.0, -4.0),
+            ))
+        audit = self._audit(rows)
+        self.assertEqual(audit["comparison_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        self.assertEqual(audit["unclassified_days"], 0)
+        # mechanical basket = mean(3, 0, 0, 0, -3) = 0.0, including the unavailable name
+        self.assertEqual(audit["mechanical_mean_net_pct"], 0.0)
+        self.assertEqual(audit["mean_ai_lift_pct"], 3.0)
+
+    def test_the_iwm_leg_is_a_consistency_check_not_a_second_confirmation(self):
+        """Members of a signal day share IWM's horizon return, so it cancels in a
+        same-day portfolio difference: the two legs are one statistic."""
+        rows = []
+        for index, day in enumerate(self._days()):
+            bench = 1.0 + (index % 5) * 0.5
+            rows.append(self._row(day, f"A{index}", "approved", 3.0, 3.0 - bench))
+            rows.append(self._row(day, f"R{index}", "rejected", -1.0, -1.0 - bench))
+        audit = self._audit(rows)
+        self.assertEqual(audit["mean_ai_lift_pct"], audit["mean_ai_excess_lift_pct"])
+        self.assertEqual(audit["ai_lift_hac_95_pct"],
+                         audit["ai_excess_lift_hac_95_pct"])
+        self.assertIs(audit["benchmark_leg_is_independent"], False)
+        self.assertIn("cancels", audit["benchmark_leg_note"])
+
+    def test_members_disagreeing_about_the_benchmark_block_the_audit(self):
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 3.0, 2.0))
+            rows.append(self._row(day, f"R{index}", "rejected", -1.0, -7.0))
+        audit = self._audit(rows)
+        self.assertEqual(audit["status"], "DATA_INCOMPLETE")
+        self.assertEqual(audit["benchmark_inconsistent_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        self.assertIn("cancel", audit["reason"])
+
+    def test_the_hac_lag_follows_the_horizon_overlap(self):
+        rows = []
+        for index, day in enumerate(self._days()):
+            for sid, selection, net, excess in (
+                    (f"A{index}", "approved", 3.0, 2.0),
+                    (f"R{index}", "rejected", -1.0, -2.0)):
+                row = self._row(day, sid, selection, net, excess)
+                row["outcomes"] = {"10": measured_outcome(net, excess)}
+                rows.append(row)
+        self.assertEqual(self._audit(rows, "10")["hac_max_lag"], 9)
+        self.assertEqual(self._audit(rows, "5")["hac_max_lag"], 5)
+
+    def test_every_tried_policy_widens_the_bound_it_has_to_clear(self):
+        """Searching over prompts and reporting the nominal 95% interval of the one
+        that currently looks best is how a tuned selector becomes an 'edge'."""
+        rows = []
+        for index, day in enumerate(self._days()):
+            swing = 2.0 + (index % 7) - 3.0
+            rows.append(self._row(day, f"A{index}", "approved", swing, swing - 1.0))
+            rows.append(self._row(day, f"R{index}", "rejected", 0.0, -1.0))
+        single = self._audit(rows)
+        self.assertEqual(single["ai_policies_tested"], 1)
+        self.assertEqual(single["ai_lift_multiplicity_adjusted_low_pct"],
+                         single["ai_lift_hac_95_pct"][0])
+
+        abandoned = [dict(row, id=f"{row['id']}-p{k}", ai_policy_id=f"tried-{k}")
+                     for k in range(4) for row in rows[:2]]
+        searched = self._audit(rows + abandoned)
+        self.assertEqual(searched["ai_policies_tested"], 5)
+        self.assertLess(searched["ai_lift_multiplicity_adjusted_low_pct"],
+                        searched["ai_lift_hac_95_pct"][0])
+        self.assertFalse(searched["auto_trade_allowed"])
+
+    def test_a_marginal_result_does_not_survive_the_policy_search(self):
+        import random
+
+        # Dispersed daily lifts whose nominal 95% bound clears zero by a whisker.
+        rng = random.Random(7)
+        rows = []
+        for index, day in enumerate(self._days()):
+            lift = round(rng.gauss(0, 1.0) + 0.35, 3)
+            rows.append(self._row(day, f"A{index}", "approved",
+                                  2 * lift, 2 * lift - 1.0))
+            rows.append(self._row(day, f"R{index}", "rejected", 0.0, -1.0))
+        clean = self._audit(rows)
+        self.assertEqual(clean["status"], "AI_LIFT_PROMISING_NOT_VALIDATED")
+        abandoned = [dict(row, id=f"{row['id']}-p{k}", ai_policy_id=f"tried-{k}")
+                     for k in range(30) for row in rows[:2]]
+        searched = self._audit(rows + abandoned)
+        self.assertEqual(searched["status"], "NO_MEASURED_AI_EDGE")
+        self.assertIn("policies tested", searched["reason"])
+        self.assertFalse(searched["auto_trade_allowed"])
+
+    def test_portfolio_concentration_is_reported_beside_the_lift(self):
+        """A one-name selection measured against a twenty-name basket is a
+        concentration change as much as a skill claim."""
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 4.0, 3.0))
+            rows.extend(self._row(day, f"R{index}-{k}", "rejected", 0.0, -1.0)
+                        for k in range(19))
+        audit = self._audit(rows)
+        concentration = audit["ai_portfolio_concentration"]
+        self.assertEqual(concentration["mean_selected_names"], 1.0)
+        self.assertEqual(concentration["mean_mechanical_names"], 20.0)
+        self.assertEqual(concentration["single_name_days"],
+                         paper.AI_VALUE_MIN_COMPARISON_DAYS)
+        self.assertEqual(concentration["cash_days"], 0)
+
+    def test_the_audit_never_unlocks_trading_or_changes_the_engine(self):
+        rows = []
+        for index, day in enumerate(self._days()):
+            rows.append(self._row(day, f"A{index}", "approved", 5.0, 4.0))
+            rows.append(self._row(day, f"R{index}", "rejected", -5.0, -6.0))
+        audit = self._audit(rows)
+        self.assertFalse(audit["auto_trade_allowed"])
+        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 6)
