@@ -3442,12 +3442,37 @@ class TestSelectorFingerprint(unittest.TestCase):
         self.assertTrue(self._moves(mock.patch.object(
             research, "AI_TIMEOUT_SEC", 1.0)))
 
+    def test_response_parsing_and_model_call_are_fingerprinted(self):
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "_extract_json", lambda raw: {"verdict": "WATCH"})))
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "_call_ai_long", lambda *args, **kwargs: "{}")))
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "analyse_dossier", lambda dossier: {"ai": None})))
+
     def test_cache_thresholds_are_fingerprinted(self):
         """A longer TTL reuses a decision for a name whose book has moved, which
         changes which names get approved."""
         self.assertTrue(self._moves(mock.patch.object(paper, "AI_CACHE_SEC", 60)))
         self.assertTrue(self._moves(mock.patch.object(
             paper, "AI_ERROR_CACHE_SEC", 60)))
+        self.assertTrue(self._moves(mock.patch.object(
+            paper, "AI_MATERIAL_PRICE_PCT", 99.0)))
+        self.assertTrue(self._moves(mock.patch.object(
+            paper, "AI_MATERIAL_SCORE_POINTS", 99.0)))
+        self.assertTrue(self._moves(mock.patch.object(
+            paper, "AI_CACHE_MAX_NAMES", 10)))
+        self.assertTrue(self._moves(mock.patch.object(
+            paper, "AI_DEEP_DIVE", paper.AI_DEEP_DIVE + 1)))
+
+    def test_cache_behavior_and_key_builder_are_fingerprinted(self):
+        self.assertTrue(self._moves(mock.patch.object(
+            paper.PennyStockPaperBot, "_cached_ai",
+            lambda *args, **kwargs: (None, "", False, ""))))
+        self.assertTrue(self._moves(mock.patch.object(
+            paper.PennyStockPaperBot, "_catalyst_key", lambda dossier: "same")))
+        self.assertTrue(self._moves(mock.patch.object(
+            paper.PennyStockPaperBot, "_store_ai", lambda *args, **kwargs: None)))
 
     def test_the_original_prompt_and_model_chain_still_move_it(self):
         self.assertTrue(self._moves(mock.patch.object(
@@ -3506,23 +3531,53 @@ def f(a):
         self.assertEqual(same, recomment)
         self.assertNotEqual(same, semantic)
 
-    def test_an_undigestible_component_does_not_hash_to_a_constant(self):
+    def test_an_undigestible_component_fails_closed(self):
         """"We could not tell whether the selector changed" must not look like
         "it did not change"."""
         class Opaque:
             pass
 
         paper._BEHAVIOUR_DIGESTS.clear()
-        digest = paper._behaviour_digest(Opaque())
-        self.assertEqual(len(digest), 16)
-        self.assertNotEqual(digest, paper._behaviour_digest(research._dossier_text))
+        with self.assertRaises(TypeError):
+            paper._behaviour_digest(Opaque())
+
+    def test_no_source_fallback_includes_constants_not_only_bytecode(self):
+        def alpha():
+            return "alpha"
+
+        def beta():
+            return "beta"
+
+        self.assertEqual(alpha.__code__.co_code, beta.__code__.co_code)
+        paper._BEHAVIOUR_DIGESTS.clear()
+        with mock.patch.object(paper.inspect, "getsource",
+                               side_effect=OSError("source unavailable")):
+            self.assertNotEqual(paper._behaviour_digest(alpha),
+                                paper._behaviour_digest(beta))
+        paper._BEHAVIOUR_DIGESTS.clear()
+
+    def test_whole_policy_id_is_stable_when_source_files_are_unavailable(self):
+        paper._BEHAVIOUR_DIGESTS.clear()
+        with mock.patch.object(paper.inspect, "getsource",
+                               side_effect=OSError("source unavailable")):
+            first = paper.ai_decision_policy_id()
+            second = paper.ai_decision_policy_id()
+            with mock.patch.object(paper, "AI_MATERIAL_PRICE_PCT", 99.0):
+                changed = paper.ai_decision_policy_id()
+        paper._BEHAVIOUR_DIGESTS.clear()
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, changed)
 
     def test_the_audit_reports_what_the_fingerprint_covers(self):
         covered = isolated_bot(tempfile.mkdtemp()).ai_value_audit(
             "5")["ai_policy_fingerprint_covers"]
         for component in ("system_prompt", "user_prompt_builder", "output_normalizer",
                           "acceptance_rule", "sampling", "cache_sec",
-                          "error_cache_sec", "model_chain", "require_ai_confirm"):
+                          "error_cache_sec", "model_chain", "require_ai_confirm",
+                          "response_extractor", "model_call", "analysis_pipeline",
+                          "cache_lookup", "cache_key_builder", "cache_store",
+                          "cache_material_price_pct", "cache_material_score_points",
+                          "review_limit_per_scan"):
             self.assertIn(component, covered)
 
     def test_fingerprinting_does_not_touch_the_engine_or_unlock_trading(self):
