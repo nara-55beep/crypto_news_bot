@@ -244,26 +244,142 @@ class TestRankingAndPortfolio(unittest.TestCase):
         self.assertGreaterEqual(rows[0]["expected"]["expected_usd"],
                                 rows[1]["expected"]["expected_usd"])
 
-    def test_portfolio_treats_the_bankroll_as_deposited_not_spent(self):
-        rows = radar.rank([_protocol()], bankroll_usd=100.0, now=NOW)
-        view = radar.portfolio_view(rows, 100.0, wallets=1)
-        self.assertAlmostEqual(view["expected_total_usd"],
-                               100.0 + view["expected_airdrop_usd"], places=9)
-        self.assertGreater(view["expected_multiple"], 1.0)
-        self.assertIn("withdrawable", view["capital_note"])
-
-    def test_portfolio_states_a_real_chance_of_nothing(self):
-        rows = radar.rank([_protocol(), _protocol(name="b"), _protocol(name="c")],
-                          bankroll_usd=100.0, now=NOW)
-        view = radar.portfolio_view(rows, 100.0, wallets=3)
-        self.assertGreater(view["probability_of_nothing"], 0.2)
-        self.assertLess(view["probability_of_nothing"], 1.0)
-
     def test_an_empty_universe_yields_an_empty_plan(self):
-        view = radar.portfolio_view([], 100.0)
-        self.assertEqual(view["farms"], 0)
-        self.assertEqual(view["expected_airdrop_usd"], 0.0)
-        self.assertEqual(view["probability_of_nothing"], 1.0)
+        plan = radar.build_plan([], 100.0)
+        self.assertEqual(plan["farms"], 0)
+        self.assertFalse(plan["affordable"])
+
+
+class TestCostModel(unittest.TestCase):
+    def test_a_multichain_protocol_is_costed_on_its_cheapest_chain(self):
+        chain, gas = radar.cheapest_chain(
+            _protocol(chains=["Ethereum", "Base", "Arbitrum"]))
+        self.assertEqual(chain, "Base")
+        self.assertLess(gas, radar.gas_budget_usd("Ethereum"))
+
+    def test_an_ethereum_only_protocol_pays_ethereum_gas(self):
+        chain, gas = radar.cheapest_chain(_protocol(chains=["Ethereum"]))
+        self.assertEqual(chain, "Ethereum")
+        self.assertEqual(gas, radar.CHAIN_GAS_BUDGET_USD["Ethereum"])
+
+    def test_an_unknown_chain_gets_a_mid_range_estimate(self):
+        chain, gas = radar.cheapest_chain(_protocol(chains=["SomeNewL2"]))
+        self.assertEqual(gas, radar.DEFAULT_GAS_BUDGET_USD)
+        self.assertEqual(chain, "SomeNewL2")
+
+    def test_cost_separates_recoverable_deposit_from_spent_gas(self):
+        cost = radar.cost_to_farm(_protocol(chains=["Base"]), 60.0)
+        self.assertEqual(cost["deposit_usd"], 60.0)
+        self.assertEqual(cost["recoverable_usd"], 60.0)
+        self.assertEqual(cost["spent_usd"], cost["gas_usd"])
+        self.assertAlmostEqual(cost["total_usd"],
+                               cost["deposit_usd"] + cost["gas_usd"], places=9)
+
+    def test_a_deposit_below_the_threshold_is_raised_to_it(self):
+        cost = radar.cost_to_farm(_protocol(chains=["Base"]), 5.0)
+        self.assertEqual(cost["deposit_usd"], radar.MIN_MEANINGFUL_DEPOSIT_USD)
+
+
+class TestPlanner(unittest.TestCase):
+    def _universe(self, count=20, chain="Base"):
+        return [_protocol(name=f"p{i}", chains=[chain],
+                          tvl=50_000_000.0 - i * 1_000_000.0) for i in range(count)]
+
+    def test_an_amount_below_the_cheapest_entry_is_refused(self):
+        rows = radar.rank(self._universe(), 5.0, now=NOW)
+        plan = radar.build_plan(rows, 5.0)
+        self.assertFalse(plan["affordable"])
+        self.assertEqual(plan["farms"], 0)
+        self.assertGreater(plan["shortfall_usd"], 0.0)
+        self.assertGreater(plan["cheapest_entry_usd"], 5.0)
+
+    def test_more_money_funds_more_farms(self):
+        counts = []
+        for amount in (30.0, 100.0, 200.0):
+            rows = radar.rank(self._universe(), amount, now=NOW)
+            counts.append(radar.build_plan(rows, amount)["farms"])
+        self.assertEqual(counts, sorted(counts))
+        self.assertLess(counts[0], counts[-1])
+
+    def test_the_plan_never_spends_more_than_the_amount(self):
+        for amount in (30.0, 75.0, 150.0, 400.0, 5_000.0):
+            rows = radar.rank(self._universe(), amount, now=NOW)
+            plan = radar.build_plan(rows, amount)
+            if not plan["affordable"]:
+                continue
+            committed = sum(r["cost"]["total_usd"] for r in plan["rows"])
+            self.assertLessEqual(committed, amount + 1e-6,
+                                 f"plan overspends at ${amount}")
+
+    def test_farms_are_capped_by_time_not_only_money(self):
+        rows = radar.rank(self._universe(40), 100_000.0, now=NOW)
+        plan = radar.build_plan(rows, 100_000.0)
+        self.assertEqual(plan["farms"], radar.MAX_PRACTICAL_FARMS)
+        self.assertTrue(plan["capped_by_time"])
+        self.assertIn("your time", plan["cap_note"])
+
+    def test_the_steps_quote_the_same_deposit_the_plan_assigns(self):
+        """Regression: steps were built from the whole amount, so a $100 plan of
+        three farms told the reader to deposit $100 into each one."""
+        rows = radar.rank(self._universe(), 100.0, now=NOW)
+        plan = radar.build_plan(rows, 100.0)
+        for row in plan["rows"]:
+            deposit = row["cost"]["deposit_usd"]
+            steps = " ".join(row["instructions"])
+            self.assertIn(f"${deposit:,.2f} deposited", steps)
+            self.assertNotIn("$100.00 deposited", steps)
+
+    def test_only_gas_is_unrecoverable(self):
+        rows = radar.rank(self._universe(), 200.0, now=NOW)
+        plan = radar.build_plan(rows, 200.0)
+        self.assertAlmostEqual(plan["recoverable_usd"],
+                               200.0 - plan["gas_total_usd"], places=9)
+        self.assertLess(plan["gas_total_usd"], 200.0)
+
+    def test_expected_total_builds_on_the_recoverable_capital(self):
+        rows = radar.rank(self._universe(), 200.0, now=NOW)
+        plan = radar.build_plan(rows, 200.0)
+        self.assertAlmostEqual(
+            plan["expected_total_usd"],
+            plan["recoverable_usd"] + plan["expected_airdrop_usd"], places=9)
+
+    def test_probability_that_any_pays_rises_with_more_farms(self):
+        small = radar.build_plan(radar.rank(self._universe(), 30.0, now=NOW), 30.0)
+        big = radar.build_plan(radar.rank(self._universe(), 300.0, now=NOW), 300.0)
+        self.assertGreater(big["probability_any_pays"], small["probability_any_pays"])
+        for plan in (small, big):
+            self.assertAlmostEqual(
+                plan["probability_any_pays"] + plan["probability_of_nothing"],
+                1.0, places=12)
+
+
+class TestTimingHonesty(unittest.TestCase):
+    def test_no_deadline_is_ever_invented(self):
+        for months in (1.0, 8.0, 18.0, 40.0):
+            timing = radar.timing_view(months)
+            self.assertIsNone(timing["deadline"])
+            self.assertIn("No end date exists", timing["deadline_note"])
+
+    def test_stage_tracks_how_long_a_protocol_has_gone_without_a_token(self):
+        self.assertEqual(radar.timing_view(1.0)["stage"], "early")
+        self.assertEqual(radar.timing_view(8.0)["stage"], "building")
+        self.assertEqual(radar.timing_view(18.0)["stage"], "mature")
+        self.assertEqual(radar.timing_view(40.0)["stage"], "long overdue")
+
+
+class TestProbabilityMath(unittest.TestCase):
+    def test_the_formulas_reproduce_the_reported_numbers(self):
+        score, _ = radar.legitimacy_score(_protocol(), NOW)
+        math_view = radar.probability_math(score)
+        payoff = radar.expected_value(_protocol(), score, 33.0)
+        self.assertIn(f"{payoff['p_protocol_airdrops']:.3f}",
+                      math_view["formula_drops"])
+        self.assertIn(f"{payoff['p_paid']:.3f}", math_view["formula_paid"])
+
+    def test_the_weakest_assumption_is_named(self):
+        math_view = radar.probability_math(80.0)
+        self.assertIn("assumption", math_view["caveat"].lower())
+        self.assertIn("weakest", math_view["caveat"].lower())
 
 
 class TestInstructions(unittest.TestCase):
@@ -281,9 +397,27 @@ class TestInstructions(unittest.TestCase):
         steps = " ".join(radar.instructions(_protocol(audits="0"), 100.0))
         self.assertIn("No audit is published", steps)
 
-    def test_deposit_guidance_scales_with_the_bankroll(self):
-        small = " ".join(radar.instructions(_protocol(), 100.0))
-        self.assertIn("$33", small)
+    def test_steps_quote_the_exact_cost_split_into_recoverable_and_spent(self):
+        steps = " ".join(radar.instructions(_protocol(chains=["Base"]), 40.0))
+        self.assertIn("$40.00 deposited (you get this back)", steps)
+        self.assertIn("of gas (you do not)", steps)
+
+    def test_steps_name_the_cheapest_chain_and_the_cost_of_ignoring_it(self):
+        steps = " ".join(
+            radar.instructions(_protocol(chains=["Ethereum", "Base"]), 40.0))
+        self.assertIn("Farm it on Base", steps)
+        self.assertIn("using Ethereum instead would burn", steps)
+
+    def test_steps_state_there_is_no_deadline_to_race(self):
+        steps = " ".join(radar.instructions(_protocol(), 40.0))
+        self.assertIn("no deadline to race", steps)
+
+    def test_steps_are_tailored_to_what_the_protocol_actually_does(self):
+        lending = " ".join(radar.instructions(_protocol(category="Lending"), 40.0))
+        dex = " ".join(radar.instructions(_protocol(category="Dexs"), 40.0))
+        self.assertIn("supply an asset", lending)
+        self.assertIn("add liquidity", dex)
+        self.assertNotEqual(lending, dex)
 
 
 class TestRadarCache(unittest.TestCase):
@@ -292,7 +426,7 @@ class TestRadarCache(unittest.TestCase):
         state = radar_instance.state()
         self.assertTrue(state["running"])
         self.assertEqual(state["rows"], [])
-        self.assertIn("portfolio", state)
+        self.assertIn("plan", state)
         self.assertIn("assumptions", state)
 
     def test_bankroll_can_be_repriced_without_refetching(self):
@@ -300,18 +434,21 @@ class TestRadarCache(unittest.TestCase):
         radar_instance._universe = [_protocol(), _protocol(name="b"),
                                     _protocol(name="c")]
         radar_instance._reprice()
-        at_100 = radar_instance.state()["portfolio"]["expected_airdrop_usd"]
+        at_100 = radar_instance.state()["plan"]
 
         radar_instance.set_bankroll(1_000.0)
         state = radar_instance.state()
         self.assertEqual(state["bankroll_usd"], 1_000.0)
-        self.assertGreater(state["portfolio"]["expected_airdrop_usd"], at_100)
-        # More money buys a bigger drop but a WORSE multiple - the whole reason
-        # this strategy suits a small bankroll.
-        self.assertLess(state["portfolio"]["expected_multiple"],
-                        radar.portfolio_view(
-                            radar.rank(radar_instance._universe, 100.0),
-                            100.0)["expected_multiple"])
+        # More money funds more farms and a larger expected airdrop...
+        self.assertGreaterEqual(state["plan"]["farms"], at_100["farms"])
+        self.assertGreater(state["plan"]["expected_airdrop_usd"],
+                           at_100["expected_airdrop_usd"])
+        # ...but the deposit in each is what scales, and allocation is logarithmic,
+        # so the return per dollar invested falls. That asymmetry is the whole
+        # reason this strategy suits a small amount.
+        big = state["plan"]["expected_airdrop_usd"] / state["plan"]["amount_usd"]
+        small = at_100["expected_airdrop_usd"] / at_100["amount_usd"]
+        self.assertLess(big, small)
 
     def test_a_nonsense_bankroll_falls_back_to_the_default(self):
         radar_instance = radar.AirdropRadar(100.0)
@@ -381,26 +518,26 @@ class TestDashboardIntegration(unittest.TestCase):
 
     def test_the_page_marks_which_rows_the_bankroll_actually_funds(self):
         page = self.PAGES["AIRDROPS_HTML"]
-        self.assertIn("funds the top", page)
-        self.assertIn("not</b> a total you can collect", page)
-        self.assertIn("FUNDED</span>", page)
-        self.assertIn("tr.unfunded td{opacity", page)
+        self.assertIn("airdrops you can farm", page)
+        self.assertIn("budget does not reach", page)
+        self.assertIn("Not enough to start", page)
 
     def test_the_airdrops_page_ranks_by_reliability_and_discloses_risk(self):
         page = self.PAGES["AIRDROPS_HTML"]
-        self.assertIn("Ranked most reliable", page)
         self.assertIn("candidates, not confirmed airdrops", page)
-        self.assertIn("chance of nothing", page)
+        self.assertIn("chance nothing pays", page)
         self.assertIn("How these numbers are built", page)
         self.assertIn("/api/airdrops/state", page)
 
     def test_the_airdrops_page_links_back_and_cannot_hijack_the_opener(self):
         page = self.PAGES["AIRDROPS_HTML"]
         self.assertIn('href="/"', page)
-        marker = 'class="pname" href="'
-        self.assertIn(marker, page)
-        self.assertIn('rel="noopener noreferrer"',
-                      page[page.index(marker):][:240])
+        # Every outbound protocol link on this page opens a new tab, so each one
+        # must sever the opener reference.
+        outbound = re.findall(r'target="_blank"[^>]*', page)
+        self.assertGreaterEqual(len(outbound), 2)
+        for tag in outbound:
+            self.assertIn('rel="noopener noreferrer"', tag)
 
 
 class TestNoTradingCapability(unittest.TestCase):

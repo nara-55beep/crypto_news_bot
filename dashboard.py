@@ -1707,10 +1707,11 @@ AIRDROPS_HTML = r"""<!doctype html>
 <html><head><meta charset="utf-8"><title>Airdrop Radar</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  :root{--bg:#070a0f;--card:#0b0906;--line:#1a1408;--gold:#fcd34d;--dim:#8b7a5a}
+  :root{--bg:#070a0f;--card:#0b0906;--line:#1a1408;--gold:#fcd34d;--dim:#8b7a5a;
+        --good:#4ade80;--bad:#f87171}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:#d8cdb4;
-       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+       font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
   a{color:var(--gold)}
   #top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 18px;
        background:linear-gradient(90deg,#120d05,#0a0805);border-bottom:1px solid var(--line);
@@ -1722,53 +1723,63 @@ AIRDROPS_HTML = r"""<!doctype html>
      background:linear-gradient(100deg,#b45309,#fde68a 50%,#b45309);
      -webkit-background-clip:text;background-clip:text;color:transparent}
   .spacer{flex:1}
-  .wrap{max-width:1240px;margin:0 auto;padding:18px}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
         margin-bottom:16px;overflow:hidden}
-  .card h2{margin:0;padding:11px 16px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
-           color:#b3873f;background:#100c06;border-bottom:1px solid var(--line)}
-  .plan{display:flex;flex-wrap:wrap;gap:22px;align-items:center;padding:14px 16px}
-  .plan .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.07em;display:block}
-  .plan .v{font-size:19px;font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
-  .v.good{color:#4ade80}.v.bad{color:#f87171}
-  input[type=number]{background:#0a0805;border:1px solid #78350f;color:var(--gold);
-                     padding:6px 10px;border-radius:8px;width:100px;font:inherit}
-  button{background:#78350f;color:#fde68a;border:1px solid #a16207;border-radius:8px;
-         padding:6px 14px;font:inherit;cursor:pointer}
-  button:hover{filter:brightness(1.2)}
+  .card h2{margin:0;padding:11px 16px;font-size:12px;letter-spacing:.1em;
+           text-transform:uppercase;color:#b3873f;background:#100c06;
+           border-bottom:1px solid var(--line)}
+  .ask{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;padding:18px 16px}
+  .ask label{display:block;color:var(--dim);font-size:11px;text-transform:uppercase;
+             letter-spacing:.07em;margin-bottom:6px}
+  #amount{background:#0a0805;border:1px solid #78350f;color:var(--gold);padding:11px 14px;
+          border-radius:9px;width:190px;font:700 20px ui-monospace,monospace}
+  #go{background:linear-gradient(100deg,#b45309,#f59e0b 45%,#fde68a);color:#3b2503;
+      border:1px solid #fcd34d;border-radius:9px;padding:12px 26px;cursor:pointer;
+      font:800 13px/1 inherit;letter-spacing:.14em;text-transform:uppercase}
+  #go:hover{filter:brightness(1.1)}
+  #go:disabled{opacity:.5;cursor:wait}
+  .kpis{display:flex;flex-wrap:wrap;gap:26px;padding:16px}
+  .kpi .k{display:block;color:var(--dim);font-size:11px;text-transform:uppercase;
+          letter-spacing:.07em}
+  .kpi .v{font-size:21px;font-weight:700;color:var(--gold);
+          font-variant-numeric:tabular-nums}
+  .v.good{color:var(--good)}.v.bad{color:var(--bad)}
   .warn{background:#2d0a0a;border:1px solid #7f1d1d;color:#fca5a5;padding:12px 16px;
         font-size:12.5px;line-height:1.6}
   .warn b{color:#fecaca}
-  table{width:100%;border-collapse:collapse}
-  th{position:sticky;top:56px;background:#120d05;color:#b3873f;font-size:10px;
-     text-transform:uppercase;letter-spacing:.08em;text-align:left;padding:9px 12px;
-     border-bottom:1px solid var(--line);z-index:2}
-  td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:top}
-  tbody tr:hover{background:#120d06}
-  .rank{color:#6b5c40;font-variant-numeric:tabular-nums;width:34px}
-  .pname{color:var(--gold);font-weight:600;text-decoration:none;font-size:13px}
-  .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
-  .band{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;
+  .note{padding:12px 16px;color:var(--dim);font-size:11.5px;line-height:1.7}
+  .farm{border-bottom:1px solid var(--line)}
+  .fhead{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:13px 16px;
+         cursor:pointer}
+  .fhead:hover{background:#120d06}
+  .fn{color:var(--gold);font-weight:700;font-size:14px}
+  .pill{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;
         letter-spacing:.06em;white-space:nowrap}
-  .b-STRONG{background:#052e16;color:#4ade80;border:1px solid #166534}
-  .b-MODERATE{background:#1c1917;color:#fbbf24;border:1px solid #78350f}
-  .b-SPECULATIVE{background:#2a1207;color:#fb923c;border:1px solid #7c2d12}
-  .b-HIGHRISK{background:#2d0a0a;color:#f87171;border:1px solid #7f1d1d}
-  .bar{height:5px;background:#231a09;border-radius:3px;overflow:hidden;margin-top:5px;width:96px}
-  .bar i{display:block;height:100%;background:linear-gradient(90deg,#b45309,#fde68a)}
-  .sig{color:var(--dim);font-size:11px;margin-top:4px}
-  tr.unfunded td{opacity:.42}
-  .fundtag{font-size:9px;font-weight:800;letter-spacing:.06em;padding:2px 7px;
-           border-radius:999px;background:#052e16;color:#4ade80;border:1px solid #166534}
-  .fundnote{padding:10px 16px;background:#140f06;border-bottom:1px solid var(--line);
-            color:#b3873f;font-size:11.5px;line-height:1.6}
-  .steps{background:#080604;padding:0 16px 14px 16px}
-  .steps ol{margin:8px 0 0 18px;padding:0}
-  .steps li{margin:7px 0;color:#c9b58a;font-size:12px;line-height:1.6}
-  .toggle{cursor:pointer;color:#a16207;font-size:11px;margin-top:5px;display:inline-block}
-  .toggle:hover{color:var(--gold)}
-  .empty{padding:34px;text-align:center;color:var(--dim)}
-  .foot{color:var(--dim);font-size:11.5px;line-height:1.7;padding:14px 16px}
+  .p-STRONG{background:#052e16;color:var(--good);border:1px solid #166534}
+  .p-MODERATE{background:#1c1917;color:#fbbf24;border:1px solid #78350f}
+  .p-SPECULATIVE{background:#2a1207;color:#fb923c;border:1px solid #7c2d12}
+  .p-HIGHRISK{background:#2d0a0a;color:var(--bad);border:1px solid #7f1d1d}
+  .cost{font-family:ui-monospace,monospace;font-size:12px;color:#e5d5b0}
+  .chance{font-family:ui-monospace,monospace;font-size:12px;color:var(--good);font-weight:700}
+  .detail{padding:0 16px 16px 16px;background:#080604}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;
+         margin:12px 0}
+  .box{background:#0d0a06;border:1px solid var(--line);border-radius:9px;padding:11px 13px}
+  .box h4{margin:0 0 7px 0;font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+          color:#b3873f}
+  .box .line{font-size:12px;color:#c9b58a;margin:4px 0;display:flex;justify-content:space-between;gap:10px}
+  .box .line b{color:#e5d5b0;font-variant-numeric:tabular-nums}
+  .math{font-family:ui-monospace,monospace;font-size:11px;color:#9fb8a0;margin:5px 0;
+        word-break:break-word}
+  ol.steps{margin:6px 0 0 20px;padding:0}
+  ol.steps li{margin:8px 0;color:#c9b58a;font-size:12.5px;line-height:1.65}
+  .empty{padding:40px;text-align:center;color:var(--dim)}
+  table{width:100%;border-collapse:collapse}
+  th{background:#120d05;color:#b3873f;font-size:10px;text-transform:uppercase;
+     letter-spacing:.08em;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);font-size:12px}
+  .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 </style></head><body>
 <div id="top">
   <a class="nav" href="/">&larr; Chart</a>
@@ -1778,104 +1789,168 @@ AIRDROPS_HTML = r"""<!doctype html>
   <span id="meta" style="color:#8b7a5a;font-size:11.5px"></span>
 </div>
 <div class="wrap">
-  <div class="card"><h2>Your plan</h2><div id="plan" class="plan"></div>
-    <div id="capnote" class="foot"></div></div>
-  <div id="warn"></div>
-  <div class="card"><h2>Ranked most reliable &rarr; least</h2>
-    <div id="list"><div class="empty">loading the first scan&hellip;</div></div></div>
-  <div class="card"><h2>How these numbers are built</h2><div id="assume" class="foot"></div></div>
+
+  <div class="card">
+    <h2>How much do you want to invest?</h2>
+    <div class="ask">
+      <div>
+        <label for="amount">Amount you want to invest (USD)</label>
+        <input id="amount" type="number" min="10" step="10" value="100">
+      </div>
+      <button id="go" onclick="analyze()">Analyze airdrops</button>
+      <div style="flex:1;min-width:220px;color:#8b7a5a;font-size:11.5px;line-height:1.6">
+        Most of this is a deposit you can withdraw again. Only the gas is spent.
+      </div>
+    </div>
+  </div>
+
+  <div id="out"><div class="card"><div class="empty">Enter an amount and press Analyze.</div></div></div>
 </div>
 <script>
 const $=i=>document.getElementById(i);
 const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const money=v=>'$'+Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0});
+const usd=v=>'$'+Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const usd0=v=>'$'+Number(v||0).toLocaleString(undefined,{maximumFractionDigits:0});
 const pct=v=>Math.round((v||0)*100)+'%';
+let OPEN={};
+
+async function analyze(){
+  const amt=Number(($('amount')||{}).value||0);
+  $('go').disabled=true; $('go').textContent='Analyzing\u2026';
+  try{
+    await fetch('/api/airdrops/bankroll',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({bankroll_usd:amt})});
+  }catch(e){}
+  await load();
+  $('go').disabled=false; $('go').textContent='Analyze airdrops';
+}
 
 async function load(){
   let s; try{ s=await(await fetch('/api/airdrops/state')).json(); }catch(e){ return; }
-  const rows=s.rows||[], p=s.portfolio||{}, a=s.assumptions||{};
+  const plan=s.plan||{}, rows=s.rows||[], a=s.assumptions||{};
   $('meta').textContent = s.error ? ('scan error: '+s.error)
-    : (rows.length+' candidates from '+Number(s.universe||0).toLocaleString()
-       +' protocols \u00b7 scanned in '+Number(s.scan_seconds||0).toFixed(2)+'s');
-
-  $('plan').innerHTML =
-    '<div><span class="k">bankroll</span><span class="v">'+money(p.bankroll_usd)+'</span></div>'+
-    '<div><span class="k">split across</span><span class="v">'+(p.farms||0)+' farms</span></div>'+
-    '<div><span class="k">expected total</span><span class="v good">'+money(p.expected_total_usd)+
-      ' <small style="font-size:12px">('+Number(p.expected_multiple||0).toFixed(2)+'x)</small></span></div>'+
-    '<div><span class="k">if all land</span><span class="v good">'+money(p.upside_total_usd)+'</span></div>'+
-    '<div><span class="k">chance of nothing</span><span class="v bad">'+pct(p.probability_of_nothing)+'</span></div>'+
-    '<div style="flex:1"></div>'+
-    '<div><span class="k">bankroll ($)</span>'+
-      '<input id="bank" type="number" min="10" step="10" value="'+Number(p.bankroll_usd||100)+'"></div>'+
-    '<button onclick="reprice()">Re-price</button><button onclick="rescan()">Rescan</button>';
-  $('capnote').innerHTML = esc(p.capital_note||'')+' <b>Horizon:</b> '+esc(p.horizon||'');
-
-  $('warn').innerHTML='<div class="card"><div class="warn"><b>Read this before depositing anything.</b> '+
-    'These are ranked <b>candidates, not confirmed airdrops</b> \u2014 a high score means the protocol looks '+
-    'real, not that a token is coming. The dollar figures are a model, not a measurement: '+esc(a.caveat||'')+
-    ' Sorting is by reliability first, because the score rests on checkable facts while the payoff rests '+
-    'on assumptions.</div></div>';
+    : (Number(s.universe||0).toLocaleString()+' protocols scanned in '
+       +Number(s.scan_seconds||0).toFixed(2)+'s \u2192 '+(s.candidates||0)+' candidates');
 
   if(!rows.length){
-    $('list').innerHTML='<div class="empty">'+(s.error?esc(s.error):'first scan running\u2026')+'</div>';
+    $('out').innerHTML='<div class="card"><div class="empty">'+
+      (s.error?esc(s.error):'first scan still running\u2026')+'</div></div>'; return;
+  }
+  if(!plan.affordable){
+    $('out').innerHTML='<div class="card"><h2>Not enough to start</h2><div class="warn">'+
+      'The cheapest farm needs <b>'+usd(plan.cheapest_entry_usd)+'</b> '+
+      '('+usd(25)+' deposit that clears a threshold, plus gas). You are '+
+      usd(plan.shortfall_usd)+' short. A deposit below that buys the gas without '+
+      'buying the eligibility, so it is worse than not farming at all.</div></div>';
     return;
   }
 
-  var funded=rows.filter(function(x){return x.funded;}).length;
-  var perFarm=Number((rows[0].expected||{}).deposit_usd||0);
-  $('list').innerHTML='<div class="fundnote">Your '+money(p.bankroll_usd)+' funds the top <b>'+funded+
-    '</b> rows at $'+perFarm.toFixed(2)+' each. Every row below is priced at that same deposit for '+
-    'comparison, so the expected column is <b>not</b> a total you can collect — farming all '+
-    rows.length+' would need '+money(perFarm*rows.length)+'.</div>'+
-    '<table><thead><tr><th></th><th>protocol</th><th>reliability</th>'+
-    '<th class="num">score</th><th class="num">TVL</th><th class="num">audits</th><th class="num">age</th>'+
-    '<th class="num">if it lands</th><th class="num">expected</th></tr></thead><tbody>'+
-    rows.map(function(r,i){
-      var e=r.expected||{}, band=(r.risk_band||'').replace(' ','');
-      var link=r.url?'<a class="pname" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.name)+'</a>'
-                    :'<span class="pname">'+esc(r.name)+'</span>';
-      return '<tr class="'+(r.funded?'':'unfunded')+'"><td class="rank">'+(i+1)+'</td>'+
-        '<td>'+link+(r.funded?' <span class="fundtag">FUNDED</span>':'')+
-        '<div class="sig">'+esc(r.category||'')+' \u00b7 '+esc(r.chain||'')+'</div>'+
-        '<span class="toggle" onclick="tog('+i+')">\u25b8 how to farm it</span></td>'+
-        '<td><span class="band b-'+esc(band)+'">'+esc(r.risk_band||'')+'</span>'+
-        '<div class="bar"><i style="width:'+Math.max(2,Math.min(100,r.score||0))+'%"></i></div></td>'+
-        '<td class="num">'+Number(r.score||0).toFixed(0)+'</td>'+
-        '<td class="num">'+money(r.tvl_usd)+'</td>'+
-        '<td class="num">'+(r.audits||0)+'</td>'+
-        '<td class="num">'+Number(r.age_months||0).toFixed(0)+'mo</td>'+
-        '<td class="num">$'+Number(e.value_if_paid_usd||0).toFixed(2)+
-          '<div class="sig">'+pct(e.p_paid)+' chance you are paid</div></td>'+
-        '<td class="num" style="color:#4ade80;font-weight:600">$'+Number(e.expected_usd||0).toFixed(2)+'</td></tr>'+
-        '<tr id="s'+i+'" style="display:none"><td></td><td colspan="8" class="steps">'+
-        '<div class="sig">'+esc((r.signals||[]).join(' \u00b7 '))+'</div>'+
-        '<ol>'+(r.instructions||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ol></td></tr>';
-    }).join('')+'</tbody></table>';
+  let html='<div class="card"><h2>Your plan</h2><div class="kpis">'+
+    '<div class="kpi"><span class="k">airdrops you can farm</span><span class="v">'+plan.farms+'</span></div>'+
+    '<div class="kpi"><span class="k">deposit in each</span><span class="v">'+usd(plan.deposit_each_usd)+'</span></div>'+
+    '<div class="kpi"><span class="k">gas (actually spent)</span><span class="v bad">'+usd(plan.gas_total_usd)+'</span></div>'+
+    '<div class="kpi"><span class="k">you can withdraw</span><span class="v">'+usd(plan.recoverable_usd)+'</span></div>'+
+    '<div class="kpi"><span class="k">expected total</span><span class="v good">'+usd(plan.expected_total_usd)+'</span></div>'+
+    '<div class="kpi"><span class="k">if every one lands</span><span class="v good">'+usd(plan.upside_total_usd)+'</span></div>'+
+    '<div class="kpi"><span class="k">chance at least one pays</span><span class="v good">'+pct(plan.probability_any_pays)+'</span></div>'+
+    '<div class="kpi"><span class="k">chance nothing pays</span><span class="v bad">'+pct(plan.probability_of_nothing)+'</span></div>'+
+    '</div><div class="note">Of your '+usd(plan.amount_usd)+', only <b>'+usd(plan.gas_total_usd)+
+    '</b> is truly spent (gas). The rest sits in the protocols and can be withdrawn. '+
+    'Horizon: '+esc(plan.horizon||'')+'.'+
+    (plan.capped_by_time?' <b>'+esc(plan.cap_note||'')+'</b>':'')+'</div></div>';
 
-  $('assume').innerHTML=
-    'Candidates are DeFiLlama protocols holding real TVL in a user-facing category with <b>no token yet</b>. '+
-    'Ranked by a legitimacy score built from published audits, TVL at risk, age, disclosure and chain spread, '+
-    'minus a penalty for mercenary TVL spikes.<br><br>'+
-    'The payoff model assumes an airdrop probability of '+pct(a.p_airdrop_range?a.p_airdrop_range[1]:0)+
-    ' at best, that only '+pct(a.value_retention)+' of any allocation keeps its value ('+
-    esc(a.value_retention_basis||'')+'), and that '+pct(1-(a.qualification_rate||0))+
-    ' of small wallets are filtered out ('+esc(a.qualification_basis||'')+'). '+
-    'Allocation is discounted by deposit size, so a small wallet is not priced like a large one \u2014 '+
-    'though because allocation is logarithmic, a small bankroll still earns a better <i>multiple</i> '+
-    'than a large one.';
+  html+='<div class="card"><div class="warn"><b>Before you deposit anything.</b> '+
+    'These are ranked <b>candidates, not confirmed airdrops</b> \u2014 a high score means the '+
+    'protocol looks real, not that a token is coming. <b>No airdrop here has an announced end '+
+    'date</b>, because unannounced drops do not publish one; any site showing you a countdown '+
+    'is inventing it. The dollar figures are a model, not a measurement: '+esc(a.caveat||'')+
+    '</div></div>';
+
+  html+='<div class="card"><h2>Farm these '+plan.farms+' \u2014 click one for exact steps</h2>';
+  (plan.rows||[]).forEach(function(r,i){
+    const c=r.cost||{}, e=r.expected||{}, t=r.timing||{}, m=r.probability_math||{};
+    const band=(r.risk_band||'').replace(' ','');
+    const open=OPEN[i]?'block':'none';
+    html+='<div class="farm"><div class="fhead" onclick="tog('+i+')">'+
+      '<span style="color:#6b5c40;font-variant-numeric:tabular-nums">'+(i+1)+'</span>'+
+      '<span class="fn">'+esc(r.name)+'</span>'+
+      '<span class="pill p-'+esc(band)+'">'+esc(r.risk_band||'')+'</span>'+
+      '<span class="cost">costs '+usd(c.total_usd)+' \u00b7 on '+esc(c.farm_on_chain||'')+'</span>'+
+      '<span class="spacer"></span>'+
+      '<span class="chance">'+pct(e.p_paid)+' chance you get paid</span>'+
+      '<span class="cost">\u2192 '+usd(e.value_if_paid_usd)+'</span>'+
+      '</div><div class="detail" id="d'+i+'" style="display:'+open+'">'+
+
+      '<div class="grid2">'+
+        '<div class="box"><h4>What it costs you</h4>'+
+          '<div class="line"><span>deposit (you get this back)</span><b>'+usd(c.deposit_usd)+'</b></div>'+
+          '<div class="line"><span>gas on '+esc(c.farm_on_chain||'')+' (spent)</span><b>'+usd(c.gas_usd)+'</b></div>'+
+          '<div class="line"><span>total to enter</span><b>'+usd(c.total_usd)+'</b></div>'+
+          '<div class="line"><span>minimum that still works</span><b>'+usd(c.minimum_total_usd)+'</b></div>'+
+        '</div>'+
+        '<div class="box"><h4>Chance, calculated</h4>'+
+          '<div class="math">'+esc(m.formula_drops||'')+'</div>'+
+          '<div class="math">'+esc(m.formula_paid||'')+'</div>'+
+          '<div class="math">'+esc(m.formula_value||'')+'</div>'+
+          '<div class="line"><span>expected value</span><b>'+usd(e.expected_usd)+'</b></div>'+
+          '<div class="note" style="padding:6px 0 0 0">'+esc(m.caveat||'')+'</div>'+
+        '</div>'+
+        '<div class="box"><h4>Timing</h4>'+
+          '<div class="line"><span>running without a token</span><b>'+Number(t.months_without_token||0).toFixed(0)+' months</b></div>'+
+          '<div class="line"><span>stage</span><b>'+esc(t.stage||'')+'</b></div>'+
+          '<div class="line"><span>announced end date</span><b style="color:#f87171">none</b></div>'+
+          '<div class="note" style="padding:6px 0 0 0">'+esc(t.note||'')+' '+esc(t.deadline_note||'')+'</div>'+
+        '</div>'+
+        '<div class="box"><h4>Evidence</h4>'+
+          '<div class="line"><span>TVL</span><b>'+usd0(r.tvl_usd)+'</b></div>'+
+          '<div class="line"><span>audits</span><b>'+(r.audits||0)+'</b></div>'+
+          '<div class="line"><span>category</span><b>'+esc(r.category||'')+'</b></div>'+
+          '<div class="note" style="padding:6px 0 0 0">'+esc((r.signals||[]).join(' \u00b7 '))+'</div>'+
+        '</div>'+
+      '</div>'+
+
+      '<h4 style="margin:14px 0 0 0;font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:#b3873f">'+
+      'Exactly what to do'+(r.url?' \u2014 <a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.url)+'</a>':'')+'</h4>'+
+      '<ol class="steps">'+(r.instructions||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ol>'+
+      '</div></div>';
+  });
+  html+='</div>';
+
+  const rest=rows.filter(function(r){return !r.funded;});
+  if(rest.length){
+    html+='<div class="card"><h2>'+rest.length+' more candidates your budget does not reach</h2>'+
+      '<table><thead><tr><th>protocol</th><th>risk</th><th class="num">score</th>'+
+      '<th class="num">TVL</th><th class="num">costs</th><th class="num">chance paid</th>'+
+      '<th>farm on</th></tr></thead><tbody>'+
+      rest.map(function(r){
+        const c=r.cost||{}, e=r.expected||{};
+        return '<tr><td>'+(r.url?'<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.name)+'</a>':esc(r.name))+'</td>'+
+          '<td>'+esc(r.risk_band||'')+'</td><td class="num">'+Number(r.score||0).toFixed(0)+'</td>'+
+          '<td class="num">'+usd0(r.tvl_usd)+'</td><td class="num">'+usd(c.minimum_total_usd)+'</td>'+
+          '<td class="num">'+pct(e.p_paid)+'</td><td>'+esc(c.farm_on_chain||'')+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+
+  html+='<div class="card"><h2>How these numbers are built</h2><div class="note">'+
+    'Candidates are DeFiLlama protocols holding real TVL in a user-facing category with '+
+    '<b>no token yet</b>, ranked by a legitimacy score from published audits, TVL at risk, '+
+    'age, disclosure and chain spread, minus a penalty for mercenary TVL spikes.<br><br>'+
+    'Multi-chain protocols are costed on their <b>cheapest</b> chain, since activity usually '+
+    'counts on any deployment and paying Ethereum gas for the same allocation is money burned.'+
+    '<br><br>Payoff assumes at best a '+pct(a.p_airdrop_range?a.p_airdrop_range[1]:0)+
+    ' chance a protocol drops, that only '+pct(a.value_retention)+' of an allocation keeps its '+
+    'value ('+esc(a.value_retention_basis||'')+'), and that '+pct(1-(a.qualification_rate||0))+
+    ' of small wallets are filtered out ('+esc(a.qualification_basis||'')+'). Allocation is '+
+    'discounted by deposit size \u2014 but because it is logarithmic, a small amount still earns '+
+    'a better <i>multiple</i> than a large one.</div></div>';
+
+  $('out').innerHTML=html;
 }
-function tog(i){var r=$('s'+i); if(r) r.style.display = r.style.display==='none'?'table-row':'none';}
-async function reprice(){
-  await fetch('/api/airdrops/bankroll',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({bankroll_usd:Number(($('bank')||{}).value||100)})});
-  load();
+function tog(i){
+  OPEN[i]=!OPEN[i];
+  const d=$('d'+i); if(d) d.style.display=OPEN[i]?'block':'none';
 }
-async function rescan(){
-  await fetch('/api/airdrops/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-  load();
-}
-load(); setInterval(load,30000);
+load();
 </script></body></html>
 """
 
