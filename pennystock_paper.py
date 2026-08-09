@@ -21,12 +21,15 @@ decides whether the trade is even takeable.
 """
 from __future__ import annotations
 
+import ast
 import asyncio
 import glob
 import hashlib
+import inspect
 import json
 import math
 import os
+import textwrap
 import time
 import uuid
 from dataclasses import dataclass, asdict, field
@@ -193,21 +196,91 @@ def _as_price(value) -> float | None:
     return out if out > 0 else None
 
 
+_BEHAVIOUR_DIGESTS: dict = {}
+
+
+def _behaviour_digest(target) -> str:
+    """A digest of what a function DOES, ignoring comments and formatting.
+
+    The source is normalised through the AST and stripped of docstrings, so rewording a
+    comment does not discard an evidence population while a changed threshold, prompt
+    line or branch does. Introspection failures fail closed - an un-digestible component
+    reports as such rather than silently hashing to a constant, because "we could not
+    tell whether the selector changed" must never look like "it did not change".
+
+    Memoised on the code object: this runs on every recorded signal and every audited
+    row, and re-reading the module from disk each time made the work quadratic. A
+    replaced function - an edit, or a test patch - is a different code object and misses
+    the cache, so the digest still moves whenever the behaviour does.
+    """
+    cache_key = getattr(target, "__code__", None)
+    if cache_key is not None and cache_key in _BEHAVIOUR_DIGESTS:
+        return _BEHAVIOUR_DIGESTS[cache_key]
+    try:
+        source = textwrap.dedent(inspect.getsource(target))
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                 ast.ClassDef, ast.Module)):
+                body = getattr(node, "body", [])
+                if (body and isinstance(body[0], ast.Expr)
+                        and isinstance(body[0].value, ast.Constant)
+                        and isinstance(body[0].value.value, str)):
+                    node.body = body[1:]
+        normalised = ast.dump(tree, annotate_fields=False)
+    except (OSError, TypeError, SyntaxError, IndentationError):
+        code = getattr(target, "__code__", None)
+        normalised = ("code:" + code.co_code.hex() if code is not None
+                      else f"unintrospectable:{getattr(target, '__name__', target)!r}")
+    digest = hashlib.sha256(normalised.encode("utf-8")).hexdigest()[:16]
+    if cache_key is not None:
+        _BEHAVIOUR_DIGESTS[cache_key] = digest
+    return digest
+
+
+def ai_decision_policy_components() -> dict:
+    """Every input that decides which names the AI selector approves.
+
+    Hashing only the system prompt and model chain left most of the selector outside the
+    fingerprint. The USER prompt is the dossier the model actually reads; the normaliser
+    decides which replies become valid verdicts at all; the acceptance rule turns a
+    verdict into an approval; sampling decides how deterministic any of it is; and the
+    cache decides how stale a reused decision may be. Editing any of those changes which
+    names get approved, so pooling the before and after into one comparison population
+    measures two selectors as if they were one - and, since the multiplicity correction
+    counts distinct policy ids, an unfingerprinted edit is also a free untracked test.
+    """
+    return {
+        "version": AI_DECISION_POLICY_VERSION,
+        # what the model is asked
+        "system_prompt": research.SYSTEM_PROMPT,
+        "user_prompt_builder": _behaviour_digest(research._dossier_text),
+        # which model answers, and how it is sampled
+        "model_chain": list(research.AI_MODEL_CHAIN),
+        "preferred_model": getattr(config, "PENNY_AI_MODEL", None),
+        "sampling": dict(getattr(research, "AI_SAMPLING", {})),
+        "model_extra_body": {k: dict(v) for k, v in
+                             getattr(research, "AI_MODEL_EXTRA_BODY", {}).items()},
+        "request_timeout_sec": float(getattr(research, "AI_TIMEOUT_SEC", 0.0)),
+        # how the reply becomes a decision
+        "output_normalizer": _behaviour_digest(research._normalize_ai),
+        "acceptance_rule": _behaviour_digest(research.signal_from),
+        "require_ai_confirm": bool(research.REQUIRE_AI_CONFIRM),
+        # how long a decision may be reused for a name whose book has moved
+        "cache_sec": AI_CACHE_SEC,
+        "error_cache_sec": AI_ERROR_CACHE_SEC,
+    }
+
+
 def ai_decision_policy_id() -> str:
     """Stable identity of the actual LLM selector used by this process.
 
-    A manual version is not enough: prompts and preferred/fallback models are easy to
-    edit without remembering a counter.  Hashing both makes a changed selector start a
+    A manual version is not enough: every part of the selector is easy to edit without
+    remembering a counter. Hashing the whole surface makes a changed selector start a
     new comparison population automatically rather than pool two policies.
     """
-    payload = {
-        "version": AI_DECISION_POLICY_VERSION,
-        "system_prompt": research.SYSTEM_PROMPT,
-        "model_chain": list(research.AI_MODEL_CHAIN),
-        "preferred_model": getattr(config, "PENNY_AI_MODEL", None),
-        "require_ai_confirm": bool(research.REQUIRE_AI_CONFIRM),
-    }
-    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    raw = json.dumps(ai_decision_policy_components(), sort_keys=True,
+                     separators=(",", ":"), default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -3334,6 +3407,10 @@ class PennyStockPaperBot:
                 AI_VALUE_MIN_CLASSIFICATION_COVERAGE_PCT),
             "ai_policy_version": AI_DECISION_POLICY_VERSION,
             "ai_policy_id": policy_id,
+            # The names of everything the fingerprint covers, so the guarantee that a
+            # changed selector starts a new population is auditable rather than claimed.
+            # Names only: the system prompt itself does not belong in an API payload.
+            "ai_policy_fingerprint_covers": sorted(ai_decision_policy_components()),
             "model_counts": model_counts,
             "ai_portfolio_mean_net_pct": round(ai_mean, 3) if comparisons else None,
             "mechanical_mean_net_pct": (round(mechanical_mean, 3)
