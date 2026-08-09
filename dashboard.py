@@ -3441,7 +3441,7 @@ PAPER_HTML = r"""<!doctype html>
         '<button class="btn '+(s.enabled?'on':'off')+'" onclick="toggleCryptalMaker()">'+tgl+'</button>'+
         '<button class="btn reset" onclick="resetCryptalMaker()">reset</button></div>'+
       statHead(s)+
-      '<div class="sub" style="padding:7px 14px">'+esc(s.status||'')+'; polls every '+Number(s.poll_sec||2)+'s; unresolved inventory is force-closed after '+Math.round(Number(s.max_hedged_hold_sec||86400)/3600)+'h. No private API or real-order code exists.</div>'+
+      '<div class="sub" style="padding:7px 14px">'+esc(s.status||'')+'; $'+Number(s.paper_bankroll_usd||100).toFixed(0)+' total paper capital ($'+Number((s.starting_allocation||{}).cryptal_tousd||50).toFixed(0)+' Cryptal + $'+Number((s.starting_allocation||{}).binance_usdt||50).toFixed(0)+' Binance hedge collateral); maximum quote $'+Number((s.starting_allocation||{}).maximum_quote_notional||40).toFixed(0)+'. Polls every '+Number(s.poll_sec||2)+'s; unresolved inventory is force-closed after '+Math.round(Number(s.max_hedged_hold_sec||86400)/3600)+'h. No private API or real-order code exists.</div>'+
       problems+
       '<div class="ph">Executable market and conversion</div><div class="sub" style="padding:8px 14px">'+marketText+'</div>'+
       '<div class="ph">Working paper quote</div><div class="sub" style="padding:8px 14px">'+quoteText+'</div>'+

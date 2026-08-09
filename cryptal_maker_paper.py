@@ -43,9 +43,13 @@ MAX_DATA_AGE_SEC = 12
 MAX_HEDGED_HOLD_SEC = 24 * 60 * 60
 PRICE_TICK = 0.01
 
-START_CRYPTAL_USD = 100.0
-START_BINANCE_USDT = 100.0
-ORDER_NOTIONAL_USD = 50.0
+PAPER_ACCOUNT_VERSION = 2
+PAPER_BANKROLL_USD = 100.0
+# The real version would need both venues prefunded. Split the user's planned
+# $100 bankroll evenly and leave a 20% buffer on each side by quoting $40.
+START_CRYPTAL_USD = 50.0
+START_BINANCE_USDT = 50.0
+ORDER_NOTIONAL_USD = 40.0
 
 # Current public pair metadata and Cryptal's published fee schedule both state 0.25%
 # for maker and taker. Binance's VIP-0 USD-M futures taker fee is modelled at a
@@ -137,6 +141,8 @@ class CryptalMakerPaperBot:
             tmp = self.state_path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as handle:
                 json.dump({
+                    "paper_account_version": PAPER_ACCOUNT_VERSION,
+                    "paper_bankroll_usd": PAPER_BANKROLL_USD,
                     "enabled": self.enabled,
                     "cryptal_cash_usd": self.cryptal_cash_usd,
                     "binance_balance_usdt": self.binance_balance_usdt,
@@ -175,6 +181,11 @@ class CryptalMakerPaperBot:
                 data = json.load(handle)
             if not isinstance(data, dict):
                 raise ValueError("state root is not an object")
+            if int(data.get("paper_account_version", 0)) != PAPER_ACCOUNT_VERSION:
+                self.persistence_error = (
+                    "legacy $200 paper account ignored; starting the requested "
+                    "$100 paper bankroll")
+                return
             self.enabled = bool(data.get("enabled", self.enabled))
             self.cryptal_cash_usd = _number(
                 data.get("cryptal_cash_usd", self.cryptal_cash_usd))
@@ -657,6 +668,8 @@ class CryptalMakerPaperBot:
         self._seen_trade_set = set()
         self._absorbed_backlog = False
         self.initial_equity_usd = 0.0
+        if _number(self.market.get("stable_bid")) > 0:
+            self.initial_equity_usd = self._equity(self.market)
         self._cycle_start_equity = self.start_equity
         self._cycle_opened_at = 0.0
         self._cycle_buy_price = 0.0
@@ -680,7 +693,11 @@ class CryptalMakerPaperBot:
         }
 
     def state(self) -> dict:
-        equity = self._equity()
+        marked_equity = self._equity()
+        # Stablecoin conversion can make $50 TOUSD + $50 USDT mark slightly above
+        # or below $100 at the first tick. Normalize that opening mark to exactly
+        # $100, then report every subsequent real conversion/strategy change as P&L.
+        equity = PAPER_BANKROLL_USD + (marked_equity - self.start_equity)
         wins = sum(1 for row in self.history if _number(row.get("pnl")) > 0)
         quote = dict(self.quote) if self.quote else None
         return {
@@ -713,10 +730,17 @@ class CryptalMakerPaperBot:
             },
             "cryptal_cash_usd": round(self.cryptal_cash_usd, 4),
             "binance_balance_usdt": round(self.binance_balance_usdt, 4),
+            "paper_bankroll_usd": PAPER_BANKROLL_USD,
+            "starting_allocation": {
+                "cryptal_tousd": START_CRYPTAL_USD,
+                "binance_usdt": START_BINANCE_USDT,
+                "maximum_quote_notional": ORDER_NOTIONAL_USD,
+            },
+            "marked_equity_tousd": round(marked_equity, 4),
             "balance": round(equity, 4),
             "equity": round(equity, 4),
-            "start_balance": self.start_equity,
-            "total_pnl": round(equity - self.start_equity, 4),
+            "start_balance": PAPER_BANKROLL_USD,
+            "total_pnl": round(equity - PAPER_BANKROLL_USD, 4),
             "trades": len(self.history),
             "wins": wins,
             "fees": {

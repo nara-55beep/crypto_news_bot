@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import time
@@ -40,6 +41,53 @@ class TestCryptalMakerPaper(unittest.TestCase):
         self.assertAlmostEqual(market["stable_mid"], 0.99)
         self.assertAlmostEqual(market["fair_usd"], 65_001 * 0.99)
         self.assertGreater(market["cryptal_spread_bps"], 300)
+
+    def test_account_starts_at_exactly_100_total_with_a_prefunded_split(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = self._bot(tmp)
+            bot._tick(_snapshot([], stable_bid=0.98, stable_ask=1.00))
+            state = bot.state()
+
+            self.assertEqual(maker.PAPER_BANKROLL_USD, 100.0)
+            self.assertEqual(bot.cryptal_cash_usd, 50.0)
+            self.assertEqual(bot.binance_balance_usdt, 50.0)
+            self.assertEqual(state["equity"], 100.0)
+            self.assertEqual(state["start_balance"], 100.0)
+            self.assertEqual(state["total_pnl"], 0.0)
+            self.assertEqual(
+                state["starting_allocation"]["maximum_quote_notional"], 40.0)
+
+    def test_legacy_200_account_is_not_loaded_into_the_100_account(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "cryptal-maker.json")
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({
+                    "cryptal_cash_usd": 100.0,
+                    "binance_balance_usdt": 100.0,
+                    "history": [{"pnl": 99.0}],
+                }, handle)
+
+            bot = maker.CryptalMakerPaperBot(state_path=path)
+
+            self.assertEqual(bot.cryptal_cash_usd, 50.0)
+            self.assertEqual(bot.binance_balance_usdt, 50.0)
+            self.assertEqual(bot.history, [])
+            self.assertIn("legacy $200", bot.persistence_error)
+
+    def test_reset_immediately_reports_100_even_when_stables_are_off_par(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = self._bot(tmp)
+            bot._tick(_snapshot([], stable_bid=0.98, stable_ask=1.00))
+            bot.cryptal_cash_usd = 12.0
+            bot.binance_balance_usdt = 7.0
+
+            bot.reset()
+            state = bot.state()
+
+            self.assertEqual(state["equity"], 100.0)
+            self.assertEqual(state["total_pnl"], 0.0)
+            self.assertEqual(state["cryptal_cash_usd"], 50.0)
+            self.assertEqual(state["binance_balance_usdt"], 50.0)
 
     def test_startup_absorbs_trade_backlog_before_placing_a_bid(self):
         with tempfile.TemporaryDirectory() as tmp:
