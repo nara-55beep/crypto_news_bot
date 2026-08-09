@@ -471,9 +471,13 @@ class CryptalMakerPaperBot:
         # if pagination makes its id appear for the first time on a later poll. Both
         # sides of this comparison are Cryptal timestamps, so venue/host clock skew
         # cannot widen the window; an unverifiable print fails closed.
+        # The watermark is read from the snapshot that *precedes* the virtual quote,
+        # so a print stamped at that exact millisecond is not proven to post-date the
+        # order. Cryptal stamps to the millisecond, making that boundary reachable in
+        # production, so equality is rejected rather than assumed favourable.
         activation_at = _number(self.quote.get("activation_exchange_at"))
         trade_at = _number(trade.get("timestamp")) / 1000.0
-        if activation_at <= 0 or trade_at <= 0 or trade_at < activation_at:
+        if activation_at <= 0 or trade_at <= 0 or trade_at <= activation_at:
             return False
         if self.quote.get("side") == "BID":
             return price <= quote_price + 1e-9
