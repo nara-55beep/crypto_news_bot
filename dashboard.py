@@ -2994,6 +2994,42 @@ PAPER_HTML = r"""<!doctype html>
     border-radius:6px;border:1px solid #202a39;background:#090d13;
     box-shadow:0 10px 24px rgba(0,0,0,.18);min-width:0
   }
+  /* Keep the Cryptal maker collector unmistakable at the top of Paper Trading.
+     Two background layers leave the panel opaque while only its border moves. */
+  .cryptal-featured{
+    grid-column:1/-1!important;border:3px solid transparent!important;
+    background:
+      linear-gradient(#090d13,#090d13) padding-box,
+      linear-gradient(110deg,#14b8a6,#22d3ee,#3b82f6,#a855f7,#f59e0b,#14b8a6) border-box!important;
+    background-size:100% 100%,300% 300%!important;
+    animation:cryptalBorderFlow 4s linear infinite,cryptalHalo 2.2s ease-in-out infinite alternate;
+    box-shadow:0 0 22px rgba(20,184,166,.38),0 14px 34px rgba(0,0,0,.32)!important
+  }
+  .cryptal-featured .bhead{
+    background:linear-gradient(90deg,rgba(8,63,68,.72),#0b111a 45%,rgba(45,20,75,.58));
+    border-bottom-color:#1d8f92
+  }
+  .cryptal-new-badge{
+    color:#071315!important;background:linear-gradient(90deg,#5eead4,#67e8f9)!important;
+    border-color:#99f6e4!important;font-weight:700;letter-spacing:.08em;
+    animation:cryptalBadgePulse 1.6s ease-in-out infinite alternate
+  }
+  @keyframes cryptalBorderFlow{
+    0%{background-position:0 0,0% 50%}
+    50%{background-position:0 0,100% 50%}
+    100%{background-position:0 0,0% 50%}
+  }
+  @keyframes cryptalHalo{
+    from{box-shadow:0 0 13px rgba(20,184,166,.3),0 14px 34px rgba(0,0,0,.32)}
+    to{box-shadow:0 0 30px rgba(34,211,238,.62),0 14px 34px rgba(0,0,0,.32)}
+  }
+  @keyframes cryptalBadgePulse{
+    from{opacity:.76;transform:scale(.98)}
+    to{opacity:1;transform:scale(1.04)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .cryptal-featured,.cryptal-new-badge{animation:none}
+  }
   .bot::after{background:#070b11;color:#60718a;border-top:1px solid #182130;padding:4px 12px}
   .bhead{
     min-height:44px;padding:10px 12px;background:linear-gradient(180deg,#0f141d,#0a0e15);
@@ -3065,6 +3101,7 @@ PAPER_HTML = r"""<!doctype html>
     <span class="sub" id="px">BTC —</span>
   </div>
   <div id="wrap">
+    <div class="bot cryptal-featured" id="cryptalmaker-panel"></div>
     <div class="bot pinned" id="lucidcont-panel" style="grid-column:1/-1;border:3px solid #22c55e;box-shadow:0 0 18px rgba(34,197,94,.55)"></div>
     <div class="bot pinned" id="lucidpass-panel" style="grid-column:1/-1;border:3px solid #facc15;box-shadow:0 0 18px rgba(250,204,21,.6)"></div>
     <div class="bot pinned" id="nqmr15-panel" style="grid-column:1/-1;border:3px solid #fbbf24;box-shadow:0 0 16px rgba(251,191,36,.55)"></div>
@@ -3084,7 +3121,6 @@ PAPER_HTML = r"""<!doctype html>
     <div class="bot" id="news-panel" style="grid-column:1/-1;border-color:#2a4a6a"></div>
     <div class="bot" id="sniper-panel" style="grid-column:1/-1;border-color:#2a6a4a"></div>
     <div class="bot" id="arb-panel" style="grid-column:1/-1;border-color:#5a4a2a"></div>
-    <div class="bot" id="cryptalmaker-panel" style="grid-column:1/-1;border:3px solid #14b8a6;box-shadow:0 0 12px rgba(20,184,166,.35)"></div>
     <div class="bot" id="fv-panel" style="grid-column:1/-1;border-color:#2a5a5a"></div>
     <div class="bot" id="trend-panel" style="grid-column:1/-1;border-color:#3a5a2a"></div>
     <div class="bot" id="ainews-panel" style="grid-column:1/-1;border-color:#5a2a5a"></div>
@@ -3401,7 +3437,7 @@ PAPER_HTML = r"""<!doctype html>
     const problems=[s.data_error,s.persistence_error].filter(Boolean).map(x=>'<div class="sub" style="padding:6px 14px;color:var(--red)">'+esc(x)+'</div>').join('');
     $('cryptalmaker-panel').innerHTML =
       '<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">Cryptal Maker + Binance Hedge</span>'+
-        '<span class="badge">PAPER ONLY</span><span class="badge">'+esc(s.display_pair||'BTC-TOUSD')+'</span><span class="spacer"></span>'+
+        '<span class="badge cryptal-new-badge">NEW STRATEGY</span><span class="badge">PAPER ONLY</span><span class="badge">'+esc(s.display_pair||'BTC-TOUSD')+'</span><span class="spacer"></span>'+
         '<button class="btn '+(s.enabled?'on':'off')+'" onclick="toggleCryptalMaker()">'+tgl+'</button>'+
         '<button class="btn reset" onclick="resetCryptalMaker()">reset</button></div>'+
       statHead(s)+
