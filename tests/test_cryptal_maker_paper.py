@@ -28,6 +28,18 @@ def _snapshot(trades=None, *, bid=64_000.0, ask=66_000.0,
     }
 
 
+def _after(quote, seconds=1.0):
+    """Exchange-time stamp strictly after a quote became live.
+
+    Fill eligibility rejects `trade_at <= activation_exchange_at`, and both values are
+    Cryptal timestamps. Deriving a print's stamp from the host clock instead made
+    these tests flaky, because two ticks can land inside the same millisecond on a
+    warm run and the fill then silently vanishes.
+    """
+    activation = maker._number(quote.get("activation_exchange_at"))
+    return int(round((activation + seconds) * 1000))
+
+
 class TestCryptalMakerPaper(unittest.TestCase):
     def _bot(self, directory):
         return maker.CryptalMakerPaperBot(
@@ -107,7 +119,7 @@ class TestCryptalMakerPaper(unittest.TestCase):
             bot._tick(_snapshot([]))
             quote = dict(bot.quote)
             fill = {"id": "101", "side": "ASK", "price": quote["price"],
-                    "volume": quote["qty"], "timestamp": int(time.time() * 1000)}
+                    "volume": quote["qty"], "timestamp": _after(quote)}
             bot._tick(_snapshot([fill]))
 
             self.assertGreater(bot.spot_qty, 0)
@@ -125,7 +137,7 @@ class TestCryptalMakerPaper(unittest.TestCase):
             # A print through a uniquely improved best bid would fill it either way.
             trade = {"id": "side-ambiguous", "side": "BID",
                      "price": quote["price"], "volume": quote["qty"],
-                     "timestamp": int(time.time() * 1000)}
+                     "timestamp": _after(quote)}
             bot._tick(_snapshot([trade]))
 
             self.assertGreater(bot.spot_qty, 0)
@@ -141,7 +153,7 @@ class TestCryptalMakerPaper(unittest.TestCase):
             bot._tick(snapshot)
             self.assertGreater(bot.quote["queue_ahead_btc"], 0.1)
             trade = {"id": "102", "side": "ASK", "price": bot.quote["price"],
-                     "volume": "0.05", "timestamp": int(time.time() * 1000)}
+                     "volume": "0.05", "timestamp": _after(bot.quote)}
             bot._tick({**snapshot, "trades": [trade], "received_at": time.time(),
                        "cryptal_at": time.time(), "stable_at": time.time()})
 
@@ -170,13 +182,13 @@ class TestCryptalMakerPaper(unittest.TestCase):
             buy_quote = dict(bot.quote)
             sell_into_bid = {
                 "id": "201", "side": "ASK", "price": buy_quote["price"],
-                "volume": buy_quote["qty"], "timestamp": int(time.time() * 1000),
+                "volume": buy_quote["qty"], "timestamp": _after(buy_quote),
             }
             bot._tick(_snapshot([sell_into_bid]))
             ask_quote = dict(bot.quote)
             buy_from_ask = {
                 "id": "202", "side": "BID", "price": ask_quote["price"],
-                "volume": ask_quote["qty"], "timestamp": int(time.time() * 1000) + 1,
+                "volume": ask_quote["qty"], "timestamp": _after(ask_quote, 2.0),
             }
             bot._tick(_snapshot([sell_into_bid, buy_from_ask]))
 
@@ -195,7 +207,7 @@ class TestCryptalMakerPaper(unittest.TestCase):
             bot._tick(_snapshot([]))
             bid = dict(bot.quote)
             fill = {"id": "pause-fill", "side": "ASK", "price": bid["price"],
-                    "volume": bid["qty"], "timestamp": int(time.time() * 1000)}
+                    "volume": bid["qty"], "timestamp": _after(bid)}
             bot._tick(_snapshot([fill]))
             self.assertEqual(bot.quote["side"], "ASK")
 
@@ -212,7 +224,7 @@ class TestCryptalMakerPaper(unittest.TestCase):
             bot._tick(_snapshot([]))
             bid = dict(bot.quote)
             fill = {"id": "old-cycle", "side": "ASK", "price": bid["price"],
-                    "volume": bid["qty"], "timestamp": int(time.time() * 1000)}
+                    "volume": bid["qty"], "timestamp": _after(bid)}
             bot._tick(_snapshot([fill]))
             bot._cycle_opened_at = time.time() - maker.MAX_HEDGED_HOLD_SEC - 1
 

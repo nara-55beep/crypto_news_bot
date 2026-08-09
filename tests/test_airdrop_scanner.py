@@ -180,6 +180,37 @@ class TestRankingAndPortfolio(unittest.TestCase):
         rows = radar.rank([_protocol()], bankroll_usd=90.0, now=NOW, wallets=3)
         self.assertEqual(rows[0]["expected"]["deposit_usd"], 30.0)
 
+    def test_the_bankroll_is_a_total_not_a_per_farm_amount(self):
+        """$100 means $100 across every farm, not $100 into each of them."""
+        universe = [_protocol(name=f"p{i}", tvl=10_000_000.0) for i in range(9)]
+        rows = radar.rank(universe, bankroll_usd=100.0, now=NOW, wallets=3)
+        funded = [row for row in rows if row["funded"]]
+        self.assertEqual(len(funded), 3)
+        self.assertAlmostEqual(
+            sum(row["expected"]["deposit_usd"] for row in funded), 100.0, places=9)
+
+    def test_rows_the_bankroll_cannot_fund_are_flagged(self):
+        """Every row is priced at the same deposit, so the expected column sums to
+        far more than the bankroll can buy. Unfunded rows must be distinguishable
+        or the list reads as an affordable shopping basket."""
+        universe = [_protocol(name=f"p{i}", tvl=10_000_000.0) for i in range(9)]
+        rows = radar.rank(universe, bankroll_usd=100.0, now=NOW, wallets=3)
+        self.assertEqual([row["funded"] for row in rows],
+                         [True, True, True, False, False, False, False, False, False])
+        affordable = sum(r["expected"]["expected_usd"] for r in rows if r["funded"])
+        listed = sum(r["expected"]["expected_usd"] for r in rows)
+        self.assertLess(affordable, listed)
+
+    def test_more_wallets_means_a_smaller_deposit_in_each(self):
+        universe = [_protocol(name=f"p{i}") for i in range(6)]
+        one = radar.rank(universe, bankroll_usd=100.0, now=NOW, wallets=1)
+        five = radar.rank(universe, bankroll_usd=100.0, now=NOW, wallets=5)
+        self.assertEqual(one[0]["expected"]["deposit_usd"], 100.0)
+        self.assertEqual(five[0]["expected"]["deposit_usd"], 20.0)
+        # Spreading the same money thinner lowers each farm's expected value.
+        self.assertGreater(one[0]["expected"]["expected_usd"],
+                           five[0]["expected"]["expected_usd"])
+
     def test_ranking_drops_ineligible_and_malformed_entries(self):
         rows = radar.rank(
             [_protocol(), _protocol(symbol="AAA"), _protocol(category="CEX"),
@@ -347,6 +378,13 @@ class TestDashboardIntegration(unittest.TestCase):
                 continue
             self.assertNotIn("airdropSweep", html,
                              f"airdrop CSS leaked into {name}")
+
+    def test_the_page_marks_which_rows_the_bankroll_actually_funds(self):
+        page = self.PAGES["AIRDROPS_HTML"]
+        self.assertIn("funds the top", page)
+        self.assertIn("not</b> a total you can collect", page)
+        self.assertIn("FUNDED</span>", page)
+        self.assertIn("tr.unfunded td{opacity", page)
 
     def test_the_airdrops_page_ranks_by_reliability_and_discloses_risk(self):
         page = self.PAGES["AIRDROPS_HTML"]

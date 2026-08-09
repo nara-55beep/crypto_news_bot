@@ -1757,6 +1757,11 @@ AIRDROPS_HTML = r"""<!doctype html>
   .bar{height:5px;background:#231a09;border-radius:3px;overflow:hidden;margin-top:5px;width:96px}
   .bar i{display:block;height:100%;background:linear-gradient(90deg,#b45309,#fde68a)}
   .sig{color:var(--dim);font-size:11px;margin-top:4px}
+  tr.unfunded td{opacity:.42}
+  .fundtag{font-size:9px;font-weight:800;letter-spacing:.06em;padding:2px 7px;
+           border-radius:999px;background:#052e16;color:#4ade80;border:1px solid #166534}
+  .fundnote{padding:10px 16px;background:#140f06;border-bottom:1px solid var(--line);
+            color:#b3873f;font-size:11.5px;line-height:1.6}
   .steps{background:#080604;padding:0 16px 14px 16px}
   .steps ol{margin:8px 0 0 18px;padding:0}
   .steps li{margin:7px 0;color:#c9b58a;font-size:12px;line-height:1.6}
@@ -1817,15 +1822,22 @@ async function load(){
     return;
   }
 
-  $('list').innerHTML='<table><thead><tr><th></th><th>protocol</th><th>reliability</th>'+
+  var funded=rows.filter(function(x){return x.funded;}).length;
+  var perFarm=Number((rows[0].expected||{}).deposit_usd||0);
+  $('list').innerHTML='<div class="fundnote">Your '+money(p.bankroll_usd)+' funds the top <b>'+funded+
+    '</b> rows at $'+perFarm.toFixed(2)+' each. Every row below is priced at that same deposit for '+
+    'comparison, so the expected column is <b>not</b> a total you can collect — farming all '+
+    rows.length+' would need '+money(perFarm*rows.length)+'.</div>'+
+    '<table><thead><tr><th></th><th>protocol</th><th>reliability</th>'+
     '<th class="num">score</th><th class="num">TVL</th><th class="num">audits</th><th class="num">age</th>'+
     '<th class="num">if it lands</th><th class="num">expected</th></tr></thead><tbody>'+
     rows.map(function(r,i){
       var e=r.expected||{}, band=(r.risk_band||'').replace(' ','');
       var link=r.url?'<a class="pname" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.name)+'</a>'
                     :'<span class="pname">'+esc(r.name)+'</span>';
-      return '<tr><td class="rank">'+(i+1)+'</td>'+
-        '<td>'+link+'<div class="sig">'+esc(r.category||'')+' \u00b7 '+esc(r.chain||'')+'</div>'+
+      return '<tr class="'+(r.funded?'':'unfunded')+'"><td class="rank">'+(i+1)+'</td>'+
+        '<td>'+link+(r.funded?' <span class="fundtag">FUNDED</span>':'')+
+        '<div class="sig">'+esc(r.category||'')+' \u00b7 '+esc(r.chain||'')+'</div>'+
         '<span class="toggle" onclick="tog('+i+')">\u25b8 how to farm it</span></td>'+
         '<td><span class="band b-'+esc(band)+'">'+esc(r.risk_band||'')+'</span>'+
         '<div class="bar"><i style="width:'+Math.max(2,Math.min(100,r.score||0))+'%"></i></div></td>'+

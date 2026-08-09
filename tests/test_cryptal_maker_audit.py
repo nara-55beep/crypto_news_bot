@@ -22,6 +22,8 @@ import cryptal_maker_paper as maker
 
 REPO = Path(__file__).resolve().parents[1]
 
+_number = maker._number
+
 F_MAKER = maker.CRYPTAL_MAKER_FEE_RATE
 F_TAKER = maker.BINANCE_TAKER_FEE_RATE
 SLIP = maker.HEDGE_SLIPPAGE_BPS / 1e4
@@ -52,11 +54,30 @@ def _bot(directory):
         state_path=os.path.join(directory, "cryptal-maker.json"))
 
 
+def _after(quote, seconds=1.0):
+    """Exchange-time stamp strictly after `quote` became live.
+
+    Both sides of the eligibility test are Cryptal timestamps and equality is
+    rejected, so a print derived from the host clock can silently fail to fill when
+    two ticks land inside the same millisecond. Anchoring to the quote's own
+    activation watermark keeps every fill in these tests deterministic.
+    """
+    return int(round((_number(quote.get("activation_exchange_at")) + seconds) * 1000))
+
+
 def _fill_quote(bot, snapshot_kwargs=None, trade_id="fill", side="ASK"):
-    """Cross the bot's working quote with a fresh public print."""
+    """Cross the bot's working quote with a fresh public print.
+
+    The print is stamped relative to the quote's own exchange-time activation
+    watermark, not the host clock. Deriving it from `time.time()` made this flaky:
+    eligibility rejects `trade_at <= activation_at`, and two ticks can land inside
+    the same millisecond on a warm run, so the fill silently vanished about a third
+    of the time. Anchoring to the watermark keeps the ordering deterministic.
+    """
     quote = dict(bot.quote)
+    stamp_ms = int(round(_number(quote.get("activation_exchange_at")) * 1000)) + 1000
     trade = {"id": trade_id, "side": side, "price": quote["price"],
-             "volume": quote["qty"], "timestamp": int(time.time() * 1000) + 500}
+             "volume": quote["qty"], "timestamp": stamp_ms}
     bot._tick(_snapshot([trade], **(snapshot_kwargs or {})))
     return quote
 
@@ -419,7 +440,7 @@ class TestFillDiscipline(unittest.TestCase):
             for index in range(5):
                 trade = {"id": f"q{index}", "side": "ASK",
                          "price": bot.quote["price"], "volume": "0.015",
-                         "timestamp": int(time.time() * 1000) + 500}
+                         "timestamp": _after(bot.quote)}
                 bot._tick({**snapshot, "trades": [trade],
                            "received_at": time.time(), "cryptal_at": time.time(),
                            "stable_at": time.time(), "binance_at": time.time()})
@@ -482,7 +503,7 @@ class TestFillDiscipline(unittest.TestCase):
             quote = dict(bot.quote)
             above = {"id": "above", "side": "ASK",
                      "price": quote["price"] + 1.0, "volume": quote["qty"],
-                     "timestamp": int(time.time() * 1000) + 500}
+                     "timestamp": _after(quote)}
             bot._tick(_snapshot([above]))
             self.assertEqual(bot.spot_qty, 0.0)
 
@@ -692,7 +713,7 @@ class TestHedgeImmediacy(unittest.TestCase):
             quote = dict(bot.quote)
             half = {"id": "half", "side": "ASK", "price": quote["price"],
                     "volume": quote["qty"] / 2.0,
-                    "timestamp": int(time.time() * 1000) + 500}
+                    "timestamp": _after(quote)}
             bot._tick(_snapshot([half]))
             self.assertGreater(bot.spot_qty, 0.0)
             self.assertEqual(bot.spot_qty, bot.short_qty)
@@ -773,7 +794,7 @@ class TestCycleAccounting(unittest.TestCase):
 
                 trade = {"id": "bind-close", "side": "BID", "price": ask["price"],
                          "volume": ask["queue_ahead_btc"] + ask["qty"],
-                         "timestamp": int(time.time() * 1000) + 500}
+                         "timestamp": _after(ask)}
                 bot._tick({**tight, "trades": [trade], "received_at": time.time(),
                            "cryptal_at": time.time(), "stable_at": time.time(),
                            "binance_at": time.time()})
@@ -795,7 +816,7 @@ class TestCycleAccounting(unittest.TestCase):
                 crossing = "ASK" if quote["side"] == "BID" else "BID"
                 trade = {"id": f"conserve-{index}", "side": crossing,
                          "price": quote["price"], "volume": quote["qty"],
-                         "timestamp": int(time.time() * 1000) + 500}
+                         "timestamp": _after(quote)}
                 bot._tick(_snapshot([trade], **stables))
 
             self.assertEqual(bot.spot_qty, 0.0)
