@@ -31,6 +31,7 @@ import math
 import os
 import textwrap
 import time
+import types
 import uuid
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timedelta, timezone
@@ -93,6 +94,7 @@ AI_CACHE_SEC = 45 * 60
 AI_ERROR_CACHE_SEC = 5 * 60
 AI_MATERIAL_PRICE_PCT = 4.0
 AI_MATERIAL_SCORE_POINTS = 7.0
+AI_CACHE_MAX_NAMES = 100
 CONFIRM_SCANS = 2
 CONFIRM_MIN_SEC = 45
 CONFIRM_MAX_GAP_SEC = 20 * 60
@@ -199,21 +201,74 @@ def _as_price(value) -> float | None:
 _BEHAVIOUR_DIGESTS: dict = {}
 
 
+def _semantic_value(value):
+    """Stable JSON-shaped representation of Python code constants and defaults."""
+    if isinstance(value, types.CodeType):
+        return {
+            "bytecode": value.co_code.hex(),
+            "constants": [_semantic_value(item) for item in value.co_consts],
+            "names": list(value.co_names),
+            "varnames": list(value.co_varnames),
+            "freevars": list(value.co_freevars),
+            "cellvars": list(value.co_cellvars),
+            "argcount": value.co_argcount,
+            "posonlyargcount": value.co_posonlyargcount,
+            "kwonlyargcount": value.co_kwonlyargcount,
+            "flags": value.co_flags,
+            "exception_table": getattr(value, "co_exceptiontable", b"").hex(),
+        }
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, bytes):
+        return {"bytes": value.hex()}
+    if isinstance(value, (tuple, list)):
+        return [_semantic_value(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        items = [_semantic_value(item) for item in value]
+        return {"set": sorted(items, key=lambda item: json.dumps(
+            item, sort_keys=True, separators=(",", ":"), default=str))}
+    if isinstance(value, dict):
+        return {str(key): _semantic_value(item)
+                for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
+    return {"type": f"{type(value).__module__}.{type(value).__qualname__}",
+            "repr": repr(value)}
+
+
+def _function_runtime_semantics(target) -> dict:
+    closure = []
+    for cell in getattr(target, "__closure__", None) or ():
+        try:
+            closure.append(_semantic_value(cell.cell_contents))
+        except ValueError:
+            closure.append({"empty_cell": True})
+    return {
+        "defaults": _semantic_value(getattr(target, "__defaults__", None)),
+        "kwdefaults": _semantic_value(getattr(target, "__kwdefaults__", None)),
+        "closure": closure,
+    }
+
+
 def _behaviour_digest(target) -> str:
     """A digest of what a function DOES, ignoring comments and formatting.
 
     The source is normalised through the AST and stripped of docstrings, so rewording a
     comment does not discard an evidence population while a changed threshold, prompt
-    line or branch does. Introspection failures fail closed - an un-digestible component
-    reports as such rather than silently hashing to a constant, because "we could not
-    tell whether the selector changed" must never look like "it did not change".
+    line or branch does. If source is unavailable, semantic bytecode includes constants
+    and defaults. A target with neither source nor a code object raises instead of
+    silently hashing to a constant, because "we could not tell whether the selector
+    changed" must never look like "it did not change".
 
-    Memoised on the code object: this runs on every recorded signal and every audited
-    row, and re-reading the module from disk each time made the work quadratic. A
-    replaced function - an edit, or a test patch - is a different code object and misses
-    the cache, so the digest still moves whenever the behaviour does.
+    Memoised on the code object plus runtime defaults/closure: this runs on every
+    recorded signal and every audited row, and re-reading the module from disk each time
+    made the work quadratic. A replaced function - an edit, or a test patch - is a
+    different code object and misses the cache, so the digest still moves whenever the
+    behaviour does.
     """
-    cache_key = getattr(target, "__code__", None)
+    code = getattr(target, "__code__", None)
+    runtime = _function_runtime_semantics(target)
+    runtime_key = json.dumps(runtime, sort_keys=True, separators=(",", ":"),
+                             default=str)
+    cache_key = (code, runtime_key) if code is not None else None
     if cache_key is not None and cache_key in _BEHAVIOUR_DIGESTS:
         return _BEHAVIOUR_DIGESTS[cache_key]
     try:
@@ -227,11 +282,16 @@ def _behaviour_digest(target) -> str:
                         and isinstance(body[0].value, ast.Constant)
                         and isinstance(body[0].value.value, str)):
                     node.body = body[1:]
-        normalised = ast.dump(tree, annotate_fields=False)
+        behaviour = {"source_ast": ast.dump(tree, annotate_fields=False),
+                     "runtime": runtime}
     except (OSError, TypeError, SyntaxError, IndentationError):
-        code = getattr(target, "__code__", None)
-        normalised = ("code:" + code.co_code.hex() if code is not None
-                      else f"unintrospectable:{getattr(target, '__name__', target)!r}")
+        if code is None:
+            raise TypeError(
+                f"selector component is not introspectable: {target!r}")
+        behaviour = {"semantic_bytecode": _semantic_value(code),
+                     "runtime": runtime}
+    normalised = json.dumps(behaviour, sort_keys=True, separators=(",", ":"),
+                            default=str)
     digest = hashlib.sha256(normalised.encode("utf-8")).hexdigest()[:16]
     if cache_key is not None:
         _BEHAVIOUR_DIGESTS[cache_key] = digest
@@ -255,6 +315,10 @@ def ai_decision_policy_components() -> dict:
         # what the model is asked
         "system_prompt": research.SYSTEM_PROMPT,
         "user_prompt_builder": _behaviour_digest(research._dossier_text),
+        "user_prompt_dependencies": {
+            "effective_spread": _behaviour_digest(research.effective_spread),
+            "catalyst_alignment": _behaviour_digest(research.catalyst_alignment),
+        },
         # which model answers, and how it is sampled
         "model_chain": list(research.AI_MODEL_CHAIN),
         "preferred_model": getattr(config, "PENNY_AI_MODEL", None),
@@ -262,13 +326,23 @@ def ai_decision_policy_components() -> dict:
         "model_extra_body": {k: dict(v) for k, v in
                              getattr(research, "AI_MODEL_EXTRA_BODY", {}).items()},
         "request_timeout_sec": float(getattr(research, "AI_TIMEOUT_SEC", 0.0)),
+        "model_call": _behaviour_digest(research._call_ai_long),
         # how the reply becomes a decision
+        "response_extractor": _behaviour_digest(research._extract_json),
         "output_normalizer": _behaviour_digest(research._normalize_ai),
+        "analysis_pipeline": _behaviour_digest(research.analyse_dossier),
         "acceptance_rule": _behaviour_digest(research.signal_from),
         "require_ai_confirm": bool(research.REQUIRE_AI_CONFIRM),
-        # how long a decision may be reused for a name whose book has moved
+        # which candidates are reviewed and how long a decision may be reused
+        "review_limit_per_scan": AI_DEEP_DIVE,
+        "cache_lookup": _behaviour_digest(PennyStockPaperBot._cached_ai),
+        "cache_key_builder": _behaviour_digest(PennyStockPaperBot._catalyst_key),
+        "cache_store": _behaviour_digest(PennyStockPaperBot._store_ai),
         "cache_sec": AI_CACHE_SEC,
         "error_cache_sec": AI_ERROR_CACHE_SEC,
+        "cache_material_price_pct": AI_MATERIAL_PRICE_PCT,
+        "cache_material_score_points": AI_MATERIAL_SCORE_POINTS,
+        "cache_max_names": AI_CACHE_MAX_NAMES,
     }
 
 
@@ -633,9 +707,9 @@ class PennyStockPaperBot:
             "model": str(model or ""),
         }
         # The cache is operational, not evidence. Bound it independently of the board.
-        if len(self._ai_cache) > 100:
+        if len(self._ai_cache) > AI_CACHE_MAX_NAMES:
             oldest = sorted(self._ai_cache, key=lambda k: self._ai_cache[k].get("t", 0))
-            for key in oldest[:-100]:
+            for key in oldest[:-AI_CACHE_MAX_NAMES]:
                 self._ai_cache.pop(key, None)
 
     def _update_setup_states(self, board: list[dict], now: float | None = None):
