@@ -3404,6 +3404,187 @@ class TestAIIncrementalValueAudit(unittest.TestCase):
         self.assertLess(audit["classification_coverage_pct"], 80.0)
 
 
+class TestSelectorFingerprint(unittest.TestCase):
+    """The policy id promises that a changed selector starts a new comparison
+    population. It only kept that promise for the system prompt and the model chain.
+
+    Everything else - the dossier the model actually reads, the normaliser that decides
+    which replies are valid verdicts, the rule turning a verdict into an approval, the
+    sampling, and how stale a reused decision may be - could be edited while two
+    different selectors pooled into one population. Because the multiplicity correction
+    counts distinct policy ids, an unfingerprinted edit was also a free untracked test.
+    """
+
+    def setUp(self):
+        self.base = paper.ai_decision_policy_id()
+
+    def _moves(self, patcher):
+        with patcher:
+            return paper.ai_decision_policy_id() != self.base
+
+    def test_the_user_prompt_the_model_reads_is_fingerprinted(self):
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "_dossier_text", lambda d: "a different dossier entirely")))
+
+    def test_the_output_normalizer_is_fingerprinted(self):
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "_normalize_ai", lambda value: {"verdict": "SPECULATIVE_BUY"})))
+
+    def test_the_acceptance_rule_is_fingerprinted(self):
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "signal_from", lambda *a, **k: {"action": "BUY"})))
+
+    def test_sampling_parameters_are_fingerprinted(self):
+        for field, value in (("temperature", 1.0), ("max_tokens", 200)):
+            with self.subTest(field=field):
+                self.assertTrue(self._moves(mock.patch.dict(
+                    research.AI_SAMPLING, {field: value})))
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "AI_TIMEOUT_SEC", 1.0)))
+
+    def test_cache_thresholds_are_fingerprinted(self):
+        """A longer TTL reuses a decision for a name whose book has moved, which
+        changes which names get approved."""
+        self.assertTrue(self._moves(mock.patch.object(paper, "AI_CACHE_SEC", 60)))
+        self.assertTrue(self._moves(mock.patch.object(
+            paper, "AI_ERROR_CACHE_SEC", 60)))
+
+    def test_the_original_prompt_and_model_chain_still_move_it(self):
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "SYSTEM_PROMPT", research.SYSTEM_PROMPT + "\nchanged")))
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "AI_MODEL_CHAIN", ["some/other-model"])))
+        self.assertTrue(self._moves(mock.patch.object(
+            research, "REQUIRE_AI_CONFIRM", not research.REQUIRE_AI_CONFIRM)))
+
+    def test_the_id_is_stable_when_nothing_changes(self):
+        self.assertEqual(paper.ai_decision_policy_id(), self.base)
+        self.assertEqual(len(self.base), 16)
+
+    def test_comments_and_docstrings_do_not_discard_a_population(self):
+        """Over-sensitivity has a real cost: it resets the evidence clock. Only the
+        semantics of a component may move its digest."""
+        def original(a):
+            """Doc."""
+            # explain something
+            return a + 1
+
+        def recommented(a):
+            """A completely different docstring."""
+
+            # a completely different comment
+            return a + 1
+
+        def rewritten(a):
+            """Doc."""
+            return a + 2
+
+        source = {original: '''
+def f(a):
+    """Doc."""
+    # explain something
+    return a + 1
+''', recommented: '''
+def f(a):
+    """A completely different docstring."""
+
+    # a completely different comment
+    return a + 1
+''', rewritten: '''
+def f(a):
+    """Doc."""
+    return a + 2
+'''}
+        with mock.patch.object(paper.inspect, "getsource", lambda t: source[t]):
+            paper._BEHAVIOUR_DIGESTS.clear()
+            same = paper._behaviour_digest(original)
+            paper._BEHAVIOUR_DIGESTS.clear()
+            recomment = paper._behaviour_digest(recommented)
+            paper._BEHAVIOUR_DIGESTS.clear()
+            semantic = paper._behaviour_digest(rewritten)
+        paper._BEHAVIOUR_DIGESTS.clear()
+        self.assertEqual(same, recomment)
+        self.assertNotEqual(same, semantic)
+
+    def test_an_undigestible_component_does_not_hash_to_a_constant(self):
+        """"We could not tell whether the selector changed" must not look like
+        "it did not change"."""
+        class Opaque:
+            pass
+
+        paper._BEHAVIOUR_DIGESTS.clear()
+        digest = paper._behaviour_digest(Opaque())
+        self.assertEqual(len(digest), 16)
+        self.assertNotEqual(digest, paper._behaviour_digest(research._dossier_text))
+
+    def test_the_audit_reports_what_the_fingerprint_covers(self):
+        covered = isolated_bot(tempfile.mkdtemp()).ai_value_audit(
+            "5")["ai_policy_fingerprint_covers"]
+        for component in ("system_prompt", "user_prompt_builder", "output_normalizer",
+                          "acceptance_rule", "sampling", "cache_sec",
+                          "error_cache_sec", "model_chain", "require_ai_confirm"):
+            self.assertIn(component, covered)
+
+    def test_fingerprinting_does_not_touch_the_engine_or_unlock_trading(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        self.assertEqual(paper.SIGNAL_ENGINE_VERSION, 6)
+        self.assertFalse(bot.ai_value_audit("5")["auto_trade_allowed"])
+        self.assertFalse(bot.forward_validation("5")["auto_trade_allowed"])
+
+
+class TestMissingDecisionBound(unittest.TestCase):
+    """The adverse bound must be the exact minimum over every assignment of the
+    decisions that were never recorded - not a heuristic that happens to look low."""
+
+    @staticmethod
+    def _brute(approved, unavailable):
+        import itertools
+        best = None
+        for mask in itertools.product([0, 1], repeat=len(unavailable)):
+            held = list(approved) + [u for u, take in zip(unavailable, mask) if take]
+            value = sum(held) / len(held) if held else 0.0
+            best = value if best is None else min(best, value)
+        return best
+
+    CASES = [
+        ([], [-5.0, 2.0, -1.0]),
+        ([3.0], [-9.0, 4.0]),
+        ([1.0, 2.0], [0.5, -0.5, -20.0]),
+        ([], [4.0, 7.0]),                 # all positive: cash is the worst outcome
+        ([-2.0], []),                     # nothing unknown
+        ([], []),                         # nothing at all
+        ([10.0], [-1.0, -1.0, -1.0, -1.0]),
+        ([0.0, 0.0], [3.0, -3.0, 1.0, -8.0, 2.0]),
+    ]
+
+    def test_the_bound_equals_brute_force_enumeration(self):
+        for approved, unavailable in self.CASES:
+            with self.subTest(approved=approved, unavailable=unavailable):
+                self.assertAlmostEqual(
+                    paper.PennyStockPaperBot._minimum_selector_return(
+                        approved, unavailable),
+                    self._brute(approved, unavailable), places=12)
+
+    def test_no_possible_assignment_beats_the_bound(self):
+        import itertools
+        for approved, unavailable in self.CASES:
+            low = paper.PennyStockPaperBot._minimum_selector_return(
+                approved, unavailable)
+            for mask in itertools.product([0, 1], repeat=len(unavailable)):
+                held = list(approved) + [u for u, t in zip(unavailable, mask) if t]
+                realised = sum(held) / len(held) if held else 0.0
+                with self.subTest(approved=approved, mask=mask):
+                    self.assertGreaterEqual(realised, low - 1e-12)
+
+    def test_cash_is_only_available_when_nothing_was_approved(self):
+        """A recorded approval is a decision: the portfolio holds it and cannot be
+        cash, even when every unknown name would drag the mean below zero."""
+        self.assertEqual(
+            paper.PennyStockPaperBot._minimum_selector_return([5.0], [8.0]), 5.0)
+        self.assertEqual(
+            paper.PennyStockPaperBot._minimum_selector_return([], [8.0]), 0.0)
+
+
 class TestAIValueAuditSampleAndInference(unittest.TestCase):
     """The lift must come from decisions the model actually made, priced against the
     search that produced it."""

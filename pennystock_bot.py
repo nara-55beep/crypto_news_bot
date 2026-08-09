@@ -85,6 +85,19 @@ AI_MODEL_CHAIN = [
     "qwen/qwen3.6-27b",          # last resort (needs a big max_tokens to get past <think>)
 ]
 LAST_MODEL_USED = ""
+# Sampling is part of the selector, not an implementation detail: raising temperature
+# or cutting max_tokens changes which names the model approves. As inline literals these
+# could be edited without the decision-policy fingerprint moving, so two different
+# selectors pooled into one evidence population. Named, they are hashed.
+AI_SAMPLING = {
+    "temperature": 0.2,
+    # room for the full object even after a <think> preamble
+    "max_tokens": 1600,
+    "response_format": {"type": "json_object"},
+}
+# Groq Qwen reasoning otherwise arrives in <think> inside content and can consume the
+# whole output before the JSON answer.
+AI_MODEL_EXTRA_BODY = {"qwen/": {"reasoning_effort": "none"}}
 
 
 async def _call_ai_long(system_prompt: str, user_prompt: str) -> str:
@@ -104,14 +117,11 @@ async def _call_ai_long(system_prompt: str, user_prompt: str) -> str:
                     model=model,
                     messages=[{"role": "system", "content": system_prompt},
                               {"role": "user", "content": user_prompt}],
-                    temperature=0.2,
-                    max_tokens=1600,         # room for the full object even after a <think> preamble
-                    response_format={"type": "json_object"},
+                    **AI_SAMPLING,
                 )
-                if model.startswith("qwen/"):
-                    # Groq Qwen reasoning otherwise arrives in <think> inside content
-                    # and can consume the whole output before the JSON answer.
-                    request["extra_body"] = {"reasoning_effort": "none"}
+                for prefix, extra in AI_MODEL_EXTRA_BODY.items():
+                    if model.startswith(prefix):
+                        request["extra_body"] = dict(extra)
                 r = await client.chat.completions.create(**request)
                 LAST_MODEL_USED = model
                 return r.choices[0].message.content or ""
