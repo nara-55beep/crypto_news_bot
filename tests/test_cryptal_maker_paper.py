@@ -212,6 +212,13 @@ class TestCryptalMakerPaper(unittest.TestCase):
             encoding="utf-8")
         self.assertIn("import cryptal_maker_paper", dashboard)
         self.assertIn('id="cryptalmaker-panel"', dashboard)
+        self.assertIn(
+            'class="bot cryptal-featured" id="cryptalmaker-panel"', dashboard)
+        self.assertIn('cryptal-new-badge">NEW STRATEGY', dashboard)
+        self.assertLess(
+            dashboard.index('id="cryptalmaker-panel"'),
+            dashboard.index('id="lucidcont-panel"'),
+        )
         self.assertIn('web.get("/api/cryptalmaker/state"', dashboard)
         self.assertIn('web.post("/api/cryptalmaker/toggle"', dashboard)
         self.assertIn("asyncio.create_task(CRYPTALMAKER.manage_loop())", dashboard)
