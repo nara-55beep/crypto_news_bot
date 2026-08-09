@@ -411,9 +411,9 @@ function render(s){
     + 'Evidence unit: '+esc(fv.grouping||'signal-day baskets')+'; '+(fv.signal_days||0)
     + ' / '+(fv.minimum_signal_days||60)+' required days. This forward panel never unlocks trading by itself.<br>'
     + 'AI filter audit: <b>'+esc(av.status||'COLLECTING')+'</b> &mdash; '
-    + esc(av.reason||'waiting for paired approved and rejected setups')+'; '
-    + (av.paired_days||0)+' / '+(av.minimum_paired_days||60)+' paired days. '
-    + 'This measures whether AI approval adds value over same-day mechanical controls; it does not prove the strategy is profitable.</div>';
+    + esc(av.reason||'waiting for complete AI-versus-mechanical days')+'; '
+    + (av.comparison_days||0)+' / '+(av.minimum_comparison_days||60)+' comparison days. '
+    + 'This compares the actual AI-selected portfolio with every same-day mechanical setup, including days it selects nothing; it does not prove the strategy is profitable.</div>';
 
   $('rules').innerHTML = esc(s.rules||'') + '<br><br>' + esc(s.note||'')
     + '<br><br><span style="color:#5d6673">A cost proxy is derived from average dollar volume only for ranking. '
