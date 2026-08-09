@@ -1,488 +1,280 @@
 """
-penny_page.py - the dedicated AI Penny Stock research & trading page (/penny).
+penny_page.py - responsive AI Penny Stock research desk served at /penny.
 
-Kept in its own module so the (large) dashboard.py stays readable. Exposes one
-constant, PENNY_HTML, which dashboard.py serves at /penny.
-
-Design notes:
-  * Reads a single endpoint (/api/penny/state) every 5s. One fetch, one render -
-    no polling storms, no per-row timers, nothing that degrades over time.
-  * The DOM is rebuilt only when the payload actually changed (cheap hash check),
-    so an idle page costs effectively nothing and never janks.
-  * All animation is CSS transform/opacity only (GPU compositor). No JS animation
-    loops, no requestAnimationFrame, no layout thrash.
+The page intentionally has no build step or framework dependency. It reads one
+state endpoint every five seconds and only repaints when the payload changes.
 """
 
 PENNY_HTML = r"""<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Penny Stock · Research Desk</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Penny Stock Evidence Desk</title>
 <style>
 :root{
-  --bg:#07090d; --panel:#0d1117; --panel2:#131a23; --line:#1e2733; --line2:#2a3646;
-  --txt:#e8eef6; --muted:#7b8798; --gold:#f5c518; --gold2:#ffdd6b;
-  --green:#19c37d; --red:#ff4d5f; --blue:#3aa0ff; --amber:#f2b84b;
+  --bg:#070a0f;--surface:#0d121a;--surface2:#111925;--surface3:#172231;
+  --line:#202d3d;--line2:#2d3d51;--text:#edf3fb;--soft:#b8c4d3;--muted:#748397;
+  --gold:#f7ca45;--green:#34d399;--red:#fb7185;--blue:#60a5fa;--amber:#fbbf24;
+  --shadow:0 18px 46px rgba(0,0,0,.28);
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--txt);
-  font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-a{color:var(--blue);text-decoration:none}
-.wrap{max-width:1400px;margin:0 auto;padding:18px 20px 60px}
+html{width:100%;max-width:100%;scrollbar-gutter:stable}
+body{width:100%;max-width:100%;margin:0;min-width:0;overflow-x:hidden;background:
+  radial-gradient(circle at 8% -10%,rgba(52,211,153,.08),transparent 28rem),
+  radial-gradient(circle at 92% 0,rgba(96,165,250,.08),transparent 30rem),var(--bg);
+  color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+button,a{font:inherit}a{color:inherit;text-decoration:none}
+.page{width:100%;max-width:1720px;min-width:0;margin:0 auto;padding:18px clamp(12px,2.1vw,34px) 64px}
+.topbar{position:relative;display:flex;align-items:flex-start;gap:22px;padding:21px 22px;
+  border:1px solid var(--line2);border-radius:18px;background:linear-gradient(135deg,rgba(18,27,39,.96),rgba(10,15,22,.96));
+  box-shadow:var(--shadow);overflow:hidden}
+.topbar:after{content:"";position:absolute;inset:0 0 auto;height:2px;background:linear-gradient(90deg,var(--green),var(--blue),transparent 72%)}
+.brand{min-width:270px}.eyebrow{color:var(--green);font:700 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.brand h1{margin:8px 0 4px;font-size:clamp(21px,2.1vw,30px);line-height:1.12;letter-spacing:-.035em}
+.statusline{max-width:850px;color:var(--muted);font-size:12px}
+.actions{margin-left:auto;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.btn{min-height:36px;padding:8px 13px;border:1px solid var(--line2);border-radius:9px;background:#121a25;color:var(--soft);cursor:pointer;font-size:12px;font-weight:700;transition:.15s ease}
+.btn:hover{border-color:#47617f;background:#192536;color:var(--text)}
+.btn.go{border-color:#1d694e;background:#0b211a;color:#79e8b9}.btn.stop{border-color:#71303b;background:#241015;color:#ffabb7}
+.systembar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0 16px;padding:0 2px}
+.chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 9px;border:1px solid var(--line);border-radius:999px;background:#0b1017;color:var(--muted);font:650 10.5px/1.2 var(--mono)}
+.chip:before{content:"";width:6px;height:6px;border-radius:99px;background:#526071;flex:none}
+.chip.on{color:#7ce4b9;border-color:#1e5c47}.chip.on:before{background:var(--green);box-shadow:0 0 9px rgba(52,211,153,.7)}
+.chip.off{color:#9ba8b8}.chip.off:before{background:#68778a}.chip.live{color:#ffe08a;border-color:#5f4b18}.chip.live:before{background:var(--gold)}
+.alerts{display:grid;gap:8px;margin-bottom:14px}.alert{padding:11px 14px;border:1px solid #6e2b39;border-radius:11px;background:#251017;color:#ffb1be;font:12px/1.5 var(--mono)}
 
-/* ---------- header ---------- */
-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
-  padding:16px 20px;margin-bottom:18px;border-radius:14px;
-  background:linear-gradient(135deg,#141a24 0%,#0d1117 60%);
-  border:1px solid var(--line2);box-shadow:0 6px 24px rgba(0,0,0,.5)}
-.logo{font-size:20px;font-weight:700;letter-spacing:.3px;
-  background:linear-gradient(90deg,var(--gold),var(--gold2));
-  -webkit-background-clip:text;background-clip:text;color:transparent}
-.sub{color:var(--muted);font-size:12px}
-.spacer{flex:1}
-.chip{padding:4px 11px;border-radius:999px;font-size:11px;font-weight:600;
-  border:1px solid var(--line2);background:#0b0f15;color:var(--muted)}
-.chip.on{color:var(--green);border-color:#12503a;background:#0c1f19}
-.chip.off{color:var(--muted)}
-.chip.live{color:var(--gold);border-color:#4a3c10;background:#1a1508}
-.btn{padding:7px 15px;border-radius:9px;border:1px solid var(--line2);
-  background:#131a23;color:var(--txt);cursor:pointer;font-size:12px;font-weight:600;
-  transition:background .15s,border-color .15s}
-.btn:hover{background:#1b242f;border-color:#3a4a5e}
-.btn.go{border-color:#1c6b4b;color:#7ef0bb;background:#0c1f19}
-.btn.stop{border-color:#6b1c2a;color:#ff9aa6;background:#1f0c11}
+.metrics{display:grid;grid-template-columns:repeat(8,minmax(118px,1fr));gap:10px;margin-bottom:12px}
+.metric{min-width:0;padding:13px 14px;border:1px solid var(--line);border-radius:13px;background:rgba(13,18,26,.95)}
+.metric .label{overflow:hidden;text-overflow:ellipsis;color:var(--muted);font:700 9.5px/1.2 var(--mono);letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
+.metric .value{overflow-wrap:anywhere;margin-top:7px;font:750 clamp(17px,1.55vw,23px)/1.1 var(--mono);letter-spacing:-.04em}
+.green{color:var(--green)}.red{color:var(--red)}.gold{color:var(--gold)}
 
-/* ---------- stat row ---------- */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));
-  gap:12px;margin-bottom:18px}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;
-  padding:13px 15px}
-.stat .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
-.stat .v{font-size:21px;font-weight:700;margin-top:3px;font-family:var(--mono)}
-.g{color:var(--green)} .r{color:var(--red)} .gold{color:var(--gold)}
+.evidence-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.evidence{min-width:0;padding:15px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(145deg,#101722,#0c1118)}
+.evidence-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.evidence-title{color:var(--muted);font:700 10px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.badge{flex:none;padding:3px 7px;border-radius:6px;border:1px solid var(--line2);color:var(--soft);font:700 9.5px/1.2 var(--mono)}
+.badge.good{border-color:#216a50;color:#77e2b4}.badge.bad{border-color:#76313c;color:#ff9fac}.badge.wait{border-color:#66511a;color:#f8d57b}
+.evidence-value{margin:9px 0 4px;font-size:18px;font-weight:750;letter-spacing:-.02em}.evidence-copy{min-height:38px;overflow-wrap:anywhere;color:var(--muted);font-size:11.5px;line-height:1.55}
+.progress{height:6px;margin-top:12px;overflow:hidden;border-radius:99px;background:#1b2634}.progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .35s ease}
+.progress-meta{display:flex;justify-content:space-between;gap:12px;margin-top:7px;color:#8795a7;font:10px/1.3 var(--mono)}
 
-/* ---------- cards ---------- */
-.grid{display:grid;grid-template-columns:1fr;gap:16px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.card h2{margin:0;padding:13px 17px;font-size:13px;font-weight:700;letter-spacing:.4px;
-  text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);
-  background:var(--panel2);display:flex;align-items:center;gap:9px}
-.card .body{padding:14px 17px}
-.empty{padding:26px;text-align:center;color:var(--muted);font-size:13px}
+.workspace{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}.span-12{grid-column:span 12}.span-7{grid-column:span 7}.span-5{grid-column:span 5}.span-6{grid-column:span 6}
+.card{min-width:0;border:1px solid var(--line);border-radius:15px;background:rgba(13,18,26,.96);box-shadow:0 12px 32px rgba(0,0,0,.12);overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:49px;padding:12px 15px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#131c28,#101720)}
+.card-title{min-width:0}.card-title h2{margin:0;color:var(--soft);font-size:12px;line-height:1.3;letter-spacing:.055em;text-transform:uppercase}.card-title p{margin:3px 0 0;color:var(--muted);font-size:10.5px}
+.count{flex:none;color:var(--muted);font:11px/1 var(--mono)}
+.empty{padding:34px 18px;text-align:center;color:var(--muted);font-size:12.5px}.empty strong{display:block;margin-bottom:4px;color:var(--soft);font-size:14px}
 
-/* ---------- tables ---------- */
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;
-  color:var(--muted);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line)}
-td{padding:10px 12px;border-bottom:1px solid #161d26;vertical-align:top}
-tr:last-child td{border-bottom:none}
-tr:hover td{background:#101720}
-.mono{font-family:var(--mono)}
-.tick{font-weight:700;font-size:14px}
-.nm{color:var(--muted);font-size:11px}
+.table-wrap{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-color:#34465d #0b1017}
+.table-wrap:focus{outline:1px solid var(--blue);outline-offset:-1px}
+table{width:100%;min-width:720px;border-collapse:separate;border-spacing:0;font-size:12px}
+table.wide{min-width:1220px}table.medium{min-width:900px}
+th{position:sticky;top:0;z-index:1;padding:10px 11px;border-bottom:1px solid var(--line);background:#0e151f;color:var(--muted);font:700 9.5px/1.25 var(--mono);letter-spacing:.06em;text-align:left;text-transform:uppercase;white-space:nowrap}
+td{padding:11px;border-bottom:1px solid #17212d;color:#c9d4e1;vertical-align:top}tr:last-child td{border-bottom:0}tbody tr:hover td{background:#101925}
+.mono{font-family:var(--mono)}.ticker{color:var(--text);font-size:13px;font-weight:800}.muted{color:var(--muted);font-size:10.5px}.nowrap{white-space:nowrap}
+.note{padding:12px 15px;border-top:1px solid var(--line);background:#0a0f16;color:var(--muted);font-size:11px;line-height:1.65}.note b{color:#aebccb}
+.method{border-top:1px solid var(--line);background:#0a0f16}.method summary{padding:11px 15px;color:#91a1b4;font:700 10.5px/1.3 var(--mono);cursor:pointer}.method .method-copy{padding:0 15px 13px;color:var(--muted);font-size:11px;line-height:1.65}
+.feed{max-height:330px;overflow:auto;font:11px/1.5 var(--mono)}.feed div{padding:7px 14px;border-bottom:1px solid #17212d;color:#9aa8ba}.feed .win{color:#69dfac}.feed .loss{color:#ff94a4}.feed .open{color:#f8d06b}
 
-/* ---------- verdict pills ---------- */
-.v{display:inline-block;padding:3px 10px;border-radius:7px;font-size:10.5px;
-  font-weight:700;letter-spacing:.4px;white-space:nowrap}
-.v-buy{background:#0c2a1d;color:#3ee89b;border:1px solid #1c6b4b}
-.v-watch{background:#2a230c;color:var(--gold);border:1px solid #6b571c}
-.v-avoid{background:#2a0f13;color:#ff8a95;border:1px solid #6b1c2a}
-.v-rej{background:#191d24;color:#8b95a4;border:1px solid #2c3542}
+.pill,.signal{display:inline-flex;align-items:center;padding:3px 8px;border:1px solid var(--line2);border-radius:6px;font:750 9.5px/1.25 var(--mono);letter-spacing:.025em;white-space:nowrap}
+.p-buy,.s-buy,.s-strong{border-color:#226b50;background:#0b281d;color:#69e8af}.p-watch,.s-watch{border-color:#68531d;background:#282108;color:#f6d56f}.p-avoid,.s-avoid{border-color:#71313b;background:#2a1016;color:#ff99a8}.p-rej,.s-no{background:#151b24;color:#8b98a9}.s-research{border-color:#285681;background:#10253a;color:#8dc9ff}
+.s-strong{box-shadow:0 0 13px rgba(52,211,153,.14)}
+.rank{display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--line2);border-radius:8px;background:#161f2b;color:#9caabc;font:800 11px/1 var(--mono)}
+.rank.t1{border-color:#d1a72d;background:#d6ad35;color:#151006}.rank.t2{border-color:#94a3b6;background:#aab5c2;color:#11151b}.rank.t3{border-color:#a96b30;background:#a86c32;color:#190e05}
+.score{display:flex;align-items:center;gap:6px;margin-top:5px}.bar{width:82px;height:4px;overflow:hidden;border-radius:99px;background:#1b2634}.bar i{display:block;height:100%}.snum{color:#8291a4;font:10px/1 var(--mono)}
+.levels{font:10.5px/1.7 var(--mono)}.levels b{color:var(--text)}.levels .entry{color:#8cc9ff}.levels .stop{color:#ff97a6}.levels .target{color:#7ee0b3}
+.mini{display:grid;gap:2px;color:var(--muted);font:9.5px/1.45 var(--mono)}.mini i{color:#c4cfdb;font-style:normal}
+.tag{display:inline-block;margin:2px 3px 1px 0;padding:2px 6px;border:1px solid #25445e;border-radius:5px;background:#102131;color:#9bcdf3;font-size:9.5px}
+.held{margin-left:5px;padding:1px 5px;border:1px solid #245173;border-radius:5px;color:#8dc9ff;font:8.5px/1.2 var(--mono)}
+details.why{margin-top:7px}details.why summary{color:#8493a6;font-size:10px;cursor:pointer}.reason{display:grid;gap:5px;margin-top:6px}.rline{display:grid;grid-template-columns:70px 1fr;gap:6px;font-size:10.5px}.rkey{color:var(--muted);text-transform:uppercase}.rvalue{color:#bfccd9}.rvalue.bull{color:#7ee0b3}.rvalue.bear{color:#ff9daa}
 
-/* score bar */
-.score{display:flex;align-items:center;gap:7px;margin-top:5px}
-.bar{flex:1;height:5px;border-radius:3px;background:#1a222c;overflow:hidden;max-width:110px}
-.bar i{display:block;height:100%;border-radius:3px;
-  transition:width .4s cubic-bezier(.4,0,.2,1)}
-.snum{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:26px}
+@media(max-width:1240px){.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}.span-7,.span-5{grid-column:span 12}}
+@media(max-width:860px){.page{padding:10px 9px 42px}.topbar{display:block;padding:17px}.actions{justify-content:flex-start;margin-top:14px}.systembar{margin-top:10px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.evidence-grid{grid-template-columns:1fr}.span-6{grid-column:span 12}.metric .value{font-size:19px}.card-head{align-items:flex-start}.statusline{font-size:11px}}
+@media(max-width:520px){.topbar,.systembar,.metrics,.evidence-grid,.workspace,.card{width:100%;max-width:100%;min-width:0}.actions{display:grid;grid-template-columns:1fr;width:100%}.actions .btn{display:block;width:100%;min-width:0;text-align:center}.metrics{grid-template-columns:minmax(0,1fr);gap:7px}.metric{padding:11px}.workspace{gap:10px}.brand{min-width:0}.evidence{max-width:100%;overflow:hidden}.chip{max-width:calc(50vw - 14px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="topbar">
+    <div class="brand">
+      <div class="eyebrow">Forward research workspace</div>
+      <h1>Penny Stock Evidence Desk</h1>
+      <div class="statusline" id="hsub">Loading scanner state...</div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-toggle" onclick="toggleBot()">Loading...</button>
+      <button class="btn" onclick="resetBot()">Reset paper account</button>
+      <a class="btn" href="/paper">Back to paper desk</a>
+    </div>
+  </header>
 
-/* reasoning block */
-.reason{margin-top:9px;display:grid;gap:6px}
-.rline{display:grid;grid-template-columns:96px 1fr;gap:9px;font-size:12px;line-height:1.55}
-.rk{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;
-  padding-top:1px}
-.rv{color:#c9d4e2}
-.rv.bull{color:#8fe8bd} .rv.bear{color:#ffa8b1}
-.cat{display:inline-block;margin:3px 5px 0 0;padding:2px 8px;border-radius:6px;
-  font-size:10.5px;background:#12202c;color:#8fc7f0;border:1px solid #1d3448}
-.flag{display:inline-block;margin:3px 5px 0 0;padding:2px 8px;border-radius:6px;
-  font-size:10.5px;background:#241016;color:#ff9aa6;border:1px solid #46202a}
-
-.note{padding:11px 17px;font-size:11.5px;color:var(--muted);line-height:1.6;
-  border-top:1px solid var(--line);background:#0a0e13}
-.err{padding:9px 17px;font-size:12px;color:#ff9aa6;background:#1a0d11;
-  border-top:1px solid #3a1a22}
-.feed{max-height:230px;overflow:auto;font-family:var(--mono);font-size:11.5px}
-.feed div{padding:5px 17px;border-bottom:1px solid #141a22;color:#9aa6b6}
-.feed .win{color:#5fe0a6} .feed .loss{color:#ff8a95} .feed .open{color:var(--gold)}
-.rank{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
-  border-radius:9px;font-weight:800;font-size:13px;font-family:var(--mono);
-  background:#161d27;color:var(--muted);border:1px solid var(--line2)}
-.rank.t1{background:linear-gradient(135deg,#f5c518,#b8860b);color:#1a1608;border-color:#d4a017}
-.rank.t2{background:linear-gradient(135deg,#c9d2dc,#8b95a1);color:#12161c;border-color:#aab4c0}
-.rank.t3{background:linear-gradient(135deg,#cd7f32,#8b5a2b);color:#1a1008;border-color:#b8722d}
-.sig{display:inline-block;padding:4px 11px;border-radius:8px;font-size:11px;
-  font-weight:800;letter-spacing:.4px;white-space:nowrap}
-.s-strong{background:#0a2e1c;color:#4dffab;border:1px solid #1f8a5a;
-  box-shadow:0 0 12px rgba(77,255,171,.18)}
-.s-buy{background:#0c2a1d;color:#3ee89b;border:1px solid #1c6b4b}
-.s-research{background:#13243a;color:#8fc7f0;border:1px solid #28517a}
-.s-watch{background:#2a230c;color:var(--gold);border:1px solid #6b571c}
-.s-avoid{background:#2a0f13;color:#ff8a95;border:1px solid #6b1c2a}
-.s-no{background:#191d24;color:#8b95a4;border:1px solid #2c3542}
-.lv{font-family:var(--mono);font-size:11px;line-height:1.7}
-.lv b{color:var(--txt)} .lv .e{color:#8fc7f0} .lv .s{color:#ff9aa6} .lv .t{color:#8fe8bd}
-.mini{display:flex;gap:9px;margin-top:5px;font-size:10px;color:var(--muted)}
-.mini span{white-space:nowrap}
-.mini i{font-style:normal;font-family:var(--mono);color:#c9d4e2}
-.held{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:5px;font-size:9.5px;
-  background:#12202c;color:#8fc7f0;border:1px solid #1d3448}
-details.why{margin-top:8px}
-details.why summary{cursor:pointer;color:var(--muted);font-size:11px;outline:none}
-details.why summary:hover{color:var(--txt)}
-@media(min-width:1100px){.grid.two{grid-template-columns:1fr 1fr}}
-</style></head><body>
-<div class="wrap">
-
-<header>
-  <div>
-    <div class="logo">◆ AI Penny Stock Desk</div>
-    <div class="sub" id="hsub">loading…</div>
+  <div class="systembar">
+    <span class="chip" id="c-state">scanner</span><span class="chip" id="c-market">market</span>
+    <span class="chip" id="c-model">model</span><span class="chip" id="c-regime">tape</span>
+    <span class="chip" id="c-edge">edge</span><span class="chip" id="c-rule">rule</span>
   </div>
-  <div class="spacer"></div>
-  <span class="chip" id="c-model">model</span>
-  <span class="chip" id="c-market">market</span>
-  <span class="chip" id="c-regime">tape</span>
-  <span class="chip" id="c-edge">edge</span>
-  <span class="chip" id="c-rule">rule</span>
-  <span class="chip" id="c-state">state</span>
-  <button class="btn" id="btn-toggle" onclick="toggleBot()">…</button>
-  <button class="btn" onclick="resetBot()">Reset</button>
-  <a class="btn" href="/paper">← Paper</a>
-</header>
+  <div class="alerts" id="alerts"></div>
+  <section class="metrics" id="stats" aria-label="Account and scanner summary"></section>
+  <section class="evidence-grid" id="evidence" aria-label="Validation progress"></section>
 
-<div class="stats" id="stats"></div>
-
-<div class="grid">
-  <div class="card">
-    <h2>◇ Open positions <span class="sub" id="poscount"></span></h2>
-    <div id="positions"></div>
-  </div>
-
-  <div class="card">
-    <h2>◇ Top 20 leaderboard — ranked by composite score, with live signals</h2>
-    <div id="watchlist"></div>
-    <div class="note" id="rules"></div>
-  </div>
-
-  <div class="card">
-    <h2>◆ Detected setups — persistence and a fresh quote required for any fill</h2>
-    <div id="signals"></div>
-  </div>
-
-  <div class="card">
-    <h2>Signal validation - forward results, not repeated scanner impressions</h2>
-    <div id="accuracy"></div>
-  </div>
-
-  <div class="grid two">
-    <div class="card">
-      <h2>◇ Closed trades</h2>
+  <section class="workspace">
+    <article class="card span-5">
+      <div class="card-head"><div class="card-title"><h2>Open paper positions</h2><p>Executable entries only; no real orders</p></div><span class="count" id="poscount"></span></div>
+      <div id="positions"></div>
+    </article>
+    <article class="card span-7">
+      <div class="card-head"><div class="card-title"><h2>Detected setups</h2><p>Persistence and a fresh trusted quote are required</p></div></div>
+      <div id="signals"></div>
+    </article>
+    <article class="card span-12">
+      <div class="card-head"><div class="card-title"><h2>Live opportunity leaderboard</h2><p>Top 20 names ranked by catalyst, technical quality and tradeability</p></div><span class="count">Scroll table sideways if needed</span></div>
+      <div id="watchlist"></div><div class="note" id="rules"></div>
+    </article>
+    <article class="card span-12">
+      <div class="card-head"><div class="card-title"><h2>Forward signal validation</h2><p>Completed signal-day baskets, never repeated scanner impressions</p></div></div>
+      <div id="accuracy"></div>
+    </article>
+    <article class="card span-6">
+      <div class="card-head"><div class="card-title"><h2>Closed paper trades</h2><p>After-cost outcomes</p></div></div>
       <div id="history"></div>
-    </div>
-    <div class="card">
-      <h2>◇ Activity</h2>
+    </article>
+    <article class="card span-6">
+      <div class="card-head"><div class="card-title"><h2>Scanner activity</h2><p>Most recent events</p></div></div>
       <div class="feed" id="log"></div>
-    </div>
-  </div>
-</div>
-</div>
+    </article>
+  </section>
+</main>
 
 <script>
 const $ = id => document.getElementById(id);
-const esc = s => String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const money = n => (n<0?'-':'') + '$' + Math.abs(Number(n)||0).toFixed(2);
-const signed = n => (Number(n)>=0?'+':'') + money(n).replace('-','');
+const esc = value => String(value ?? '').replace(/[&<>\"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[ch]));
+const number = value => Number(value) || 0;
+const money = value => (number(value) < 0 ? '-' : '') + '$' + Math.abs(number(value)).toFixed(2);
+const signedMoney = value => (number(value) >= 0 ? '+' : '-') + '$' + Math.abs(number(value)).toFixed(2);
+let lastHash = '';
 
-let lastHash = '';   // only touch the DOM when something actually changed
-
-function verdictPill(w){
-  if(w.rejected) return '<span class="v v-rej">REJECTED</span>';
-  const v = w.verdict||'';
-  if(v==='SPECULATIVE_BUY') return '<span class="v v-buy">SPEC BUY</span>';
-  if(v==='WATCH')  return '<span class="v v-watch">WATCH</span>';
-  if(v==='AVOID')  return '<span class="v v-avoid">AVOID</span>';
-  return '<span class="v v-rej">—</span>';
+function metric(label,value,cls=''){
+  return '<div class="metric"><div class="label">'+esc(label)+'</div><div class="value '+cls+'">'+value+'</div></div>';
 }
-function scoreBar(sc){
-  if(sc===undefined||sc===null||sc==='') return '';
-  const n = Math.max(0,Math.min(100,Number(sc)||0));
-  const col = n>=65?'var(--green)':n>=45?'var(--gold)':'var(--red)';
-  return '<div class="score"><div class="bar"><i style="width:'+n+'%;background:'+col+'"></i></div>'
-       + '<span class="snum">'+n+'</span></div>';
+function td(value,cls='mono'){ return '<td class="'+cls+'">'+esc(value)+'</td>'; }
+function table(head,rows,size=''){
+  return '<div class="table-wrap" tabindex="0"><table class="'+size+'"><thead><tr>'+
+    head.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-function rl(k,v,cls){ return v ? '<div class="rline"><div class="rk">'+k+'</div>'
-  + '<div class="rv '+(cls||'')+'">'+esc(v)+'</div></div>' : ''; }
-
-function render(s){
-  $('hsub').textContent = s.status || '';
-  $('c-model').textContent = s.ai_model || 'AI';
-  const mk = $('c-market');
-  mk.textContent = s.market_open ? 'market open' : 'market closed';
-  mk.className = 'chip ' + (s.market_open?'live':'off');
-  const rg = $('c-regime');
-  if(rg){
-    const R = s.regime||{};
-    rg.textContent = 'tape: ' + (R.label||'unknown') + (R.score!==undefined?' '+R.score:'');
-    rg.className = 'chip ' + (R.label==='risk-on'?'on':R.label==='risk-off'?'off':'');
-    rg.title = (R.why||[]).join(' | ');
-  }
-  const ep = s.edge_policy||{};
-  const ec = $('c-edge');
-  if(ec){
-    const p = ep.selection_p_value;
-    ec.textContent = 'edge: ' + (ep.status||'missing').toLowerCase()
-      + (p==null ? '' : ' (p=' + Number(p).toFixed(2) + ')');
-    ec.className = 'chip ' + (ep.auto_trade_allowed?'on':'off');
-    // the verdicts say WHY, which matters more than the status word
-    const v = ep.inference_verdicts||[];
-    ec.title = [ep.reason || 'Automatic entries require a validated edge audit.']
-      .concat(v).join('\n');
-  }
-  const lr = s.live_rule_evidence||{};
-  const rc = $('c-rule');
-  if(rc){
-    if(!lr.measured){
-      rc.textContent = 'rule: unmeasured';
-      rc.className = 'chip';
-      rc.title = 'The deployed scanner rule has not been backtested.';
-    } else {
-      // gross expectancy is the number that decides whether this rule can ever work
-      rc.textContent = 'price core: gross ' + (Number(lr.mean_gross_pct)>=0?'+':'')
-        + Number(lr.mean_gross_pct).toFixed(2) + '%';
-      rc.className = 'chip ' + (lr.gross_is_zero ? 'off' : '');
-      rc.title = [
-        'Price/volume component only (not the full catalyst-confirmation strategy)',
-        lr.strategy_id + ' over ' + (lr.trades||0).toLocaleString() + ' backtested trades',
-        'gross ' + lr.mean_gross_pct + '%  cost ' + lr.mean_cost_pct
-          + '%  net ' + lr.test_mean_net_pct + '% (untouched test)',
-        lr.diagnosis || ''
-      ].concat(Object.entries(lr.rank_verdicts||{}).map(function(e){return e[0]+': '+e[1];}))
-       .concat((lr.catalyst_gate||{}).tested ? ['',
-          'catalyst gate (EDGAR point-in-time, untouched 2025+):',
-          '  ' + (lr.catalyst_gate.setups||0).toLocaleString() + ' setups, gross '
-            + lr.catalyst_gate.gross_pct + '%  CI ['
-            + (lr.catalyst_gate.gross_ci_pct||[]).join(', ') + ']',
-          '  profitable at any modelled cost: '
-            + (lr.catalyst_gate.profitable_at_any_modelled_cost ? 'yes' : 'no')] : [])
-       .join('\n');
-    }
-  }
-  const st = $('c-state');
-  st.textContent = 'scanner live';
-  st.className = 'chip on';
-  st.title = s.enabled ? 'Continuous research and new paper entries are enabled.'
-                       : 'Continuous research is live; only new paper entries are paused.';
-  const b = $('btn-toggle');
-  b.textContent = s.enabled ? 'Pause entries' : 'Enable entries';
-  b.className = 'btn ' + (s.enabled?'stop':'go');
-
-  const pnl = Number(s.total_pnl)||0;
-  const s5 = (s.signal_stats||{})['5']||{};
-  const fv = s.forward_validation||{};
-  const av = s.ai_value_audit||{};
-  const fp = fv.feasibility||{};
-  $('stats').innerHTML =
-    stat('Equity', money(s.equity), 'gold') +
-    stat('Net P&L', signed(pnl), pnl>=0?'g':'r') +
-    stat('Cash', money(s.balance)) +
-    stat('Open', (s.open_count||0)+' / '+(s.max_open||0)) +
-    stat('Closed trades', s.trades||0) +
-    stat('Win rate', (s.trades? s.win_rate+'%' : '—')) +
-    stat('Verdict', esc((s.forward_validation||{}).status||'COLLECTING')) +
-    stat('Open risk', money(s.open_risk||0)) +
-    stat('Scans', s.scan_count||0) +
-    stat('Next scan', s.scan_in_progress ? 'running' : (s.next_scan_in_sec||0)+'s') +
-    stat('Hot setups', s.hot_setups||0) +
-    stat('Forward edge', (fv.status||'collecting').toLowerCase(),
-         fv.status==='PROMISING_NOT_VALIDATED'?'g':fv.status==='REJECTED'?'r':'') +
-    stat('AI value', (av.status||'collecting').toLowerCase(),
-         av.status==='AI_LIFT_PROMISING_NOT_VALIDATED'?'g':
-         av.status==='NO_MEASURED_AI_EDGE'?'r':'') +
-    stat('Validation power', (fp.status||'not assessable').toLowerCase(),
-         fp.status==='RESOLVABLE_NOW'?'g':
-         fp.status==='INFEASIBLE_WITHIN_HORIZON'?'r':'');
-
-  // positions
-  const P = s.positions||[];
-  $('poscount').textContent = P.length ? '('+P.length+')' : '';
-  $('positions').innerHTML = P.length ? table(
-    ['Ticker','Qty','Entry','Now','Stop','Target','P&L','Held'],
-    P.map(p=>'<tr><td><span class="tick">'+esc(p.ticker)+'</span><div class="nm">'+esc(p.name)+'</div>'
-      + (p.catalyst?'<div class="nm">'+esc(p.catalyst)+'</div>':'') + '</td>'
-      + td(p.qty)+td('$'+p.entry)+td('$'+p.price)
-      + td('$'+p.stop + (p.trailing?' <span class="v v-watch">trail</span>':''))
-      + td('$'+p.tp)
-      + '<td class="mono '+(p.pnl>=0?'g':'r')+'">'+signed(p.pnl)+'<div class="nm">'+p.pnl_pct+'%</div></td>'
-      + td(p.held_days+'d')+'</tr>').join('')
-  ) : '<div class="empty">No open positions.</div>';
-
-  // ---------- ranked leaderboard ----------
-  const W = s.watchlist||[];
-  $('watchlist').innerHTML = W.length ? table(
-    ['#','Ticker','Price','Signal','Levels','Scores','Why'],
-    W.map(w=>{
-      const sig = w.signal||{}, ai = w.ai||{}, cf = w.confirmation||{};
-      const a = sig.action||'';
-      const cls = a==='STRONG BUY'?'s-strong':a==='BUY'?'s-buy':a==='RESEARCH'?'s-research':a==='WATCH'?'s-watch'
-                 :a==='NO TRADE'?'s-no':'s-avoid';
-      const rk = 'rank'+(w.rank===1?' t1':w.rank===2?' t2':w.rank===3?' t3':'');
-      const chg = Number(w.change_pct)||0;
-      const levels = (a==='BUY'||a==='STRONG BUY')
-        ? '<div class="lv"><b>entry</b> <span class="e">$'+sig.entry+'</span><br>'
-          +'<b>stop</b> <span class="s">$'+sig.stop+'</span> <span style="color:#5d6673">-'+sig.risk_pct+'%</span><br>'
-          +'<b>tgt</b> <span class="t">$'+sig.target1+' / $'+sig.target2+'</span></div>'
-        : a==='RESEARCH'
-          ? '<span style="color:#8ab4d6;font-size:11px">TRACK ONLY<br>no authorized trade levels</span>'
-          : '<span style="color:#5d6673;font-size:11px">—</span>';
-      const scores = '<div class="mini" style="flex-direction:column;gap:3px">'
-        + '<span>hype <i>'+w.hype+'</i></span>'
-        + '<span>technical <i>'+w.technical+'</i></span>'
-        + '<span>catalyst <i>'+w.catalyst+'</i></span>'
-        + '<span>quality <i>'+w.quality+'</i></span>'
-        + '<span>tradeable <i>'+w.tradeability+'</i></span></div>';
-      const drivers = [].concat(w.hype_why||[],w.technical_why||[],w.catalyst_why||[],w.quality_why||[]).slice(0,4)
-        .map(x=>'<span class="cat">'+esc(x)+'</span>').join('');
-      // A blank AI column read as "the model is broken". It is almost always "the model
-      // was never asked", because only mechanically eligible setups are reviewed.
-      const deep = ai.bull_case ? '<details class="why"><summary>AI reasoning</summary><div class="reason">'
-        + rl('Bull', ai.bull_case,'bull') + rl('Bear', ai.bear_case,'bear')
-        + rl('Catalyst', ai.catalyst_assessment) + rl('Verdict', ai.why_this_verdict)
-        + rl('Cost', ai.cost_hurdle) + rl('Watch', ai.what_to_watch)
-        + '</div></details>'
-        : (w.ai_error ? '<div class="nm">AI error: '+esc(w.ai_error)+'</div>'
-                      : (w.ai_skip_reason ? '<div class="nm">AI '+esc(w.ai_skip_reason)+'</div>' : ''));
-      return '<tr><td><div class="'+rk+'">'+w.rank+'</div></td>'
-        + '<td><span class="tick">'+esc(w.ticker)+'</span>'+(w.held?'<span class="held">HELD</span>':'')
-        + '<div class="nm">'+esc(w.name||'')+'</div></td>'
-        + '<td class="mono">$'+w.price+'<div class="'+(chg>=0?'g':'r')+'" style="font-size:11px">'
-        + (chg>=0?'+':'')+chg+'%</div><div class="nm">'+w.spread_pct+'% '+(w.spread_unreliable?'cost proxy':'live spread')+'</div></td>'
-        + '<td><span class="sig '+cls+'">'+esc(a)+'</span>'+scoreBar(w.composite)
-        + '<div class="nm" style="margin-top:3px">'+esc(sig.why||'')+'</div>'
-        + (['BUY','STRONG BUY'].includes(sig.candidate_action)
-          ?'<div class="nm">confirmation '+(cf.observations||0)+' / '+(cf.required||s.confirmation_required||2)
-            +(cf.executable_observation?'':' · waiting for trusted live quote')+'</div>':'')
-        + '</td>'
-        + '<td>'+levels+'</td><td>'+scores+'</td>'
-        + '<td>'+drivers+deep+'</td></tr>';
-    }).join('')
-  ) : '<div class="empty">No scan yet — the bot screens and ranks on its own schedule.</div>';
-
-  // ---------- actionable and forward-research signals panel ----------
-  const SG = W.filter(w=>['BUY','STRONG BUY','RESEARCH'].includes((w.signal||{}).action));
-  $('signals').innerHTML = SG.length ? table(
-    ['#','Ticker','Action','Entry','Stop','Target 1','Target 2','Confirmation','Status'],
-    SG.map(w=>{ const g=w.signal, cf=w.confirmation||{}, tradable=['BUY','STRONG BUY'].includes(g.action);
-      const cls = g.action==='STRONG BUY'?'s-strong':g.action==='BUY'?'s-buy':'s-research';
-      return '<tr><td class="mono">'+w.rank+'</td><td class="tick">'+esc(w.ticker)+'</td>'
-        + '<td><span class="sig '+cls+'">'+esc(g.action)+'</span></td>'
-        + '<td class="mono '+(tradable?'e':'')+'">'+(tradable?'$'+g.entry:'reference $'+g.entry)+'</td>'
-        + '<td class="mono r">'+(tradable?'$'+g.stop:'—')+'</td>'
-        + '<td class="mono g">'+(tradable?'$'+g.target1:'—')+'</td>'
-        + '<td class="mono g">'+(tradable?'$'+g.target2:'—')+'</td>'
-        + '<td class="mono">'+(cf.observations||0)+' / '+(cf.required||s.confirmation_required||2)
-        + (cf.confirmed?' <span class="v v-buy">CONFIRMED</span>':'')+'</td>'
-        + '<td>'+(w.held?'<span class="held">in book</span>'
-          :g.action==='RESEARCH'?'<span class="v v-watch">TRACK ONLY</span>'
-          :g.needs_open_recheck?'<span class="v v-watch">RECHECK AT OPEN</span>'
-          :'<span class="nm">ready</span>')+'</td></tr>';
-    }).join('')
-  ) : '<div class="empty">No qualifying setup right now. Automatic fills remain locked until the out-of-sample edge audit passes.</div>';
-
-  const AS = s.signal_stats||{};
-  $('accuracy').innerHTML = table(
-    ['Horizon','Completed signals','Net positive','Avg after cost','Avg vs IWM','Target 1 touched','Stop touched'],
-    ['1','5','10'].map(h=>{const x=AS[h]||{}; return '<tr><td class="mono">'+h+' session'+(h==='1'?'':'s')+'</td>'
-      +td(x.count||0)+td(x.count?(x.net_hit_rate+'%'):'collecting')+td(x.count?(x.avg_net_return_pct+'%'):'-')
-      +td(x.count&&x.avg_net_excess_pct!=null?(x.avg_net_excess_pct+'%'):'-')
-      +td(x.count?(x.target1_rate+'%'):'-')+td(x.count?(x.stop_rate+'%'):'-')+'</tr>';}).join('')
-  ) + '<div class="note"><b>Resolved rows only - non-evidentiary.</b> These averages cover whichever signals happened to resolve, so they carry the survivor bias the verdict below is built to remove; a winner beside an unresolved halted name still shows as a win. '+ ((AS['5']||{}).stale_incomplete_days ? '<b>'+((AS['5']||{}).stale_incomplete_days)+' matured day(s) still unresolved.</b> ' : '')+ '<br>Forward verdict: <b>'+esc(fv.status||'COLLECTING')+'</b> — '
-    + esc(fv.reason||'waiting for confirmed observations')+'<br>'
-    + 'Evidence unit: '+esc(fv.grouping||'signal-day baskets')+'; '+(fv.signal_days||0)
-    + ' / '+(fv.minimum_signal_days||60)+' required days. This forward panel never unlocks trading by itself.<br>'
-    + 'AI filter audit: <b>'+esc(av.status||'COLLECTING')+'</b> &mdash; '
-    + esc(av.reason||'waiting for complete AI-versus-mechanical days')+'; '
-    + (av.comparison_days||0)+' / '+(av.minimum_comparison_days||60)+' comparison days. '
-    + (av.unclassified_days ? '<b>'+av.unclassified_days+' day(s) excluded from the point estimate because the model classified too little of them.</b> ' : '')
-    + ((av.classification_missing_bound||{}).days_bounded
-        ? av.classification_missing_bound.days_bounded+' completed day(s) contain missing AI decisions. They are assigned to the most adverse possible approve/reject combination; adjusted lower bound '+av.classification_missing_bound.multiplicity_adjusted_low_pct+'%. ' : '')
-    + (av.ai_policies_tested>1 ? '<b>'+av.ai_policies_tested+' AI policies have been tested</b>, so the bound shown is Bonferroni-corrected for that search. ' : '')
-    + ((av.ai_portfolio_concentration||{}).mean_selected_names!=null
-        ? 'The AI holds '+(av.ai_portfolio_concentration.mean_selected_names)+' of '+(av.ai_portfolio_concentration.mean_mechanical_names)+' names on average ('+(av.ai_portfolio_concentration.single_name_days||0)+' single-name day(s), '+(av.ai_portfolio_concentration.cash_days||0)+' cash day(s)), so part of any difference is concentration rather than selection. ' : '')
-    + 'The IWM-relative leg is a consistency check, not a second confirmation: the benchmark cancels in a same-day portfolio difference. '
-    + 'This compares the actual AI-selected portfolio with every same-day mechanical setup, including days it selects nothing; it does not prove the strategy is profitable.</div>';
-
-  $('rules').innerHTML = esc(s.rules||'') + '<br><br>' + esc(s.note||'')
-    + '<br><br><span style="color:#5d6673">A cost proxy is derived from average dollar volume only for ranking. '
-    + 'It is never treated as an executable quote or used for a paper fill.</span>';
-
-  // history
-  const H = s.history||[];
-  $('history').innerHTML = H.length ? table(
-    ['Ticker','Qty','Entry','Exit','P&L','Why','Spread'],
-    H.map(h=>'<tr><td class="tick">'+esc(h.ticker)+'</td>'+td(h.qty)+td('$'+h.entry)+td('$'+h.exit)
-      + '<td class="mono '+(h.pnl>=0?'g':'r')+'">'+signed(h.pnl)+'<div class="nm">'+h.pnl_pct+'%</div></td>'
-      + td(h.reason)+'<td class="mono r">'+money(-(h.spread_cost||0))+'</td></tr>').join('')
-  ) : '<div class="empty">No closed trades yet.</div>';
-
-  $('log').innerHTML = (s.log||[]).map(l=>'<div class="'+esc(l.kind||'')+'">'+esc(l.msg)+'</div>').join('')
-    || '<div style="padding:16px;color:var(--muted)">No activity.</div>';
-
-  // A lost write silently destroys the forward evidence, so it belongs in the banner
-  // ahead of any transient scan error rather than only in the API payload.
-  const problems = [];
-  if(s.state_save_error) problems.push('EVIDENCE AT RISK - '+s.state_save_error);
-  if(s.archive_error)    problems.push('EVIDENCE AT RISK - '+s.archive_error);
-  if(s.last_error)       problems.push(s.last_error);
-  const e = $('errbox');
-  if(problems.length){
-    const text = problems.join('   |   ');
-    if(!e){ const d=document.createElement('div'); d.id='errbox'; d.className='err';
-            d.textContent=text; $('watchlist').parentNode.appendChild(d); }
-    else e.textContent = text;
-  } else if(e){ e.remove(); }
+function statusClass(status){
+  if(['PROMISING_NOT_VALIDATED','AI_LIFT_PROMISING_NOT_VALIDATED','RESOLVABLE_NOW'].includes(status)) return 'good';
+  if(['REJECTED','NO_MEASURED_AI_EDGE','INFEASIBLE_WITHIN_HORIZON','DATA_INCOMPLETE'].includes(status)) return 'bad';
+  return 'wait';
 }
-function stat(k,v,cls){ return '<div class="stat"><div class="k">'+k+'</div>'
-  + '<div class="v '+(cls||'')+'">'+v+'</div></div>'; }
-function td(v){ return '<td class="mono">'+esc(v)+'</td>'; }
-function table(head,rows){ return '<table><tr>'+head.map(h=>'<th>'+h+'</th>').join('')
-  + '</tr>'+rows+'</table>'; }
+function progressCard(title,value,copy,current,required,status){
+  const need = Math.max(0,number(required)); const have = Math.max(0,number(current));
+  const pct = need ? Math.min(100,have/need*100) : 0;
+  return '<article class="evidence"><div class="evidence-head"><div class="evidence-title">'+esc(title)+'</div>'+
+    '<span class="badge '+statusClass(status)+'">'+esc(status||'COLLECTING')+'</span></div>'+
+    '<div class="evidence-value">'+esc(value)+'</div><div class="evidence-copy">'+esc(copy)+'</div>'+
+    '<div class="progress" aria-label="'+pct.toFixed(0)+' percent complete"><i style="width:'+pct+'%"></i></div>'+
+    '<div class="progress-meta"><span>'+have+' completed</span><span>'+(need ? need+' minimum' : 'awaiting data')+'</span></div></article>';
+}
+function validationPowerView(fv){
+  const fp = fv.feasibility || {}; const days = number(fv.signal_days);
+  if(!days) return {value:'Waiting for outcomes',copy:'Power needs completed returns. No signal day has reached the '+number(fv.horizon_sessions||5)+'-session outcome horizon yet.',status:'COLLECTING'};
+  if(fp.applicable === false) return {value:'Still collecting',copy:fp.summary||fp.reason||'More completed outcomes are required before power can be estimated.',status:'COLLECTING'};
+  return {value:String(fp.status||'Power estimate ready').replaceAll('_',' '),copy:fp.summary||fp.reason||'Power is estimated from the observed event rate and return dispersion.',status:fp.status||'RESOLVABLE_NOW'};
+}
+function evidencePanel(s){
+  const fv=s.forward_validation||{}, av=s.ai_value_audit||{}, clock=s.evidence_clock||{};
+  const power=validationPowerView(fv);
+  return progressCard('Forward strategy evidence',(number(fv.signal_days))+' / '+number(fv.minimum_signal_days||60)+' days',fv.reason||'Waiting for complete signal-day outcomes.',fv.signal_days,fv.minimum_signal_days||60,fv.status||'COLLECTING')+
+    progressCard('Incremental AI value',(number(av.comparison_days))+' / '+number(av.minimum_comparison_days||60)+' days',av.reason||'Waiting for complete AI-versus-mechanical days.',av.comparison_days,av.minimum_comparison_days||60,av.status||'COLLECTING')+
+    progressCard('Validation power',power.value,power.copy,clock.completed_signal_days,clock.completed_signal_days_required||60,power.status);
+}
+function scoreBar(value){
+  if(value===undefined||value===null||value==='') return '';
+  const n=Math.max(0,Math.min(100,number(value))); const color=n>=65?'var(--green)':n>=45?'var(--gold)':'var(--red)';
+  return '<div class="score"><div class="bar"><i style="width:'+n+'%;background:'+color+'"></i></div><span class="snum">'+n+'</span></div>';
+}
+function reasonLine(key,value,cls=''){
+  return value ? '<div class="rline"><div class="rkey">'+esc(key)+'</div><div class="rvalue '+cls+'">'+esc(value)+'</div></div>' : '';
+}
 
-async function load(){
-  try{
-    const r = await fetch('/api/penny/state',{cache:'no-store'});
-    const s = await r.json();
-    const h = JSON.stringify(s);
-    if(h === lastHash) return;      // nothing changed -> don't touch the DOM
-    lastHash = h;
-    render(s);
-  }catch(e){ /* transient - next tick retries */ }
+function renderHeader(s){
+  $('hsub').textContent=s.status||'Scanner state unavailable';
+  const setChip=(id,text,cls,title='')=>{const el=$(id);el.textContent=text;el.className='chip '+cls;el.title=title;};
+  setChip('c-state','continuous scanner','on',s.enabled?'Research and paper-entry toggle enabled.':'Research remains live; new paper entries are paused.');
+  setChip('c-market',s.market_open?'market open':'market closed',s.market_open?'live':'off');
+  setChip('c-model',s.ai_model||'AI','');
+  const regime=s.regime||{}; setChip('c-regime','tape: '+(regime.label||'unknown'),regime.label==='risk-on'?'on':regime.label==='risk-off'?'off':'',(regime.why||[]).join(' | '));
+  const edge=s.edge_policy||{}; setChip('c-edge','edge: '+String(edge.status||'missing').toLowerCase(),edge.auto_trade_allowed?'on':'off',[edge.reason||'Trading remains locked.'].concat(edge.inference_verdicts||[]).join('\n'));
+  const rule=s.live_rule_evidence||{};
+  setChip('c-rule',rule.measured?'price core gross '+(number(rule.mean_gross_pct)>=0?'+':'')+number(rule.mean_gross_pct).toFixed(2)+'%':'rule: unmeasured',rule.gross_is_zero?'off':'',rule.diagnosis||'Price/volume component only; not the full deployed strategy.');
+  const button=$('btn-toggle');button.textContent=s.enabled?'Pause new entries':'Enable new entries';button.className='btn '+(s.enabled?'stop':'go');
+  const problems=[];if(s.state_save_error)problems.push('EVIDENCE AT RISK - '+s.state_save_error);if(s.archive_error)problems.push('EVIDENCE AT RISK - '+s.archive_error);if(s.last_error)problems.push(s.last_error);
+  $('alerts').innerHTML=problems.map(x=>'<div class="alert">'+esc(x)+'</div>').join('');
 }
-async function toggleBot(){
-  const r = await fetch('/api/penny/state'); const s = await r.json();
-  await fetch('/api/penny/toggle',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({enabled:!s.enabled})});
-  lastHash=''; load();
+function renderStats(s){
+  const pnl=number(s.total_pnl);
+  $('stats').innerHTML=metric('Equity',money(s.equity),'gold')+metric('Net P&L',signedMoney(pnl),pnl>=0?'green':'red')+
+    metric('Cash',money(s.balance))+metric('Open positions',number(s.open_count)+' / '+number(s.max_open))+
+    metric('Closed trades',number(s.trades))+metric('Win rate',s.trades?esc(s.win_rate)+'%':'No outcomes')+
+    metric('Scans',number(s.scan_count))+metric('Next scan',s.scan_in_progress?'Running now':number(s.next_scan_in_sec)+'s');
+  $('evidence').innerHTML=evidencePanel(s);
 }
-async function resetBot(){
-  if(!confirm('Reset the AI penny stock paper account to $100?')) return;
-  await fetch('/api/penny/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-  lastHash=''; load();
+function renderPositions(s){
+  const rows=s.positions||[];$('poscount').textContent=rows.length?rows.length+' open':'0 open';
+  $('positions').innerHTML=rows.length?table(['Ticker','Qty','Entry','Now','Stop','Target','P&L','Held'],rows.map(p=>
+    '<tr><td><span class="ticker">'+esc(p.ticker)+'</span><div class="muted">'+esc(p.name||'')+'</div></td>'+td(p.qty)+td('$'+p.entry)+td('$'+p.price)+
+    td('$'+p.stop+(p.trailing?' trailing':''))+td('$'+p.tp)+'<td class="mono '+(number(p.pnl)>=0?'green':'red')+'">'+signedMoney(p.pnl)+'<div class="muted">'+esc(p.pnl_pct)+'%</div></td>'+td(p.held_days+'d')+'</tr>').join(''),'medium'):
+    '<div class="empty"><strong>No open positions</strong>The evidence gate is still collecting, so automatic execution remains locked.</div>';
 }
-load();
-setInterval(load, 5000);
-// pause polling when the tab is hidden - zero cost in the background
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ lastHash=''; load(); } });
+function renderLeaderboard(s){
+  const rows=s.watchlist||[];
+  $('watchlist').innerHTML=rows.length?table(['#','Ticker','Price','Signal','Levels','Scores','Why'],rows.map(w=>{
+    const signal=w.signal||{},ai=w.ai||{},confirmation=w.confirmation||{},action=signal.action||'';
+    const signalClass=action==='STRONG BUY'?'s-strong':action==='BUY'?'s-buy':action==='RESEARCH'?'s-research':action==='WATCH'?'s-watch':action==='NO TRADE'?'s-no':'s-avoid';
+    const rankClass='rank'+(w.rank===1?' t1':w.rank===2?' t2':w.rank===3?' t3':'');const change=number(w.change_pct);
+    const tradable=['BUY','STRONG BUY'].includes(action);
+    const levels=tradable?'<div class="levels"><b>entry</b> <span class="entry">$'+esc(signal.entry)+'</span><br><b>stop</b> <span class="stop">$'+esc(signal.stop)+'</span><br><b>targets</b> <span class="target">$'+esc(signal.target1)+' / $'+esc(signal.target2)+'</span></div>':
+      action==='RESEARCH'?'<span class="muted">TRACK ONLY<br>no trade levels</span>':'<span class="muted">-</span>';
+    const scores='<div class="mini"><span>hype <i>'+esc(w.hype)+'</i></span><span>technical <i>'+esc(w.technical)+'</i></span><span>catalyst <i>'+esc(w.catalyst)+'</i></span><span>quality <i>'+esc(w.quality)+'</i></span><span>tradeable <i>'+esc(w.tradeability)+'</i></span></div>';
+    const drivers=[].concat(w.hype_why||[],w.technical_why||[],w.catalyst_why||[],w.quality_why||[]).slice(0,4).map(x=>'<span class="tag">'+esc(x)+'</span>').join('');
+    const deep=ai.bull_case?'<details class="why"><summary>AI reasoning</summary><div class="reason">'+reasonLine('Bull',ai.bull_case,'bull')+reasonLine('Bear',ai.bear_case,'bear')+reasonLine('Catalyst',ai.catalyst_assessment)+reasonLine('Verdict',ai.why_this_verdict)+reasonLine('Cost',ai.cost_hurdle)+reasonLine('Watch',ai.what_to_watch)+'</div></details>':
+      w.ai_error?'<div class="muted">AI error: '+esc(w.ai_error)+'</div>':w.ai_skip_reason?'<div class="muted">AI '+esc(w.ai_skip_reason)+'</div>':'';
+    return '<tr><td><div class="'+rankClass+'">'+esc(w.rank)+'</div></td><td><span class="ticker">'+esc(w.ticker)+'</span>'+(w.held?'<span class="held">HELD</span>':'')+'<div class="muted">'+esc(w.name||'')+'</div></td>'+
+      '<td class="mono nowrap">$'+esc(w.price)+'<div class="'+(change>=0?'green':'red')+'">'+(change>=0?'+':'')+esc(change)+'%</div><div class="muted">'+esc(w.spread_pct)+'% '+(w.spread_unreliable?'cost proxy':'live spread')+'</div></td>'+
+      '<td><span class="signal '+signalClass+'">'+esc(action||'NO SIGNAL')+'</span>'+scoreBar(w.composite)+'<div class="muted">'+esc(signal.why||'')+'</div>'+(tradable?'<div class="muted">confirmation '+number(confirmation.observations)+' / '+number(confirmation.required||s.confirmation_required||2)+(confirmation.executable_observation?'':' - awaiting trusted quote')+'</div>':'')+'</td>'+
+      '<td>'+levels+'</td><td>'+scores+'</td><td>'+drivers+deep+'</td></tr>';
+  }).join(''),'wide'):'<div class="empty"><strong>No completed scan yet</strong>The scanner ranks candidates automatically on its normal schedule.</div>';
+  $('rules').innerHTML=esc(s.rules||'')+'<br><br>'+esc(s.note||'')+'<br><br>A dollar-volume cost proxy is used only for ranking. It is never treated as an executable quote or used for a paper fill.';
+}
+function renderSignals(s){
+  const rows=(s.watchlist||[]).filter(w=>['BUY','STRONG BUY','RESEARCH'].includes((w.signal||{}).action));
+  $('signals').innerHTML=rows.length?table(['Ticker','Action','Entry','Stop','Target 1','Confirmation','Status'],rows.map(w=>{
+    const signal=w.signal||{},confirmation=w.confirmation||{},tradable=['BUY','STRONG BUY'].includes(signal.action);const cls=signal.action==='STRONG BUY'?'s-strong':signal.action==='BUY'?'s-buy':'s-research';
+    return '<tr><td class="ticker">'+esc(w.ticker)+'</td><td><span class="signal '+cls+'">'+esc(signal.action)+'</span></td>'+td(tradable?'$'+signal.entry:'reference $'+signal.entry)+td(tradable?'$'+signal.stop:'-')+td(tradable?'$'+signal.target1:'-')+
+      '<td class="mono">'+number(confirmation.observations)+' / '+number(confirmation.required||s.confirmation_required||2)+(confirmation.confirmed?' <span class="pill p-buy">CONFIRMED</span>':'')+'</td><td>'+(w.held?'<span class="held">IN BOOK</span>':signal.action==='RESEARCH'?'<span class="pill p-watch">TRACK ONLY</span>':signal.needs_open_recheck?'<span class="pill p-watch">RECHECK AT OPEN</span>':'<span class="muted">ready</span>')+'</td></tr>';
+  }).join(''),'medium'):'<div class="empty"><strong>No qualifying setup right now</strong>The scanner is still running. AI review starts only after a name passes the mechanical setup gates.</div>';
+}
+function renderValidation(s){
+  const stats=s.signal_stats||{},fv=s.forward_validation||{},av=s.ai_value_audit||{},clock=s.evidence_clock||{};
+  const rows=['1','5','10'].map(h=>{const x=stats[h]||{};return '<tr>'+td(h+' session'+(h==='1'?'':'s'))+td(x.count||0)+td(x.count?x.net_hit_rate+'%':'collecting')+td(x.count?x.avg_net_return_pct+'%':'-')+td(x.count&&x.avg_net_excess_pct!=null?x.avg_net_excess_pct+'%':'-')+td(x.count?x.target1_rate+'%':'-')+td(x.count?x.stop_rate+'%':'-')+'</tr>';}).join('');
+  const summary=number(fv.signal_days)===0?'<div class="note"><b>Why validation is still collecting:</b> no signal day has completed the outcome horizon. The scanner can run hundreds of times, but repeated scans are not independent evidence. Progress begins only when a qualifying setup is recorded and its full '+number(fv.horizon_sessions||5)+'-session result is available.</div>':'';
+  const methodology='<details class="method"><summary>Methodology and limitations</summary><div class="method-copy"><b>Forward verdict:</b> '+esc(fv.status||'COLLECTING')+' - '+esc(fv.reason||'waiting for confirmed observations')+'<br><b>Evidence unit:</b> '+esc(fv.grouping||'signal-day baskets')+'; '+number(fv.signal_days)+' / '+number(fv.minimum_signal_days||60)+' required days. This panel never unlocks trading by itself.<br><b>AI filter audit:</b> '+esc(av.status||'COLLECTING')+' - '+esc(av.reason||'waiting for complete comparison days')+'; '+number(av.comparison_days)+' / '+number(av.minimum_comparison_days||60)+' days.<br><b>Evidence clock:</b> '+number(clock.completed_signal_days)+' completed, '+number(clock.benchmarked_signal_days)+' benchmarked, '+number(clock.unresolved_rows)+' unresolved rows. Resolved-row averages above are diagnostic only and may contain survivor bias. The IWM-relative AI leg is a consistency check, not an independent confirmation.</div></details>';
+  $('accuracy').innerHTML=summary+table(['Horizon','Completed signals','Net positive','Avg after cost','Avg vs IWM','Target 1 touched','Stop touched'],rows,'medium')+methodology;
+}
+function renderHistoryAndLog(s){
+  const rows=s.history||[];$('history').innerHTML=rows.length?table(['Ticker','Qty','Entry','Exit','P&L','Why','Spread'],rows.map(h=>'<tr><td class="ticker">'+esc(h.ticker)+'</td>'+td(h.qty)+td('$'+h.entry)+td('$'+h.exit)+'<td class="mono '+(number(h.pnl)>=0?'green':'red')+'">'+signedMoney(h.pnl)+'<div class="muted">'+esc(h.pnl_pct)+'%</div></td>'+td(h.reason)+td(money(-number(h.spread_cost)))+'</tr>'),'medium'):'<div class="empty"><strong>No closed trades yet</strong>Completed paper outcomes will appear here.</div>';
+  $('log').innerHTML=(s.log||[]).map(item=>'<div class="'+esc(item.kind||'')+'">'+esc(item.msg)+'</div>').join('')||'<div class="empty">No scanner activity yet.</div>';
+}
+function render(s){renderHeader(s);renderStats(s);renderPositions(s);renderSignals(s);renderLeaderboard(s);renderValidation(s);renderHistoryAndLog(s);}
+async function load(){try{const response=await fetch('/api/penny/state',{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);const state=await response.json();const hash=JSON.stringify(state);if(hash===lastHash)return;lastHash=hash;render(state);}catch(error){$('alerts').innerHTML='<div class="alert">Dashboard connection lost. Retrying automatically.</div>';}}
+async function toggleBot(){const response=await fetch('/api/penny/state');const state=await response.json();await fetch('/api/penny/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!state.enabled})});lastHash='';load();}
+async function resetBot(){if(!confirm('Reset the AI penny-stock paper account to $100?'))return;await fetch('/api/penny/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});lastHash='';load();}
+load();setInterval(load,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastHash='';load();}});
 </script>
-</body></html>
+</body>
+</html>
 """
