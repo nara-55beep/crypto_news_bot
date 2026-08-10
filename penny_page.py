@@ -161,6 +161,20 @@ const number = value => Number(value) || 0;
 const money = value => (number(value) < 0 ? '-' : '') + '$' + Math.abs(number(value)).toFixed(2);
 const signedMoney = value => (number(value) >= 0 ? '+' : '-') + '$' + Math.abs(number(value)).toFixed(2);
 let lastHash = '';
+const deepScanClock = {deadline:0,running:false};
+
+function syncDeepScanClock(s){
+  deepScanClock.running=Boolean(s.scan_in_progress);
+  const serverNow=number(s.server_time), dueAt=number(s.next_scan_at);
+  const remaining=(serverNow>0&&dueAt>0)?Math.max(0,dueAt-serverNow):Math.max(0,number(s.next_scan_in_sec));
+  deepScanClock.deadline=performance.now()+remaining*1000;
+  paintDeepScanClock();
+}
+function deepScanClockText(){
+  if(deepScanClock.running) return 'Running now';
+  return Math.max(0,Math.ceil((deepScanClock.deadline-performance.now())/1000))+'s';
+}
+function paintDeepScanClock(){const el=$('next-deep-scan');if(el)el.textContent=deepScanClockText();}
 
 function metric(label,value,cls=''){
   return '<div class="metric"><div class="label">'+esc(label)+'</div><div class="value '+cls+'">'+value+'</div></div>';
@@ -233,11 +247,12 @@ function renderHeader(s){
   $('alerts').innerHTML=problems.map(x=>'<div class="alert">'+esc(x)+'</div>').join('');
 }
 function renderStats(s){
+  syncDeepScanClock(s);
   const pnl=number(s.total_pnl);
   $('stats').innerHTML=metric('Equity',money(s.equity),'gold')+metric('Net P&L',signedMoney(pnl),pnl>=0?'green':'red')+
     metric('Cash',money(s.balance))+metric('Open positions',number(s.open_count)+' / '+number(s.max_open))+
     metric('Closed trades',number(s.trades))+metric('Win rate',s.trades?esc(s.win_rate)+'%':'No outcomes')+
-    metric('Deep scans',number(s.scan_count))+metric('Next deep scan',s.scan_in_progress?'Running now':number(s.next_scan_in_sec)+'s');
+    metric('Deep scans',number(s.scan_count))+metric('Next deep scan','<span id="next-deep-scan">'+esc(deepScanClockText())+'</span>');
   $('evidence').innerHTML=evidencePanel(s);
 }
 function renderPositions(s){
@@ -287,10 +302,10 @@ function renderHistoryAndLog(s){
   $('log').innerHTML=(s.log||[]).map(item=>'<div class="'+esc(item.kind||'')+'">'+esc(item.msg)+'</div>').join('')||'<div class="empty">No scanner activity yet.</div>';
 }
 function render(s){renderHeader(s);renderStats(s);renderUniverse(s);renderPositions(s);renderSignals(s);renderLeaderboard(s);renderValidation(s);renderHistoryAndLog(s);}
-async function load(){try{const response=await fetch('/api/penny/state',{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);const state=await response.json();const hash=JSON.stringify(state);if(hash===lastHash)return;lastHash=hash;render(state);}catch(error){$('alerts').innerHTML='<div class="alert">Dashboard connection lost. Retrying automatically.</div>';}}
+async function load(){try{const response=await fetch('/api/penny/state',{cache:'no-store'});if(!response.ok)throw new Error('HTTP '+response.status);const state=await response.json();syncDeepScanClock(state);const hash=JSON.stringify(state);if(hash===lastHash)return;lastHash=hash;render(state);}catch(error){$('alerts').innerHTML='<div class="alert">Dashboard connection lost. Retrying automatically.</div>';}}
 async function toggleBot(){const response=await fetch('/api/penny/state');const state=await response.json();await fetch('/api/penny/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!state.enabled})});lastHash='';load();}
 async function resetBot(){if(!confirm('Reset the AI penny-stock paper account to $100?'))return;await fetch('/api/penny/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});lastHash='';load();}
-load();setInterval(load,5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastHash='';load();}});
+load();setInterval(load,5000);setInterval(paintDeepScanClock,250);document.addEventListener('visibilitychange',()=>{if(!document.hidden){lastHash='';load();}});
 </script>
 </body>
 </html>

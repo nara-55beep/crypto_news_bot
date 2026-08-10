@@ -571,6 +571,46 @@ class PennyStockLogicTests(unittest.TestCase):
         bot.last_full_scan = 900
         self.assertEqual(bot.scan_plan(True, now=1_000), "pulse")
 
+    def test_deep_scan_deadline_is_ten_seconds_in_every_market_phase(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.last_scan_started = 1_000
+        bot.last_scan = 1_004
+        bot.last_full_scan = 1_000
+
+        for is_open in (True, False):
+            self.assertEqual(bot.scan_interval(is_open, now=1_009), 10)
+            self.assertEqual(bot.scan_due_at(is_open, now=1_009), 1_010)
+            self.assertIsNone(bot.scan_plan(is_open, now=1_009.999))
+            self.assertEqual(bot.scan_plan(is_open, now=1_010), "pulse")
+
+    def test_fast_deep_scan_consumes_the_latest_all_market_candidates(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot._universe_rows = [{"ticker": "WIDE1"}, {"ticker": "WIDE2"}]
+        bot.watchlist = [{
+            "ticker": "KEEP",
+            "signal": {"candidate_action": "BUY"},
+        }]
+        with mock.patch.object(
+            penny_quotes, "select_market_candidates", return_value=["WIDE1", "WIDE2"]
+        ) as select:
+            candidates = bot._pulse_candidates(["YAHOO1"], pool=24)
+
+        select.assert_called_once_with(bot._universe_rows, 24)
+        self.assertEqual(candidates, ["KEEP", "WIDE1", "YAHOO1", "WIDE2"])
+
+    def test_state_exposes_absolute_deadline_for_a_smooth_client_countdown(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.last_scan_started = 1_000
+        bot.last_scan = 1_004
+        with mock.patch.object(bot, "market_open", return_value=True), \
+             mock.patch.object(paper.time, "time", return_value=1_006):
+            state = bot.state()
+
+        self.assertEqual(state["scan_interval_sec"], 10)
+        self.assertEqual(state["server_time"], 1_006)
+        self.assertEqual(state["next_scan_at"], 1_010)
+        self.assertEqual(state["next_scan_in_sec"], 4)
+
     def test_forward_stats_use_cost_adjusted_return(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
             paper, "STATE_PATH", os.path.join(tmp, "state.json")

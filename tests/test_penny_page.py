@@ -58,6 +58,12 @@ class TestPennyPage(unittest.TestCase):
         self.assertIn("OTC unavailable", PENNY_HTML)
         self.assertIn("Next deep scan", PENNY_HTML)
 
+    def test_deep_scan_countdown_ticks_locally_between_server_refreshes(self):
+        self.assertIn('id="next-deep-scan"', PENNY_HTML)
+        self.assertIn("next_scan_at", PENNY_HTML)
+        self.assertIn("performance.now()", PENNY_HTML)
+        self.assertIn("setInterval(paintDeepScanClock,250)", PENNY_HTML)
+
     def test_page_contains_no_common_utf8_mojibake(self):
         self.assertNotIn("â", PENNY_HTML)
         self.assertNotIn("Â", PENNY_HTML)
