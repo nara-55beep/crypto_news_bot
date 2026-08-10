@@ -71,17 +71,19 @@ TRAIL_ARM_PCT = 12.0       # once up this much, trail
 TRAIL_PCT = 8.0            # trail distance from the high-water mark
 MAX_HOLD_DAYS = 10
 
-# The scanner has two gears.  A cheap pulse watches movers repeatedly while a full
-# breadth pass refreshes the whole board.  Research runs even when new paper entries
-# are paused; otherwise the forward sample is selection-biased and opportunities are
-# missed whenever the portfolio is full.
-REGULAR_SCAN_SEC = 2 * 60
-HOT_SCAN_SEC = 60
-EXTENDED_SCAN_SEC = 5 * 60
-CLOSED_SCAN_SEC = 30 * 60
+# The scanner has two gears. A cheap all-symbol pass refreshes the market snapshot,
+# while this deep loop builds the expensive Yahoo/SEC dossiers and refreshes the
+# ranked board. Keep one explicit cadence across every market phase so the displayed
+# deadline and the scheduler cannot silently disagree. The scan lock prevents overlap;
+# if a deep pass itself takes longer than ten seconds, the next starts when it finishes.
+DEEP_SCAN_SEC = 10
+REGULAR_SCAN_SEC = DEEP_SCAN_SEC
+HOT_SCAN_SEC = DEEP_SCAN_SEC
+EXTENDED_SCAN_SEC = DEEP_SCAN_SEC
+CLOSED_SCAN_SEC = DEEP_SCAN_SEC
 FULL_SCAN_SEC = 15 * 60
 MARK_EVERY_SEC = 20         # protective exits must not wait for a long market scan
-LOOP_TICK_SEC = 5
+LOOP_TICK_SEC = 5           # maximum housekeeping wait; scan deadlines wake it sooner
 # The cheap all-symbol pass is independent of deep Yahoo/SEC/AI work. One pass takes
 # about 53 Alpaca snapshot requests for the current ~13k listed universe; a 30-second
 # target leaves ample headroom under the standard request limit while staying live.
@@ -708,12 +710,16 @@ class PennyStockPaperBot:
         )
 
     def scan_interval(self, is_open: bool, now: float | None = None) -> int:
-        phase = self.session_phase(is_open)
-        if phase == "regular":
-            return HOT_SCAN_SEC if self.hot_setup_count(now) else REGULAR_SCAN_SEC
-        if phase in ("premarket", "afterhours"):
-            return EXTENDED_SCAN_SEC
-        return CLOSED_SCAN_SEC
+        """Return the one advertised deep-scan cadence in every market phase."""
+        return DEEP_SCAN_SEC
+
+    def scan_due_at(self, is_open: bool, now: float | None = None) -> float:
+        """Absolute deep-scan deadline shared by the scheduler and the dashboard."""
+        now = time.time() if now is None else now
+        anchor = self.last_scan_started or self.last_scan
+        cadence_due = (anchor + self.scan_interval(is_open, now)
+                       if anchor > 0 else now)
+        return max(self.provider_backoff_until, cadence_due)
 
     def scan_plan(self, is_open: bool, now: float | None = None,
                   force: bool = False) -> str | None:
@@ -748,6 +754,18 @@ class PennyStockPaperBot:
                 if len(selected) >= max(0, int(limit)):
                     return selected
         return selected
+
+    def _pulse_candidates(self, yahoo_fresh: list[str], pool: int) -> list[str]:
+        """Mix held setups, broad-market movers, and Yahoo movers for a fast pass."""
+        market_fresh = penny_quotes.select_market_candidates(
+            list(self._universe_rows), pool)
+        priority = [
+            str(w.get("ticker") or "") for w in self.watchlist
+            if (w.get("signal") or {}).get("candidate_action")
+            in ("BUY", "STRONG BUY")
+        ]
+        return self._interleave_candidates(
+            priority, market_fresh, yahoo_fresh, limit=PULSE_SCORE_LIMIT)
 
     @staticmethod
     def _catalyst_key(d) -> str:
@@ -2298,15 +2316,11 @@ class PennyStockPaperBot:
                     raise RuntimeError(str(market_error))
                 self.universe_coverage = coverage
             else:
-                fresh = await asyncio.to_thread(research.screen, pool)
-                # Keep confirming prior candidates while reserving most of the pulse
-                # for fresh movers returned by the live screener.
-                priority = [
-                    str(w.get("ticker") or "") for w in self.watchlist
-                    if (w.get("signal") or {}).get("candidate_action")
-                    in ("BUY", "STRONG BUY")
-                ]
-                syms = list(dict.fromkeys(priority + fresh))[:PULSE_SCORE_LIMIT]
+                yahoo_fresh = await asyncio.to_thread(research.screen, pool)
+                # Keep confirming prior candidates while also consuming the newest
+                # exhaustive-market snapshot. Previously the frequent pulse ignored
+                # that snapshot and only revisited Yahoo's mover lists.
+                syms = self._pulse_candidates(yahoo_fresh, pool)
             if mode == "full":
                 syms = fresh
         except Exception as e:
@@ -3785,13 +3799,13 @@ class PennyStockPaperBot:
         }
 
     async def manage_loop(self):
-        # The all-symbol pass begins immediately. Deep scans retain a short startup
-        # delay so the rest of the dashboard can initialise, but no penny-stock
-        # universe scan waits for that delay or for the 15-minute full-scan clock.
+        # Both loops begin immediately. The first deep scan waits for the initial
+        # all-symbol result inside _scan_locked, so a fixed startup sleep only made the
+        # page look idle without protecting any dependency.
         if self._universe_task is None or self._universe_task.done():
             self._universe_task = asyncio.create_task(self._continuous_universe_loop())
-        await asyncio.sleep(12)
         while True:
+            next_wake = float(LOOP_TICK_SEC)
             try:
                 now = time.time()
                 today = datetime.now(NY).strftime("%Y-%m-%d")
@@ -3862,10 +3876,22 @@ class PennyStockPaperBot:
                         self.status = f"continuous {self.session_phase(is_open)} research; {entry_state}"
                 self._was_market_open = is_open
                 self._save()
+                # Housekeeping can stay on its five-second rhythm without making a
+                # ten-second scan late. Wake on the absolute scan deadline; if a scan
+                # is still running, the wait below wakes as soon as that task ends.
+                if not self._scan_lock.locked():
+                    clock_now = time.time()
+                    next_wake = min(
+                        next_wake,
+                        max(0.05, self.scan_due_at(is_open, clock_now) - clock_now),
+                    )
             except Exception as e:
                 self.last_error = f"{type(e).__name__}: {str(e)[:120]}"
                 self.status = "error"
-            await asyncio.sleep(LOOP_TICK_SEC)
+            if self._scan_task is not None and not self._scan_task.done():
+                await asyncio.wait({self._scan_task}, timeout=LOOP_TICK_SEC)
+            else:
+                await asyncio.sleep(next_wake)
 
     # ---------------- api ----------------
     def equity(self) -> float:
@@ -3918,9 +3944,7 @@ class PennyStockPaperBot:
         now = time.time()
         market_is_open = self.market_open()
         interval = self.scan_interval(market_is_open, now)
-        anchor = self.last_scan_started or self.last_scan
-        due_at = max(self.provider_backoff_until,
-                     (anchor + interval) if anchor > 0 else now)
+        due_at = self.scan_due_at(market_is_open, now)
         wins = sum(1 for h in self.history if h.get("pnl", 0) > 0)
         n = len(self.history)
         spread_paid = sum(h.get("spread_cost", 0) for h in self.history)
@@ -3980,6 +4004,8 @@ class PennyStockPaperBot:
             "last_scan_mode": self.last_scan_mode,
             "last_scan_duration_sec": self.last_scan_duration,
             "scan_interval_sec": interval,
+            "server_time": now,
+            "next_scan_at": due_at,
             "next_scan_in_sec": max(0, int(due_at - now)),
             "scan_in_progress": self._scan_lock.locked(),
             "scan_failures": self.scan_failures,
@@ -4003,8 +4029,8 @@ class PennyStockPaperBot:
             "rules": (f"every supported listed symbol swept every {UNIVERSE_TARGET_CYCLE_SEC}s "
                       f"from startup (real-time IEX between {UNIVERSE_FULL_TAPE_SEC // 60}m "
                       f"delayed-consolidated baselines), plus "
-                      f"adaptive deep scans ({HOT_SCAN_SEC}s hot / {REGULAR_SCAN_SEC}s regular / "
-                      f"{EXTENDED_SCAN_SEC}s extended / {CLOSED_SCAN_SEC}s closed); "
+                      f"deep dossier scans every {DEEP_SCAN_SEC}s in every market phase "
+                      f"(non-overlapping; a slow pass resumes immediately); "
                       f"official non-adverse 8-K + headline aligned within "
                       f"{research.CATALYST_ALIGNMENT_HOURS:.0f}h; "
                       f"{CONFIRM_SCANS} separated trusted regular-session quotes required; "
