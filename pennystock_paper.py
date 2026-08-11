@@ -3987,6 +3987,7 @@ class PennyStockPaperBot:
             "open_count": len(self.pos), "max_open": MAX_OPEN,
             "scan_count": self.scan_count,
             "universe_coverage": coverage,
+            "sec_feed": research.sec_edgar.current_feed_status(),
             "evidence_clock": self._evidence_clock(),
             "persistence_error": "; ".join(x for x in (self.state_save_error, self.archive_error) if x),
             "state_save_error": self.state_save_error,

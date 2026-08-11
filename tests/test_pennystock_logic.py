@@ -969,6 +969,112 @@ class TestEdgarCatalystTiming(unittest.TestCase):
         # 22:00 UTC is 17:00 ET: the next session contains the first reaction close.
         self.assertEqual(reaction_position(index, "2026-01-06T22:00:00Z"), 2)
 
+    def test_current_feed_cache_matches_the_fast_scanner_latency(self):
+        from research import edgar_catalysts as ed
+        self.assertEqual(ed.CURRENT_FEED_TTL_SEC, 30)
+        self.assertLessEqual(ed.CURRENT_FEED_TTL_SEC, 3 * paper.DEEP_SCAN_SEC)
+
+    def test_a_transient_sec_failure_keeps_last_known_filings_visible(self):
+        import pandas as pd
+        from research import edgar_catalysts as ed
+        now = pd.Timestamp.now(tz="UTC")
+        old_event = {
+            "symbol": "KEEP", "cik": "0000000001", "accessionNumber": "a",
+            "accepted_at": (now - pd.Timedelta(minutes=5)).isoformat(),
+            "age_hours": 0.0,
+        }
+        status = {
+            "status": "COMPLETE", "last_attempt_at": 0.0,
+            "last_success_at": 1.0, "error": "", "served_stale": False,
+        }
+        with mock.patch.object(ed, "_feed_cache", (1.0, [old_event])), \
+             mock.patch.object(ed, "_feed_status", status), \
+             mock.patch.object(ed, "ticker_to_cik", return_value={"KEEP": "0000000001"}), \
+             mock.patch.object(ed, "_request", return_value=None):
+            events = ed.current_8k_events(max_age_hours=72)
+            health = ed.current_feed_status()
+
+        self.assertEqual([row["symbol"] for row in events], ["KEEP"])
+        self.assertGreater(events[0]["age_hours"], 0.0)
+        self.assertEqual(health["status"], "DEGRADED")
+        self.assertTrue(health["served_stale"])
+        self.assertIn("unavailable", health["error"])
+
+    def test_concurrent_current_feed_callers_share_one_sec_request(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import threading
+        import time as wall_time
+        from research import edgar_catalysts as ed
+        entry = {
+            "cik": "0000000001", "company": "Test", "accepted_at": "",
+            "accessionNumber": "a", "url": "", "items": "2.02",
+        }
+        import pandas as pd
+        entry["accepted_at"] = pd.Timestamp.now(tz="UTC").isoformat()
+        status = {
+            "status": "EMPTY", "last_attempt_at": 0.0,
+            "last_success_at": 0.0, "error": "", "served_stale": False,
+        }
+        request_entered = threading.Event()
+        release_request = threading.Event()
+
+        def slow_request(_url):
+            request_entered.set()
+            release_request.wait(timeout=1)
+            return b"feed"
+
+        request = mock.Mock(side_effect=slow_request)
+        with mock.patch.object(ed, "_feed_cache", (0.0, [])), \
+             mock.patch.object(ed, "_feed_status", status), \
+             mock.patch.object(ed, "ticker_to_cik", return_value={"TEST": "0000000001"}), \
+             mock.patch.object(ed, "_request", request), \
+             mock.patch.object(ed, "_feed_entries", return_value=[entry]):
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first = pool.submit(ed.current_8k_events)
+                self.assertTrue(request_entered.wait(timeout=1))
+                second = pool.submit(ed.current_8k_events)
+                wall_time.sleep(0.03)
+                release_request.set()
+                results = [first.result(timeout=1), second.result(timeout=1)]
+
+        self.assertEqual(request.call_count, 1)
+        self.assertEqual([[row["symbol"] for row in result] for result in results],
+                         [["TEST"], ["TEST"]])
+
+    def test_a_valid_empty_sec_response_is_cached_instead_of_refetched(self):
+        from research import edgar_catalysts as ed
+        status = {
+            "status": "EMPTY", "last_attempt_at": 0.0,
+            "last_success_at": 0.0, "error": "", "served_stale": False,
+        }
+        request = mock.Mock(return_value=b"empty feed")
+        with mock.patch.object(ed, "_feed_cache", (0.0, [])), \
+             mock.patch.object(ed, "_feed_status", status), \
+             mock.patch.object(ed, "ticker_to_cik", return_value={"TEST": "0000000001"}), \
+             mock.patch.object(ed, "_request", request), \
+             mock.patch.object(ed, "_feed_entries", return_value=[]):
+            self.assertEqual(ed.current_8k_events(), [])
+            self.assertEqual(ed.current_8k_events(), [])
+            self.assertEqual(ed.current_feed_status()["status"], "COMPLETE")
+
+        self.assertEqual(request.call_count, 1)
+
+    def test_cached_event_age_is_recomputed_before_filtering(self):
+        import pandas as pd
+        from research import edgar_catalysts as ed
+        now = pd.Timestamp.now(tz="UTC")
+        expired = {
+            "symbol": "OLD", "accepted_at": (now - pd.Timedelta(hours=73)).isoformat(),
+            "age_hours": 0.0,
+        }
+        status = {
+            "status": "COMPLETE", "last_attempt_at": 0.0,
+            "last_success_at": 1.0, "error": "", "served_stale": False,
+        }
+        with mock.patch.object(ed, "_feed_cache", (ed.time.time(), [expired])), \
+             mock.patch.object(ed, "_feed_status", status):
+            self.assertEqual(ed.current_8k_events(max_age_hours=72), [])
+
 
 class TestSecFundamentalTiming(unittest.TestCase):
     @staticmethod

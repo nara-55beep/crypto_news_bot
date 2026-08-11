@@ -76,7 +76,16 @@ _throttle_lock = threading.Lock()
 _ticker_cache: tuple[float, dict[str, str]] = (0.0, {})
 _feed_cache: tuple[float, list[dict[str, object]]] = (0.0, [])
 _cache_lock = threading.Lock()
-CURRENT_FEED_TTL_SEC = 5 * 60
+_feed_refresh_lock = threading.Lock()
+_feed_status: dict[str, object] = {
+    "status": "EMPTY", "last_attempt_at": 0.0, "last_success_at": 0.0,
+    "error": "", "served_stale": False,
+}
+# Deep scans run every ten seconds. A five-minute feed cache made a newly filed 8-K
+# invisible to roughly thirty scans, defeating catalyst-first discovery. One request
+# every thirty seconds is still far below SEC's ten-requests/second fair-access limit.
+CURRENT_FEED_TTL_SEC = 30
+CURRENT_FEED_ERROR_RETRY_SEC = 30
 # The service polls continuously.  Reading the newest page each cycle catches new
 # disclosures with bounded latency; walking ten historical pages blocked the scanner
 # for roughly 100 seconds and mostly rediscovered stale, non-penny issuers.
@@ -163,57 +172,162 @@ def _feed_entries(raw: bytes) -> list[dict[str, str]]:
     return out
 
 
+def _events_with_current_age(events: list[dict[str, object]], max_age_hours: float,
+                             now=None) -> list[dict[str, object]]:
+    """Re-age cached filings so an old cache cannot freeze a filing inside the window."""
+    current = now if now is not None else pd.Timestamp.now(tz="UTC")
+    out: list[dict[str, object]] = []
+    for event in events:
+        accepted = pd.to_datetime(event.get("accepted_at"), utc=True, errors="coerce")
+        if pd.isna(accepted):
+            continue
+        age_hours = max(0.0, float((current - accepted).total_seconds() / 3600.0))
+        if age_hours <= max_age_hours:
+            out.append(dict(event, age_hours=round(age_hours, 3)))
+    return out
+
+
+def _cached_current_feed(max_age_hours: float, wall_now: float, utc_now,
+                         force: bool) -> list[dict[str, object]] | None:
+    """Return a fresh cache or a failure-backoff cache; ``None`` means refresh."""
+    if force:
+        return None
+    with _cache_lock:
+        created, cached = _feed_cache
+        status = dict(_feed_status)
+    cache_fresh = created > 0 and wall_now - created < CURRENT_FEED_TTL_SEC
+    retry_wait = (
+        status.get("status") in ("DEGRADED", "FAILED")
+        and wall_now - float(status.get("last_attempt_at") or 0)
+        < CURRENT_FEED_ERROR_RETRY_SEC
+    )
+    if not cache_fresh and not retry_wait:
+        return None
+    return _events_with_current_age(cached, max_age_hours, utc_now)
+
+
+def _feed_failure(error: str, previous: list[dict[str, object]], wall_now: float,
+                  utc_now, max_age_hours: float) -> list[dict[str, object]]:
+    """Keep last-known filings on a transient outage and expose the degraded state."""
+    with _cache_lock:
+        _feed_status.update({
+            "status": "DEGRADED" if previous else "FAILED",
+            "last_attempt_at": wall_now,
+            "error": str(error)[:180],
+            "served_stale": bool(previous),
+        })
+    return _events_with_current_age(previous, max_age_hours, utc_now)
+
+
+def current_feed_status() -> dict[str, object]:
+    """Read-only freshness telemetry for the scanner dashboard."""
+    wall_now = time.time()
+    with _cache_lock:
+        created, cached = _feed_cache
+        status = dict(_feed_status)
+    cache_age = max(0.0, wall_now - created) if created > 0 else None
+    current_events = _events_with_current_age(cached, 72.0)
+    accepted = [str(row.get("accepted_at") or "") for row in current_events
+                if str(row.get("accepted_at") or "")]
+    if status.get("status") == "COMPLETE" and cache_age is not None \
+            and cache_age >= CURRENT_FEED_TTL_SEC:
+        status["status"] = "STALE"
+    status.update({
+        "ttl_sec": CURRENT_FEED_TTL_SEC,
+        "cache_age_sec": round(cache_age, 1) if cache_age is not None else None,
+        "event_count": len(current_events),
+        "newest_accepted_at": max(accepted, default=""),
+    })
+    return status
+
+
 def current_8k_events(max_age_hours: float = 72.0, force: bool = False) -> list[dict[str, object]]:
     """Recent 8-Ks from SEC's real-time feed, mapped to current ticker symbols.
 
     This is a discovery source, not a bullish label.  Every row retains its item codes
     so adverse events can be rejected and mixed disclosures are not called catalysts.
-    Results are cached because the scanner runs every minute when a setup is hot.
+    Results are cached briefly because the deep scanner runs every ten seconds.
     """
     global _feed_cache
-    now = pd.Timestamp.now(tz="UTC")
-    with _cache_lock:
-        if (not force and _feed_cache[1]
-                and time.time() - _feed_cache[0] < CURRENT_FEED_TTL_SEC):
-            return [dict(x) for x in _feed_cache[1]
-                    if float(x.get("age_hours", 1e9)) <= max_age_hours]
+    wall_now = time.time()
+    utc_now = pd.Timestamp.now(tz="UTC")
+    cached = _cached_current_feed(max_age_hours, wall_now, utc_now, force)
+    if cached is not None:
+        return cached
 
-    by_cik: dict[str, list[str]] = {}
-    for symbol, cik in ticker_to_cik().items():
-        by_cik.setdefault(cik, []).append(symbol)
+    # Full scans used to call current_8k_tickers directly and indirectly through
+    # screen() at the same time. Coalesce those callers into one SEC request.
+    with _feed_refresh_lock:
+        wall_now = time.time()
+        utc_now = pd.Timestamp.now(tz="UTC")
+        cached = _cached_current_feed(max_age_hours, wall_now, utc_now, force)
+        if cached is not None:
+            return cached
+        with _cache_lock:
+            previous = [dict(row) for row in _feed_cache[1]]
 
-    events: list[dict[str, object]] = []
-    stop = False
-    for start in range(0, CURRENT_FEED_MAX_ENTRIES, 100):
-        raw = _request(CURRENT_FEED_URL.format(start=start))
-        if not raw:
-            break
-        entries = _feed_entries(raw)
-        if not entries:
-            break
-        for entry in entries:
-            accepted = pd.to_datetime(entry.get("accepted_at"), utc=True, errors="coerce")
-            if pd.isna(accepted):
-                continue
-            age_hours = max(0.0, float((now - accepted).total_seconds() / 3600.0))
-            if age_hours > max_age_hours:
-                stop = True
-                continue
-            classification = classify_8k_items(entry.get("items"))
-            for symbol in by_cik.get(str(entry.get("cik") or ""), []):
-                events.append(dict(entry, symbol=symbol, age_hours=round(age_hours, 3),
-                                   **classification))
-        if stop:
-            break
+        ticker_map = ticker_to_cik()
+        if not ticker_map:
+            return _feed_failure(
+                "SEC ticker map unavailable", previous, wall_now, utc_now,
+                max_age_hours)
+        by_cik: dict[str, list[str]] = {}
+        for symbol, cik in ticker_map.items():
+            by_cik.setdefault(cik, []).append(symbol)
 
-    # De-duplicate amendments/feed pagination by ticker+accession while preserving newest.
-    unique: dict[tuple[str, str], dict[str, object]] = {}
-    for event in sorted(events, key=lambda x: str(x.get("accepted_at") or ""), reverse=True):
-        unique.setdefault((str(event.get("symbol")), str(event.get("accessionNumber"))), event)
-    value = list(unique.values())
-    with _cache_lock:
-        _feed_cache = (time.time(), [dict(x) for x in value])
-    return value
+        events: list[dict[str, object]] = []
+        stop = False
+        for start in range(0, CURRENT_FEED_MAX_ENTRIES, 100):
+            raw = _request(CURRENT_FEED_URL.format(start=start))
+            if not raw:
+                return _feed_failure(
+                    "SEC current 8-K feed unavailable", previous, wall_now,
+                    utc_now, max_age_hours)
+            try:
+                entries = _feed_entries(raw)
+            except (ET.ParseError, TypeError, ValueError) as error:
+                return _feed_failure(
+                    f"SEC current 8-K feed malformed: {type(error).__name__}",
+                    previous, wall_now, utc_now, max_age_hours)
+            if not entries:
+                break
+            for entry in entries:
+                accepted = pd.to_datetime(
+                    entry.get("accepted_at"), utc=True, errors="coerce")
+                if pd.isna(accepted):
+                    continue
+                age_hours = max(
+                    0.0, float((utc_now - accepted).total_seconds() / 3600.0))
+                if age_hours > max_age_hours:
+                    stop = True
+                    continue
+                classification = classify_8k_items(entry.get("items"))
+                for symbol in by_cik.get(str(entry.get("cik") or ""), []):
+                    events.append(dict(
+                        entry, symbol=symbol, age_hours=round(age_hours, 3),
+                        **classification))
+            if stop:
+                break
+
+        # De-duplicate amendments/feed pagination by ticker+accession while preserving newest.
+        unique: dict[tuple[str, str], dict[str, object]] = {}
+        for event in sorted(
+            events, key=lambda x: str(x.get("accepted_at") or ""), reverse=True
+        ):
+            unique.setdefault(
+                (str(event.get("symbol")), str(event.get("accessionNumber"))), event)
+        value = list(unique.values())
+        completed_at = time.time()
+        with _cache_lock:
+            _feed_cache = (completed_at, [dict(x) for x in value])
+            _feed_status.update({
+                "status": "COMPLETE",
+                "last_attempt_at": completed_at,
+                "last_success_at": completed_at,
+                "error": "",
+                "served_stale": False,
+            })
+        return _events_with_current_age(value, max_age_hours, utc_now)
 
 
 def current_8k_tickers(max_age_hours: float = 72.0) -> list[str]:
