@@ -57,6 +57,9 @@ class TestPennyPage(unittest.TestCase):
         self.assertIn("Deep dossiers", PENNY_HTML)
         self.assertIn("OTC unavailable", PENNY_HTML)
         self.assertIn("Next deep scan", PENNY_HTML)
+        self.assertIn("SEC 8-K feed", PENNY_HTML)
+        self.assertIn("sec.cache_age_sec", PENNY_HTML)
+        self.assertIn("transient SEC failure keeps the last known filings", PENNY_HTML)
 
     def test_deep_scan_countdown_ticks_locally_between_server_refreshes(self):
         self.assertIn('id="next-deep-scan"', PENNY_HTML)
