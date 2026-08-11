@@ -94,8 +94,14 @@ UNIVERSE_FULL_TAPE_SEC = 15 * 60
 TOP_N = 20                 # leaderboard size
 SCREEN_POOL = 60           # how many raw candidates to score before ranking
 PULSE_SCREEN_POOL = 24
-PULSE_SCORE_LIMIT = 32
-DOSSIER_CONCURRENCY = 4    # bounded: faster than serial without a provider stampede
+# A live 24-name pulse took about 45 seconds, so advertising a ten-second scan
+# cadence was impossible even though the scheduler's constant said 10. One pulse is
+# now exactly one concurrent dossier batch. Candidates rotate by least-recently
+# attempted time, while two slots remain available for setups awaiting confirmation.
+PULSE_SCORE_LIMIT = 4
+PULSE_PRIORITY_SLOTS = 2
+CANDIDATE_ROTATION_MEMORY = 5_000
+DOSSIER_CONCURRENCY = 4    # one bounded batch per ten-second pulse
 AI_DEEP_DIVE = 10          # AI calls allowed PER SCAN (reviews resets each scan),
                            # not per day - keeps one pass inside the free-tier budget
 RETRY_EMPTY_SEC = 5 * 60
@@ -522,6 +528,10 @@ class PennyStockPaperBot:
         self.provider_backoff_until = 0.0
         self.setup_states: dict[str, dict] = {}
         self._ai_cache: dict[str, dict] = {}
+        # Rotation is runtime scheduling state, not evidence. It deliberately is not
+        # persisted: after a restart every currently-discovered name gets a fair fresh
+        # chance, with source order only breaking ties.
+        self._candidate_last_scored: dict[str, float] = {}
         self._scan_task: asyncio.Task | None = None
         self._last_mark = 0.0
         self.engine_version_started_at = time.time()
@@ -755,17 +765,66 @@ class PennyStockPaperBot:
                     return selected
         return selected
 
-    def _pulse_candidates(self, yahoo_fresh: list[str], pool: int) -> list[str]:
-        """Mix held setups, broad-market movers, and Yahoo movers for a fast pass."""
-        market_fresh = penny_quotes.select_market_candidates(
-            list(self._universe_rows), pool)
-        priority = [
-            str(w.get("ticker") or "") for w in self.watchlist
-            if (w.get("signal") or {}).get("candidate_action")
+    def _least_recent_candidates(self, candidates: list[str], limit: int) -> list[str]:
+        """Select a stable, fair slice without repeatedly rescoring the first names."""
+        unique = self._interleave_candidates(candidates, limit=len(candidates))
+        source_order = {symbol: index for index, symbol in enumerate(unique)}
+        return sorted(
+            unique,
+            key=lambda symbol: (
+                float(self._candidate_last_scored.get(symbol, 0.0)),
+                source_order[symbol],
+            ),
+        )[:max(0, int(limit))]
+
+    def _deep_scan_batch(self, priority: list[str], *discovery_buckets) -> list[str]:
+        """Build one bounded batch: confirmation work plus rotating discovery."""
+        priority = self._interleave_candidates(priority, limit=len(priority))
+        selected = self._least_recent_candidates(
+            priority, min(PULSE_PRIORITY_SLOTS, PULSE_SCORE_LIMIT))
+        discovery = self._interleave_candidates(
+            *discovery_buckets,
+            limit=max(PULSE_SCREEN_POOL, sum(len(bucket or []) for bucket in discovery_buckets)),
+        )
+        discovery = [symbol for symbol in discovery if symbol not in priority]
+        selected.extend(self._least_recent_candidates(
+            discovery, PULSE_SCORE_LIMIT - len(selected)))
+        if len(selected) < PULSE_SCORE_LIMIT:
+            remaining_priority = [symbol for symbol in priority if symbol not in selected]
+            selected.extend(self._least_recent_candidates(
+                remaining_priority, PULSE_SCORE_LIMIT - len(selected)))
+        return selected
+
+    def _record_candidate_attempts(self, candidates: list[str], attempted_at: float) -> None:
+        """Advance rotation even when a provider fails to build a dossier."""
+        for symbol in candidates:
+            self._candidate_last_scored[str(symbol).strip().upper()] = attempted_at
+        if len(self._candidate_last_scored) > CANDIDATE_ROTATION_MEMORY:
+            newest = sorted(
+                self._candidate_last_scored.items(), key=lambda item: item[1], reverse=True
+            )[:CANDIDATE_ROTATION_MEMORY]
+            self._candidate_last_scored = dict(newest)
+
+    def _priority_candidates(self) -> list[str]:
+        """Keep confirmation work scheduled even after its row rotates off the board."""
+        board = [
+            str(row.get("ticker") or "") for row in self.watchlist
+            if (row.get("signal") or {}).get("candidate_action")
             in ("BUY", "STRONG BUY")
         ]
+        tracked = [
+            ticker for ticker, state in self.setup_states.items()
+            if state.get("candidate_action") in ("BUY", "STRONG BUY")
+        ]
         return self._interleave_candidates(
-            priority, market_fresh, yahoo_fresh, limit=PULSE_SCORE_LIMIT)
+            board, tracked, limit=len(board) + len(tracked))
+
+    def _pulse_candidates(self, yahoo_fresh: list[str], pool: int) -> list[str]:
+        """Mix confirming setups and rotating broad/Yahoo movers for a fast pass."""
+        market_fresh = penny_quotes.select_market_candidates(
+            list(self._universe_rows), pool)
+        return self._deep_scan_batch(
+            self._priority_candidates(), market_fresh, yahoo_fresh)
 
     @staticmethod
     def _catalyst_key(d) -> str:
@@ -2296,10 +2355,16 @@ class PennyStockPaperBot:
                     market_rows, pool, catalysts=catalyst_symbols)
                 fresh = self._interleave_candidates(
                     yahoo_fresh, market_fresh, limit=pool)
+                # Refresh the wider discovery pool here, but deep-score only one
+                # concurrent batch. The old 60-dossier full pass periodically blocked
+                # the advertised ten-second loop for nearly a minute.
+                syms = self._deep_scan_batch(
+                    self._priority_candidates(), yahoo_fresh, market_fresh)
                 coverage = dict(coverage or {})
                 coverage.update({
-                    "deep_score_cap": pool,
-                    "deep_score_target": len(fresh),
+                    "deep_candidate_pool": len(fresh),
+                    "deep_score_cap": PULSE_SCORE_LIMIT,
+                    "deep_score_target": len(syms),
                     "yahoo_in_play_candidates": len(yahoo_fresh),
                     "market_wide_candidates": len(market_fresh),
                     "fresh_sec_catalyst_symbols": len(catalyst_symbols),
@@ -2321,8 +2386,6 @@ class PennyStockPaperBot:
                 # exhaustive-market snapshot. Previously the frequent pulse ignored
                 # that snapshot and only revisited Yahoo's mover lists.
                 syms = self._pulse_candidates(yahoo_fresh, pool)
-            if mode == "full":
-                syms = fresh
         except Exception as e:
             self.last_error = f"screen: {type(e).__name__}: {str(e)[:90]}"
             self._note(self.last_error, "loss")
@@ -2333,6 +2396,8 @@ class PennyStockPaperBot:
             self._note(self.last_error, "info")
             self._scan_failed(started, empty=True)
             return
+
+        self._record_candidate_attempts(syms, started)
 
         # ---- 1) mechanical scoring pass over the whole pool ----
         async def score_one(sym):
@@ -3929,6 +3994,7 @@ class PennyStockPaperBot:
         self.provider_backoff_until = 0.0
         self.setup_states = {}
         self._ai_cache = {}
+        self._candidate_last_scored = {}
         self.last_error = ""          # stale provider errors must not linger
         self._note("bot reset to $100")
         self._save()
@@ -4005,6 +4071,7 @@ class PennyStockPaperBot:
             "last_scan_mode": self.last_scan_mode,
             "last_scan_duration_sec": self.last_scan_duration,
             "scan_interval_sec": interval,
+            "deep_scan_batch_size": PULSE_SCORE_LIMIT,
             "server_time": now,
             "next_scan_at": due_at,
             "next_scan_in_sec": max(0, int(due_at - now)),
@@ -4031,7 +4098,8 @@ class PennyStockPaperBot:
                       f"from startup (real-time IEX between {UNIVERSE_FULL_TAPE_SEC // 60}m "
                       f"delayed-consolidated baselines), plus "
                       f"deep dossier scans every {DEEP_SCAN_SEC}s in every market phase "
-                      f"(non-overlapping; a slow pass resumes immediately); "
+                      f"({PULSE_SCORE_LIMIT} rotating candidates per non-overlapping batch; "
+                      f"a slow pass resumes immediately); "
                       f"official non-adverse 8-K + headline aligned within "
                       f"{research.CATALYST_ALIGNMENT_HOURS:.0f}h; "
                       f"{CONFIRM_SCANS} separated trusted regular-session quotes required; "

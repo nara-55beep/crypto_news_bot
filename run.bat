@@ -29,6 +29,7 @@ echo.
 echo ================================================================
 echo   Starting the Crypto News Bot
 echo   The chart will open in your browser automatically (~8 seconds).
+echo   Code updates auto-restart the bot so deployed fixes are not stale.
 echo   FIRST RUN ONLY: type your phone number + Telegram code below.
 echo   Keep this window open. Press Ctrl-C to stop the bot.
 echo ================================================================
@@ -37,8 +38,9 @@ echo.
 REM --- open the dashboard in the browser after a short delay (server needs a moment) ---
 start "" powershell -WindowStyle Hidden -Command "Start-Sleep -Seconds 10; $p='8000'; if (Test-Path 'data\dashboard_port.txt') { $p=(Get-Content 'data\dashboard_port.txt' -Raw).Trim() }; Start-Process ('http://127.0.0.1:'+$p)"
 
-REM --- run the bot in THIS window (so you see logs + can type the Telegram login) ---
-python main.py
+REM --- supervise main.py so merged Python fixes replace the running process too ---
+REM dev_reload.py has a standard-library fallback if watchfiles is unavailable.
+python dev_reload.py
 
 echo.
 echo Bot stopped. Press any key to close this window.

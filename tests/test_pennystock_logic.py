@@ -598,6 +598,49 @@ class PennyStockLogicTests(unittest.TestCase):
         select.assert_called_once_with(bot._universe_rows, 24)
         self.assertEqual(candidates, ["KEEP", "WIDE1", "YAHOO1", "WIDE2"])
 
+    def test_ten_second_batch_is_one_concurrent_batch_and_rotates_discovery(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.watchlist = [{
+            "ticker": "KEEP",
+            "signal": {"candidate_action": "BUY"},
+        }]
+        market = [f"WIDE{i}" for i in range(1, 7)]
+        yahoo = [f"YAHOO{i}" for i in range(1, 7)]
+        with mock.patch.object(
+            penny_quotes, "select_market_candidates", return_value=market
+        ):
+            first = bot._pulse_candidates(yahoo, pool=24)
+            bot._record_candidate_attempts(first, attempted_at=1_000)
+            second = bot._pulse_candidates(yahoo, pool=24)
+
+        self.assertEqual(paper.PULSE_SCORE_LIMIT, paper.DOSSIER_CONCURRENCY)
+        self.assertEqual(first, ["KEEP", "WIDE1", "YAHOO1", "WIDE2"])
+        self.assertEqual(len(second), paper.PULSE_SCORE_LIMIT)
+        self.assertEqual(second[0], "KEEP")
+        self.assertTrue(set(first[1:]).isdisjoint(second[1:]))
+
+    def test_new_discovery_is_scored_before_recently_attempted_names(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        old = ["OLD1", "OLD2", "OLD3", "OLD4"]
+        bot._record_candidate_attempts(old, attempted_at=1_000)
+
+        batch = bot._deep_scan_batch([], ["NEW", *old])
+
+        self.assertEqual(batch[0], "NEW")
+        self.assertEqual(len(batch), paper.PULSE_SCORE_LIMIT)
+
+    def test_confirmation_candidate_stays_prioritized_after_board_rotates(self):
+        bot = isolated_bot(tempfile.mkdtemp())
+        bot.setup_states = {
+            "TRACKED": {"candidate_action": "BUY", "candidate": True},
+        }
+        with mock.patch.object(
+            penny_quotes, "select_market_candidates", return_value=["FRESH1", "FRESH2"]
+        ):
+            batch = bot._pulse_candidates(["YAHOO1"], pool=24)
+
+        self.assertEqual(batch[0], "TRACKED")
+
     def test_state_exposes_absolute_deadline_for_a_smooth_client_countdown(self):
         bot = isolated_bot(tempfile.mkdtemp())
         bot.last_scan_started = 1_000
@@ -607,6 +650,7 @@ class PennyStockLogicTests(unittest.TestCase):
             state = bot.state()
 
         self.assertEqual(state["scan_interval_sec"], 10)
+        self.assertEqual(state["deep_scan_batch_size"], 4)
         self.assertEqual(state["server_time"], 1_006)
         self.assertEqual(state["next_scan_at"], 1_010)
         self.assertEqual(state["next_scan_in_sec"], 4)
