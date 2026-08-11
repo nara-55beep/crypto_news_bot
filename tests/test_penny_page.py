@@ -66,6 +66,7 @@ class TestPennyPage(unittest.TestCase):
         self.assertIn("next_scan_at", PENNY_HTML)
         self.assertIn("performance.now()", PENNY_HTML)
         self.assertIn("setInterval(paintDeepScanClock,250)", PENNY_HTML)
+        self.assertIn("s.deep_scan_batch_size", PENNY_HTML)
 
     def test_page_contains_no_common_utf8_mojibake(self):
         self.assertNotIn("â", PENNY_HTML)
