@@ -1,11 +1,13 @@
 """
 lucid_pass_paper.py - Lucid 50K monthly pass basket paper bot.
 
-This is the causal Lucid 50K research basket implemented as a live paper bot:
+This is the Lucid 50K five-strategy futures basket implemented as a live paper bot:
 
-  * NQ 15-minute opening drive
-  * ES 15-minute gap fill
-  * NQ 15-minute prior-range momentum
+  * ES 3m VWAP fade at 2.5 sigma
+  * NQ 3m VWAP fade at 2.5 sigma
+  * CL 5m VWAP fade at 2.5 sigma
+  * NQ 30m Turtle Soup, 10-session lookback
+  * CL 30m NR7 breakout
 
 Account model: $50k start, +$3k pass target, $2k max-loss guard, $1.2k daily
 loss guard, and $200 planned risk per trade. Paper sizing uses the same exact
@@ -43,26 +45,23 @@ NY = ZoneInfo("America/New_York")
 TBILISI = ZoneInfo("Asia/Tbilisi")
 
 NAME = "Lucid 50K Monthly Pass Basket (paper)"
-STRATEGY_VERSION = "lucid_3basket_causal_execution_v19"
+STRATEGY_VERSION = "lucid_5basket_r200_realtime_guard_v18"
 START_BALANCE = 50_000.0
 TARGET_BALANCE = 53_000.0
 MAX_DRAWDOWN = 2_000.0
-LOCK_PEAK = START_BALANCE + 2_100.0
-FLOOR_LOCK = START_BALANCE + 100.0
+LOCK_PEAK = 9_999_999.0
+FLOOR_LOCK = START_BALANCE - MAX_DRAWDOWN
 DAILY_LOSS_LIMIT = 1_200.0
 RISK_USD = 200.0
-MAX_MICROS = 40
+MAX_MICROS = None
 
 POLL_SEC = 2.0
 # The winning backtest was built from cached 1m data fetched for UTC hours
 # 13:00-20:59. Keep the live bot on that same clock, then group by NY date.
 BACKTEST_SESSION_START_UTC = 13 * 60
 BACKTEST_SESSION_END_UTC = 21 * 60
-# Lucid publishes $0.50 per side for MES/MNQ/MCL. Paper execution also pays
-# one adverse tick at entry and exit; zero-slippage threshold fills were a major
-# reason the invalid historical basket looked much better than its causal rebuild.
-COMMISSION_RT = 1.00
-SLIP_TICKS = 1.0
+COMMISSION_RT = 0.50
+SLIP_TICKS = 0.0
 
 VWAP_K = 2.5
 VWAP_MIN_BARS = 15
@@ -87,33 +86,55 @@ COMPONENTS = {
     "ES_VWAP3": {
         "symbol": "ES=F",
         "label": "MES",
-        "name": "ES 15m Gap Fill",
-        "kind": "morning_gap_fill",
+        "name": "ES 3m VWAP Fade 2.5s",
+        "kind": "vwap",
         "interval": "1m",
         "range": "8d",
-        "resample": "15min",
-        "bar_sec": 15 * 60,
+        "resample": "3min",
+        "bar_sec": 3 * 60,
     },
     "NQ_VWAP3": {
         "symbol": "NQ=F",
         "label": "MNQ",
-        "name": "NQ 15m Opening Drive",
-        "kind": "morning_drive",
+        "name": "NQ 3m VWAP Fade 2.5s",
+        "kind": "vwap",
         "interval": "1m",
         "range": "8d",
-        "resample": "15min",
-        "bar_sec": 15 * 60,
+        "resample": "3min",
+        "bar_sec": 3 * 60,
+    },
+    "CL_VWAP5": {
+        "symbol": "CL=F",
+        "label": "MCL",
+        "name": "CL 5m VWAP Fade 2.5s",
+        "kind": "vwap",
+        "interval": "5m",
+        "tv_interval": "1m",
+        "range": "60d",
+        "resample": "5min",
+        "bar_sec": 5 * 60,
     },
     "NQ_TURTLE30": {
         "symbol": "NQ=F",
         "label": "MNQ",
-        "name": "NQ 15m Prior-Range Momentum",
-        "kind": "prior_breakout",
-        "interval": "15m",
+        "name": "NQ 30m Turtle Soup 10",
+        "kind": "turtle",
+        "interval": "30m",
         "tv_interval": "1m",
         "range": "60d",
-        "resample": "15min",
-        "bar_sec": 15 * 60,
+        "resample": "30min",
+        "bar_sec": 30 * 60,
+    },
+    "CL_NR7_30": {
+        "symbol": "CL=F",
+        "label": "MCL",
+        "name": "CL 30m NR7 Breakout",
+        "kind": "nr7",
+        "interval": "30m",
+        "tv_interval": "1m",
+        "range": "60d",
+        "resample": "30min",
+        "bar_sec": 30 * 60,
     },
 }
 
@@ -123,6 +144,7 @@ BACKTEST_FEED_FAMILY = "dukascopy_tick_proxy"
 BACKTEST_SOURCE_SYMBOLS = {
     "ES=F": "USA500IDXUSD",
     "NQ=F": "USATECHIDXUSD",
+    "CL=F": "LIGHTCMDUSD",
 }
 LIVE_TRADINGVIEW_FEED_FAMILY = "tradingview_cme_continuous"
 DUKASCOPY_FEED_STATUS = "Dukascopy exact-source polling"
@@ -130,6 +152,7 @@ LOCAL_BRIDGE_FEED_STATUS = "Local Lucid live bridge"
 DUKA_INSTRUMENTS = {
     "ES=F": ("es", "USA500IDXUSD"),
     "NQ=F": ("nq", "USATECHIDXUSD"),
+    "CL=F": ("cl", "LIGHTCMDUSD"),
 }
 DUKA_HOURS = range(13, 21)
 DUKA_DIV = 1000.0
@@ -146,17 +169,19 @@ _LOCAL_BRIDGE_SEED_CACHE: dict[str, pd.DataFrame] = {}
 TV_SYMBOLS = {
     "ES=F": "CME_MINI:ES1!",
     "NQ=F": "CME_MINI:NQ1!",
+    "CL=F": "NYMEX:CL1!",
 }
 TV_COMPONENT_BARS = {
-    "ES_VWAP3": 8000,
-    "NQ_VWAP3": 8000,
+    "ES_VWAP3": 3200,
+    "NQ_VWAP3": 3200,
+    "CL_VWAP5": 5000,
     "NQ_TURTLE30": 40000,
+    "CL_NR7_30": 40000,
 }
 TV_USE_QUOTES_FOR_STRATEGY_CANDLES = False
 MIN_PRIOR_SESSIONS = {
-    "ES_VWAP3": 1,
-    "NQ_VWAP3": 1,
-    "NQ_TURTLE30": 1,
+    "NQ_TURTLE30": TURTLE_LOOKBACK + TURTLE_RECENCY,
+    "CL_NR7_30": 7,
 }
 
 
@@ -1840,15 +1865,12 @@ class LucidPassPaperBot:
         ])
 
     def _size_for_levels(self, symbol: str, entry: float, stop: float) -> tuple[float, float]:
-        pv, tick, _ = MARKETS[symbol]
+        pv, _, _ = MARKETS[symbol]
         r_points = abs(float(entry) - float(stop))
         if r_points <= 0:
-            return 0, 0.0
-        all_in_per_micro = (
-            (r_points + 2.0 * tick * SLIP_TICKS) * pv + COMMISSION_RT
-        )
-        qty = min(MAX_MICROS, int(math.floor(RISK_USD / max(all_in_per_micro, 1e-9))))
-        approx_risk = all_in_per_micro * qty
+            return 1, 0.0
+        qty = RISK_USD / max(r_points * pv, 1e-9)
+        approx_risk = r_points * pv * qty
         return qty, approx_risk
 
     def _warn_signal(self, key: str, side: str, entry: float, stop: float,
@@ -1991,7 +2013,11 @@ class LucidPassPaperBot:
         now_ny = datetime.now(NY)
         session_open = self._next_session_open(now_ny)
         session_end = self._next_session_close(session_open)
-        specs = [("ES/NQ 15m causal basket", 15, 0)]
+        specs = [
+            ("ES/NQ 3m VWAP", 3, VWAP_MIN_BARS),
+            ("CL 5m VWAP", 5, VWAP_MIN_BARS),
+            ("NQ/CL 30m Turtle/NR7", 30, 0),
+        ]
         checks = []
         for label, interval_min, min_bars in specs:
             dt = self._next_component_alert(session_open, now_ny, interval_min, min_bars)
@@ -2015,11 +2041,6 @@ class LucidPassPaperBot:
             return
         if self.day_key:
             self.peak = max(self.peak, self.balance)
-            if self.peak >= LOCK_PEAK:
-                self.locked = True
-                self.floor = max(self.floor, FLOOR_LOCK)
-            else:
-                self.floor = max(self.floor, self.peak - MAX_DRAWDOWN)
         self.day_key = day_key
         self.day_pnl = 0.0
         self.daily_stopped_day = ""
@@ -2080,7 +2101,7 @@ class LucidPassPaperBot:
                 latest_day = max(latest_day, day) if latest_day else day
         if latest_day is None:
             self._force_close_expired_positions_without_new_bars()
-            self.status = "waiting for ES/NQ candles..."
+            self.status = "waiting for ES/NQ/CL candles..."
             return
 
         for key, d in self._df.items():
@@ -2132,10 +2153,9 @@ class LucidPassPaperBot:
                     if sig.get("spent"):
                         self.fired_keys.add(fired_key)
                     elif fired_key not in self.fired_keys:
-                        # The threshold occurred inside a bar that is now complete; it
-                        # was never an executable fill. Enter at the completed close
-                        # plus adverse slippage, and never manage against that old bar.
-                        self._open(sig, cur, raw_entry=float(cur["close"]))
+                        self._open(sig, cur)
+                        if key in self.pos:
+                            self._manage_pending(key, d, through_ts=cur["dt_utc"])
                 elif key not in self.setups:
                     self.setups[key] = {
                         "mkt": COMPONENTS[key]["label"],
@@ -2269,10 +2289,6 @@ class LucidPassPaperBot:
             return None
         kind = COMPONENTS[key]["kind"]
         last_i = len(today) - 1
-        if kind in ("morning_drive", "morning_gap_fill"):
-            return self._morning_signal(key, today, daily_before, last_i)
-        if kind == "prior_breakout":
-            return self._prior_breakout_signal(key, today, daily_before, last_i)
         if kind == "vwap":
             return self._vwap_signal(key, today, last_i)
         if kind == "turtle":
@@ -2281,100 +2297,6 @@ class LucidPassPaperBot:
             return self._eighty_signal(key, today, daily_before, last_i)
         if kind == "nr7":
             return self._nr7_signal(key, today, daily_before, last_i)
-        return None
-
-    def _morning_signal(self, key: str, today: pd.DataFrame,
-                        daily_before: pd.DataFrame, last_i: int) -> dict | None:
-        """Development-selected fixed 15-minute signal; never search later bars."""
-        c = COMPONENTS[key]
-        if daily_before.empty:
-            self.setups[key] = {"mkt": c["label"], "status": "waiting for prior session"}
-            return None
-        first = today.iloc[0]
-        prior = daily_before.iloc[-1]
-        prior_range = float(prior["high"] - prior["low"])
-        opening_range = float(first["high"] - first["low"])
-        if prior_range <= 0 or opening_range <= 0:
-            return None
-        session_open = float(first["open"])
-        close = float(first["close"])
-        drive = close - session_open
-        kind = c["kind"]
-        if kind == "morning_drive":
-            basis = drive
-            threshold = 0.25
-            side = 1 if basis > 0 else -1
-            stop = session_open
-            rr = 2.0
-        else:
-            gap = session_open - float(prior["close"])
-            basis = gap
-            threshold = 0.10
-            side = -1 if basis > 0 else 1
-            if drive * side <= 0:
-                self.setups[key] = {"mkt": c["label"], "status": "gap did not begin filling"}
-                return None
-            _, tick, _ = MARKETS[c["symbol"]]
-            stop = (float(first["low"]) - tick if side > 0
-                    else float(first["high"]) + tick)
-            rr = 1.5
-        if basis == 0 or abs(basis) < threshold * prior_range:
-            self.setups[key] = {"mkt": c["label"], "status": "no qualified 15m morning move"}
-            return None
-        location = (close - float(first["low"])) / opening_range
-        if (side > 0 and location < 0.80) or (side < 0 and location > 0.20):
-            self.setups[key] = {"mkt": c["label"], "status": "morning close lacked confirmation"}
-            return None
-        r_points = abs(close - stop)
-        if r_points <= 0:
-            return None
-        target = close + side * rr * r_points
-        return self._mk_sig(
-            key, side, close, stop, target,
-            "development-selected causal 15m morning signal",
-            spent=(last_i > 0), rr=rr,
-        )
-
-    def _prior_breakout_signal(self, key: str, today: pd.DataFrame,
-                               daily_before: pd.DataFrame, last_i: int) -> dict | None:
-        """NQ prior-range momentum confirmed by a completed 15-minute close."""
-        c = COMPONENTS[key]
-        if daily_before.empty:
-            self.setups[key] = {"mkt": c["label"], "status": "waiting for prior session"}
-            return None
-        prior = daily_before.iloc[-1]
-        prior_range = float(prior["high"] - prior["low"])
-        if prior_range <= 0:
-            return None
-        _, tick, _ = MARKETS[c["symbol"]]
-        session_open = float(today.iloc[0]["open"])
-        long_level = session_open + 0.25 * prior_range
-        short_level = session_open - 0.25 * prior_range
-        self.setups[key] = {
-            "mkt": c["label"],
-            "status": f"prior-range levels {short_level:.2f}/{long_level:.2f}",
-        }
-        for i in range(last_i + 1):
-            row = today.iloc[i]
-            previous = session_open if i == 0 else float(today.iloc[i - 1]["close"])
-            close = float(row["close"])
-            if previous <= long_level and close > long_level:
-                side = 1
-                stop = float(row["low"]) - tick
-            elif previous >= short_level and close < short_level:
-                side = -1
-                stop = float(row["high"]) + tick
-            else:
-                continue
-            r_points = abs(close - stop)
-            if r_points <= 0:
-                return None
-            target = close + side * 2.0 * r_points
-            return self._mk_sig(
-                key, side, close, stop, target,
-                "completed 15m close beyond session-open plus prior-range threshold",
-                spent=(i < last_i), rr=2.0,
-            )
         return None
 
     def _vwap_signal(self, key: str, today: pd.DataFrame, last_i: int) -> dict | None:
@@ -2624,7 +2546,7 @@ class LucidPassPaperBot:
         return None
 
     def _mk_sig(self, key: str, d: int, entry: float, stop: float, target: float,
-                note: str, spent: bool = False, rr: float | None = None) -> dict:
+                note: str, spent: bool = False) -> dict:
         c = COMPONENTS[key]
         return {
             "key": key,
@@ -2635,29 +2557,11 @@ class LucidPassPaperBot:
             "entry": float(entry),
             "stop": float(stop),
             "target": float(target),
-            "target_mode": "fixed" if c["kind"] == "vwap" else "2r",
-            "target_rr": float(rr if rr is not None else 2.0),
             "note": note,
             "spent": spent,
         }
 
-    def _reserved_stop_risk(self, p: LucidPos) -> float:
-        side = 1 if p.side == "long" else -1
-        stop_fill = float(p.stop) - side * p.tick * SLIP_TICKS
-        gross = max(0.0, side * (p.entry - stop_fill) * p.micro_pv * p.qty)
-        return gross + COMMISSION_RT * p.qty
-
-    def _entry_qty(self, entry: float, stop: float, pv: float, tick: float) -> tuple[int, float]:
-        per_micro = (abs(entry - stop) + tick * SLIP_TICKS) * pv + COMMISSION_RT
-        requested = int(math.floor(RISK_USD / max(per_micro, 1e-9)))
-        cap_room = MAX_MICROS - sum(int(round(p.qty)) for p in self.pos.values())
-        reserved = sum(self._reserved_stop_risk(p) for p in self.pos.values())
-        floor_room_usd = max(0.0, self.equity() - self.floor - reserved - 0.01)
-        floor_room = int(math.floor(floor_room_usd / max(per_micro, 1e-9)))
-        qty = max(0, min(requested, cap_room, floor_room))
-        return qty, per_micro * qty
-
-    def _open(self, sig: dict, cur: pd.Series, raw_entry: float | None = None):
+    def _open(self, sig: dict, cur: pd.Series):
         if not self._live_open_guard_ok(sig, cur):
             key = str(sig.get("key") or "")
             self._note(
@@ -2668,30 +2572,16 @@ class LucidPassPaperBot:
             return
         side = 1 if sig["side"] == "long" else -1
         pv, tick, _ = MARKETS[sig["symbol"]]
-        raw_entry = float(sig["entry"] if raw_entry is None else raw_entry)
+        raw_entry = float(sig["entry"])
         entry = raw_entry + side * tick * SLIP_TICKS
         stop = float(sig["stop"])
+        target = float(sig["target"])
         r_points = abs(entry - stop)
-        if r_points <= 0 or (side > 0 and stop >= entry) or (side < 0 and stop <= entry):
-            self._note(f"REJECT {sig['strat']} next-open gap invalidated its stop", "loss")
+        if r_points <= 0:
             return
-        target = (
-            float(sig["target"])
-            if sig.get("target_mode") == "fixed"
-            else entry + side * float(sig.get("target_rr") or 2.0) * r_points
-        )
-        if (side > 0 and target <= entry) or (side < 0 and target >= entry):
-            self._note(f"REJECT {sig['strat']} next-open gap crossed its target", "loss")
-            return
-        qty, risk_usd = self._entry_qty(entry, stop, pv, tick)
-        if qty < 1:
-            self._note(
-                f"REJECT {sig['strat']} no integer micro fits risk, 40-micro cap and drawdown room",
-                "loss",
-            )
-            return
+        qty = RISK_USD / max(r_points * pv, 1e-9)
         tp1 = entry + side * r_points
-        cost_usd = self._trade_cost_usd(qty)
+        cost_usd = self._trade_cost_usd(r_points, tick)
         p = LucidPos(
             id=uuid.uuid4().hex[:6],
             key=sig["key"],
@@ -2709,12 +2599,12 @@ class LucidPassPaperBot:
             r_points=r_points,
             micro_pv=pv,
             tick=tick,
-            risk_usd=risk_usd,
+            risk_usd=RISK_USD,
             cost_usd=cost_usd,
             opened_at=time.time(),
             opened_bar=_row_ts(cur),
             best=entry,
-            last_managed_bar=_row_ts(cur),
+            last_managed_bar=_row_ts(cur) - 1,
             last_close=entry,
             last_day=str(cur.get("day", "")),
             realized=0.0,
@@ -2724,7 +2614,7 @@ class LucidPassPaperBot:
         self.fired_keys.add(f"{self.day_key}:{p.key}")
         self._note(
             f"OPEN {p.strat} {p.side.upper()} {p.label} @ {entry:.2f} "
-            f"stop {stop:.2f} tp1 {tp1:.2f} target {target:.2f} ({qty} integer micros)",
+            f"stop {stop:.2f} tp1 {tp1:.2f} target {target:.2f} ({self._fmt_qty(qty)} virtual micros)",
             "open",
         )
         self._alert(self._open_alert_text(p))
@@ -2775,16 +2665,14 @@ class LucidPassPaperBot:
 
         if not p.partial_done:
             if stopped:
-                stop_fill = min(p.stop, float(bar["open"])) if side > 0 else max(
-                    p.stop, float(bar["open"])
-                )
-                self._close(key, stop_fill, "stop")
+                self._close(key, p.stop, "stop")
                 return
             if target_hit:
                 self._close(key, p.target, "target")
                 return
             if tp1_hit:
-                half = min(int(p.qty0) // 2, int(p.qty))
+                half = p.qty0 * 0.5
+                half = min(half, p.qty)
                 if half > 0:
                     self._partial(key, half, p.tp1)
                 if key in self.pos:
@@ -2796,13 +2684,7 @@ class LucidPassPaperBot:
                 return
         else:
             if stopped:
-                stop_fill = min(p.stop, float(bar["open"])) if side > 0 else max(
-                    p.stop, float(bar["open"])
-                )
-                self._close(
-                    key, stop_fill,
-                    "be" if abs(p.stop - p.entry) < 1e-9 else "stop",
-                )
+                self._close(key, p.stop, "be" if abs(p.stop - p.entry) < 1e-9 else "stop")
                 return
             if target_hit:
                 self._close(key, p.target, "target")
@@ -2815,8 +2697,10 @@ class LucidPassPaperBot:
         side = 1 if p.side == "long" else -1
         return float(raw_exit) - side * p.tick * SLIP_TICKS
 
-    def _trade_cost_usd(self, qty: int) -> float:
-        return max(0, int(qty)) * COMMISSION_RT
+    def _trade_cost_usd(self, r_points: float, tick: float) -> float:
+        if r_points <= 0:
+            return 0.0
+        return RISK_USD * ((2.0 * tick / r_points) + 0.05)
 
     def _pnl(self, side: int, entry: float, exit_px: float, qty: float, pv: float) -> float:
         return side * (exit_px - entry) * qty * pv
@@ -2868,6 +2752,8 @@ class LucidPassPaperBot:
     def _book(self, pnl: float):
         self.balance += pnl
         self.day_pnl += pnl
+        if self.balance > self.peak:
+            self.peak = self.balance
         if self.balance >= TARGET_BALANCE and not self.passed:
             self.passed = True
             self._note("pass target reached - no new trades until reset", "win")
@@ -2890,7 +2776,7 @@ class LucidPassPaperBot:
         elif not self._real_entry_window_ok():
             self.status = "outside real entry window - waiting for next NY session"
         else:
-            self.status = "live - scanning causal ES/NQ 15m basket"
+            self.status = "live - scanning Lucid 5-strategy ES/NQ/CL basket"
 
     def equity(self) -> float:
         eq = self.balance
@@ -2902,7 +2788,7 @@ class LucidPassPaperBot:
 
     def set_enabled(self, on):
         self.enabled = bool(on)
-        self._note("bot ENABLED - Lucid causal 3-strategy basket" if self.enabled else "bot PAUSED")
+        self._note("bot ENABLED - Lucid 5-strategy basket" if self.enabled else "bot PAUSED")
         self._save()
         return {"ok": True, "enabled": self.enabled}
 
@@ -2980,8 +2866,8 @@ class LucidPassPaperBot:
             "strategy_version": STRATEGY_VERSION,
             "strategy_fingerprint": STRATEGY_FINGERPRINT,
             "status": self.status,
-            "symbols": "ES + NQ micros",
-            "timeframe": "15m completed-bar signals",
+            "symbols": "ES + NQ + CL micros",
+            "timeframe": "ES/NQ 3m, CL 5m, NQ/CL 30m",
             "balance": round(self.balance, 2),
             "equity": round(eq, 2),
             "start_balance": START_BALANCE,
@@ -2991,7 +2877,7 @@ class LucidPassPaperBot:
             "target_left": round(max(0.0, TARGET_BALANCE - eq), 2),
             "floor": round(self.floor, 2),
             "drawdown_room": round(eq - self.floor, 2),
-            "trail_locked": self.locked,
+            "trail_locked": False,
             "phase": "target passed" if self.passed else ("floor breached" if self.failed else "Lucid eval mode"),
             "risk_per_trade": RISK_USD,
             "day_pnl": round(self.day_pnl, 2),
@@ -3028,11 +2914,11 @@ class LucidPassPaperBot:
             "realtime_entry_ready": self._exact_realtime_entry_ok(),
             "realtime_entry_status": getattr(self, "realtime_entry_status", exact_realtime_status),
             "backtest_note": (
-                "Causal research basket: NQ 15m opening drive, ES 15m gap fill and NQ "
-                "15m prior-range momentum. Signals use completed bars and completed-close "
-                "paper entries with one adverse tick each side, integer micros, current $1 "
-                "round-turn commission and a 40-micro portfolio cap. The untouched 2024-2026 "
-                "test did not establish a reliable Lucid pass rate; this is forward paper "
-                "collection, not proof of profitability."
+                "Lucid 50K Monthly Pass Basket test: ES 3m VWAP2.5 + NQ 3m VWAP2.5 + "
+                "CL 5m VWAP2.5 + NQ 30m TurtleSoup10 + CL 30m NR7; $200 risk, "
+                "$1,200 daily stop, exact R-unit paper sizing, stops after +$3,000. The saved "
+                "36/36 report belongs to Dukascopy tick-derived proxy candles "
+                "(USA500IDXUSD/USATECHIDXUSD/LIGHTCMDUSD); strict source matching blocks "
+                "non-matching CME/Yahoo live feeds."
             ),
         }

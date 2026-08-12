@@ -4768,7 +4768,7 @@ PAPER_HTML = r"""<!doctype html>
   }
   async function toggleLucidCont(){ let s; try{s=await(await fetch('/api/lucidcont/state')).json();}catch(e){return;} await fetch('/api/lucidcont/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadLucidCont(); }
   async function toggleLucidContNotify(){ let s; try{s=await(await fetch('/api/lucidcont/state')).json();}catch(e){return;} await fetch('/api/lucidcont/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.telegram_enabled})}); loadLucidCont(); }
-  async function resetLucidCont(){ if(!confirm('Reset the Lucid continuous causal paper account to $50,000? Previous-version results are not carried forward.'))return; await fetch('/api/lucidcont/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadLucidCont(); }
+  async function resetLucidCont(){ if(!confirm('Reset the Lucid continuous paper account to $50,000? The invalidated strategy will remain paused.'))return; await fetch('/api/lucidcont/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadLucidCont(); }
 
   async function loadLucidPass(){
     let s; try{ s=await(await fetch('/api/lucidpass/state')).json(); }catch(e){ return; }
