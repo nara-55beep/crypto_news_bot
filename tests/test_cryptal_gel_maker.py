@@ -212,7 +212,9 @@ class TestCryptalGelMaker(unittest.TestCase):
 
     def test_dashboard_runs_both_ledgers_and_exposes_independent_controls(self):
         dashboard = Path("dashboard.py").read_text(encoding="utf-8")
-        self.assertIn("CRYPTALGELMAKER = cryptal_maker_paper.CryptalGelMakerPaperBot()", dashboard)
+        self.assertIn("CRYPTAL_DATA = cryptal_maker_paper.CryptalPublicDataHub(", dashboard)
+        self.assertIn("CRYPTALGELMAKER = cryptal_maker_paper.CryptalGelMakerPaperBot(", dashboard)
+        self.assertIn("data_hub=CRYPTAL_DATA", dashboard)
         self.assertIn('id="cryptalgelmaker-panel"', dashboard)
         self.assertIn('web.get("/api/cryptalgelmaker/state"', dashboard)
         self.assertIn('web.post("/api/cryptalgelmaker/toggle"', dashboard)
@@ -225,11 +227,14 @@ class TestCryptalGelMaker(unittest.TestCase):
         report = Path(audit["report"]).read_text(encoding="utf-8")
 
         self.assertEqual(audit["registered_vasps_in_scope"], 42)
-        self.assertEqual(audit["included"], ["Cryptal BTC-TOUSD", "Cryptal BTC-TOGEL"])
+        self.assertEqual(
+            audit["included"],
+            ["Cryptal public market catalog (81 observed; 60 hedgeable when checked)"],
+        )
         self.assertIn("WhiteBIT Georgia", audit["excluded"])
         self.assertIn("Bybit Georgia", audit["excluded"])
-        self.assertIn("zero GEL spot pairs", report)
-        self.assertIn("no public BTC/GEL order book plus timestamped trade tape", report)
+        self.assertIn("no Georgia-isolated order book or GEL spot pair", report)
+        self.assertIn("no public central limit order book plus timestamped trade tape", report)
 
 
 if __name__ == "__main__":

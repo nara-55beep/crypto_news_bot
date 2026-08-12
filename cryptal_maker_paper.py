@@ -18,10 +18,12 @@ not proof of profit.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import math
 import os
 import time
+from decimal import Decimal
 from typing import Any
 
 import aiohttp
@@ -67,18 +69,157 @@ ADVERSE_SELECTION_RESERVE_BPS = 40.0
 REPRICE_BPS = 8.0
 MIN_PAPER_CYCLES = 30
 
+
+class CryptalRateLimitError(RuntimeError):
+    """Public Cryptal gateway rejected the request and supplied no JSON body."""
+
+    def __init__(self, status: int, endpoint: str, retry_after: float):
+        self.status = int(status)
+        self.endpoint = endpoint
+        self.retry_after = max(0.0, float(retry_after))
+        super().__init__(
+            f"Cryptal HTTP {self.status} for {self.endpoint}; "
+            f"shared collector backing off {self.retry_after:.0f}s"
+        )
+
+
+async def _public_json_request(
+    session: aiohttp.ClientSession,
+    url: str,
+    params: dict | None = None,
+) -> tuple[int, Any, str]:
+    """Perform the module's sole public, read-only HTTP operation."""
+    async with session.get(url, params=params) as response:
+        status = int(response.status)
+        if status == 200:
+            return status, await response.json(), ""
+        return status, None, (await response.text())[:120]
+
+
+class CryptalPublicDataHub:
+    """Rate-safe shared cache for every Cryptal public-data consumer.
+
+    Cryptal advertises a 20-token burst and a 20-token/second replenish rate.
+    The application deliberately stays below that ceiling, shares duplicate
+    conversion books, and applies one process-wide backoff after a 403/429.
+    """
+
+    def __init__(self, *, min_interval_sec: float = 0.0, cache_ttl_sec: float = 0.0):
+        self.min_interval_sec = max(0.0, float(min_interval_sec))
+        self.cache_ttl_sec = max(0.0, float(cache_ttl_sec))
+        self._lock: asyncio.Lock | None = None
+        self._last_request_at = 0.0
+        self._cache: dict[tuple, tuple[float, Any]] = {}
+        self.blocked_until = 0.0
+        self.consecutive_blocks = 0
+        self.request_count = 0
+        self.cache_hits = 0
+        self.last_status = 0
+        self.last_error = ""
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    @staticmethod
+    def _key(url: str, params: dict | None) -> tuple:
+        return url, tuple(sorted((params or {}).items()))
+
+    @staticmethod
+    def _endpoint(url: str) -> str:
+        marker = "/api/v1/public/"
+        return url.split(marker, 1)[-1] if marker in url else url
+
+    def retry_delay(self) -> float:
+        return max(0.0, self.blocked_until - time.monotonic())
+
+    def state(self) -> dict:
+        return {
+            "request_count": self.request_count,
+            "cache_hits": self.cache_hits,
+            "last_status": self.last_status,
+            "last_error": self.last_error,
+            "backoff_remaining_sec": round(self.retry_delay(), 1),
+            "minimum_request_spacing_sec": self.min_interval_sec,
+            "shared_cache_ttl_sec": self.cache_ttl_sec,
+        }
+
+    async def get(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        params: dict | None = None,
+        *,
+        cache_ttl_sec: float | None = None,
+    ) -> Any:
+        ttl = self.cache_ttl_sec if cache_ttl_sec is None else max(0.0, cache_ttl_sec)
+        key = self._key(url, params)
+        now = time.monotonic()
+        cached = self._cache.get(key)
+        if ttl > 0 and cached and now - cached[0] <= ttl:
+            self.cache_hits += 1
+            return copy.deepcopy(cached[1])
+
+        async with self._get_lock():
+            now = time.monotonic()
+            cached = self._cache.get(key)
+            if ttl > 0 and cached and now - cached[0] <= ttl:
+                self.cache_hits += 1
+                return copy.deepcopy(cached[1])
+
+            blocked = self.retry_delay()
+            if blocked > 0:
+                raise CryptalRateLimitError(
+                    self.last_status or 429, self._endpoint(url), blocked
+                )
+            spacing = self.min_interval_sec - (now - self._last_request_at)
+            if spacing > 0:
+                await asyncio.sleep(spacing)
+
+            status, payload, body = await _public_json_request(
+                session, url, params
+            )
+            self._last_request_at = time.monotonic()
+            self.request_count += 1
+            self.last_status = status
+            if status in (403, 429):
+                self.consecutive_blocks += 1
+                delay = min(120.0, 5.0 * (2 ** (self.consecutive_blocks - 1)))
+                self.blocked_until = time.monotonic() + delay
+                self.last_error = f"HTTP {status} at {self._endpoint(url)}"
+                raise CryptalRateLimitError(status, self._endpoint(url), delay)
+            if status != 200:
+                self.last_error = f"HTTP {status} at {self._endpoint(url)}"
+                raise RuntimeError(self.last_error)
+
+            self.consecutive_blocks = 0
+            self.blocked_until = 0.0
+            self.last_error = ""
+            self._cache[key] = (time.monotonic(), copy.deepcopy(payload))
+            return payload
+
 GEORGIAN_MARKET_AUDIT = {
     "as_of": "2026-08-12",
     "nbg_register_as_of": "2026-08-06",
     "registered_vasps_in_scope": 42,
-    "qualification": "public BTC/GEL CLOB + timestamped trade tape + fees",
-    "included": ["Cryptal BTC-TOUSD", "Cryptal BTC-TOGEL"],
+    "qualification": (
+        "Georgian-venue public CLOB + timestamped trade tape + fees + "
+        "executable currency conversion + live delta hedge"
+    ),
+    "included": [
+        "Cryptal public market catalog (81 observed; 60 hedgeable when checked)"
+    ],
     "excluded": {
-        "WhiteBIT Georgia": "live public catalog contained 0 GEL spot pairs",
-        "Bybit Georgia": "live public catalog contained 0 GEL spot pairs",
-        "Mycoins": "no public CLOB plus timestamped trade tape found",
-        "Coinmania": "wallet/P2P surface; no public CLOB plus trade tape found",
-        "other_registered_vasps": "no verifiable public BTC/GEL CLOB and tape found",
+        "WhiteBIT Georgia": (
+            "global WhiteBIT books; no Georgia-isolated order book or GEL spot pair"
+        ),
+        "Bybit Georgia": (
+            "global Bybit books; no Georgia-isolated order book or GEL spot pair"
+        ),
+        "Mycoins": "no public central limit order book plus timestamped trade tape found",
+        "Coinmania": "wallet/P2P surface; no public central limit order book plus trade tape found",
+        "other_registered_vasps": "no verifiable public local CLOB and trade tape found",
     },
     "report": "docs/georgian_btc_gel_market_audit.md",
 }
@@ -119,14 +260,31 @@ class CryptalMakerPaperBot:
         pair: str | None = None,
         stable_pair: str | None = None,
         display_pair: str | None = None,
+        base_asset: str = "BTC",
         quote_currency: str = "USD",
+        hedge_symbol: str = "BTCUSDT",
+        price_tick: float = PRICE_TICK,
+        quantity_step: float = 0.000001,
+        maker_fee_rate: float = CRYPTAL_MAKER_FEE_RATE,
         minimum_cost_quote: float = 5.0,
+        data_hub: CryptalPublicDataHub | None = None,
     ):
         self.pair = pair or CRYPTAL_PAIR
         self.stable_pair = stable_pair or STABLE_PAIR
         self.display_pair = display_pair or "BTC-TOUSD"
+        self.base_asset = str(base_asset or "BTC").upper()
         self.quote_currency = str(quote_currency or "USD").upper()
+        self.hedge_symbol = str(hedge_symbol or f"{self.base_asset}USDT").upper()
+        self.price_tick = max(1e-12, _number(price_tick) or PRICE_TICK)
+        self.price_decimals = max(
+            0, min(12, -Decimal(str(self.price_tick)).as_tuple().exponent)
+        )
+        self.quantity_step = max(1e-12, _number(quantity_step) or 0.000001)
+        self.maker_fee_rate = max(0.0, _number(maker_fee_rate))
         self.minimum_cost_quote = max(0.0, _number(minimum_cost_quote))
+        # Tests and standalone bots get an isolated no-cache hub. The dashboard
+        # explicitly injects one shared throttled hub into every live consumer.
+        self.data_hub = data_hub or CryptalPublicDataHub()
         self.state_path = state_path or STATE_PATH
         self.instance_name = (
             NAME if self.pair == CRYPTAL_PAIR
@@ -190,7 +348,12 @@ class CryptalMakerPaperBot:
                     "market_pair": self.pair,
                     "stable_pair": self.stable_pair,
                     "display_pair": self.display_pair,
+                    "base_asset": self.base_asset,
                     "quote_currency": self.quote_currency,
+                    "hedge_symbol": self.hedge_symbol,
+                    "price_tick": self.price_tick,
+                    "quantity_step": self.quantity_step,
+                    "maker_fee_rate": self.maker_fee_rate,
                     "enabled": self.enabled,
                     "cryptal_cash_usd": self.cryptal_cash_usd,
                     "cryptal_cash_quote": self.cryptal_cash_usd,
@@ -287,28 +450,29 @@ class CryptalMakerPaperBot:
     @staticmethod
     async def _json(session: aiohttp.ClientSession, url: str,
                     params: dict | None = None) -> Any:
-        async with session.get(url, params=params) as response:
-            if response.status != 200:
-                body = (await response.text())[:120]
-                raise RuntimeError(f"HTTP {response.status}: {body}")
-            return await response.json()
+        status, payload, body = await _public_json_request(session, url, params)
+        if status != 200:
+            raise RuntimeError(f"HTTP {status}: {body}")
+        return payload
 
     async def _fetch_snapshot(self, session: aiohttp.ClientSession) -> dict:
         btc_url = f"{CRYPTAL_BASE}/api/v1/public/orderbook/{self.pair}"
         stable_url = f"{CRYPTAL_BASE}/api/v1/public/orderbook/{self.stable_pair}"
         trades_url = f"{CRYPTAL_BASE}/api/v1/public/trades/{self.pair}"
         requests = [
-            self._json(session, btc_url, {"limit": 25}),
-            self._json(session, stable_url, {"limit": 25}),
-            self._json(session, trades_url, {"limit": 100}),
-            self._json(session, BINANCE_BOOK_URL, {"symbol": "BTCUSDT"}),
+            self.data_hub.get(session, btc_url, {"limit": 25}),
+            self.data_hub.get(session, stable_url, {"limit": 25}),
+            self.data_hub.get(session, trades_url, {"limit": 100}),
+            self._json(session, BINANCE_BOOK_URL, {"symbol": self.hedge_symbol}),
         ]
         needs_settlement = self.stable_pair != SETTLEMENT_PAIR
         if needs_settlement:
             settlement_url = (
                 f"{CRYPTAL_BASE}/api/v1/public/orderbook/{SETTLEMENT_PAIR}"
             )
-            requests.append(self._json(session, settlement_url, {"limit": 25}))
+            requests.append(self.data_hub.get(
+                session, settlement_url, {"limit": 25}
+            ))
         results = await asyncio.gather(*requests)
         btc_book, stable_book, trades, binance = results[:4]
         settlement_book = results[4] if needs_settlement else stable_book
@@ -412,9 +576,11 @@ class CryptalMakerPaperBot:
         return ""
 
     @staticmethod
-    def _required_half_spread_bps() -> float:
+    def _required_half_spread_bps(
+        maker_fee_rate: float = CRYPTAL_MAKER_FEE_RATE,
+    ) -> float:
         round_trip_cost = (
-            2 * CRYPTAL_MAKER_FEE_RATE * 1e4
+            2 * maker_fee_rate * 1e4
             + 2 * BINANCE_TAKER_FEE_RATE * 1e4
             + 2 * HEDGE_SLIPPAGE_BPS
             + FUNDING_AND_BASIS_RESERVE_BPS
@@ -425,19 +591,26 @@ class CryptalMakerPaperBot:
     def _desired_bid(self, snapshot: dict) -> tuple[float, float, float] | None:
         market = self._snapshot_market(snapshot)
         fair = market["fair_quote"]
-        max_safe = fair * (1.0 - self._required_half_spread_bps() / 1e4)
-        price = _round_down(min(market["cryptal_bid"] + PRICE_TICK, max_safe))
+        max_safe = fair * (
+            1.0 - self._required_half_spread_bps(self.maker_fee_rate) / 1e4
+        )
+        price = _round_down(
+            min(market["cryptal_bid"] + self.price_tick, max_safe),
+            self.price_tick,
+        )
         if price <= 0 or price >= market["cryptal_ask"]:
             return None
-        affordable = self.cryptal_cash_usd / (price * (1.0 + CRYPTAL_MAKER_FEE_RATE))
-        hedge_capacity = self.binance_balance_usdt / max(market["binance_mid"], 1.0)
+        affordable = self.cryptal_cash_usd / (price * (1.0 + self.maker_fee_rate))
+        hedge_capacity = self.binance_balance_usdt / max(
+            market["binance_mid"], 1e-12
+        )
         quote_limit = ORDER_NOTIONAL_USD
         if self.quote_currency != "USD":
             # Convert the $40 cap into native quote currency at executable sides:
             # TOGEL -> USDT at the local ask, then USDT -> TOUSD at the settlement bid.
             quote_limit *= market["stable_ask"] / max(market["settlement_bid"], 1e-9)
         qty = min(quote_limit / price, affordable, hedge_capacity)
-        qty = math.floor(qty * 1_000_000) / 1_000_000
+        qty = math.floor((qty + 1e-15) / self.quantity_step) * self.quantity_step
         if qty <= 0 or qty * price < self.minimum_cost_quote:
             return None
         expected_gross_bps = (fair - price) / fair * 1e4
@@ -449,8 +622,8 @@ class CryptalMakerPaperBot:
         if qty <= 0:
             return 0.0
         spot = qty * (
-            ask_price * (1.0 - CRYPTAL_MAKER_FEE_RATE)
-            - self.spot_entry * (1.0 + CRYPTAL_MAKER_FEE_RATE)
+            ask_price * (1.0 - self.maker_fee_rate)
+            - self.spot_entry * (1.0 + self.maker_fee_rate)
         )
         hedge_usdt = qty * (
             self.short_entry_usdt - hedge_close_usdt
@@ -478,9 +651,12 @@ class CryptalMakerPaperBot:
             market["stable_bid"] if hedge_usdt >= 0 else market["stable_ask"])
         required = (
             target - hedge_usd
-            + qty * self.spot_entry * (1.0 + CRYPTAL_MAKER_FEE_RATE)
-        ) / (qty * (1.0 - CRYPTAL_MAKER_FEE_RATE))
-        price = _round_up(max(market["cryptal_ask"] - PRICE_TICK, required))
+            + qty * self.spot_entry * (1.0 + self.maker_fee_rate)
+        ) / (qty * (1.0 - self.maker_fee_rate))
+        price = _round_up(
+            max(market["cryptal_ask"] - self.price_tick, required),
+            self.price_tick,
+        )
         if price <= market["cryptal_bid"]:
             return None
         projected = self._projected_cycle_pnl(
@@ -531,10 +707,11 @@ class CryptalMakerPaperBot:
         queue = self._queue_ahead(snapshot, side, price)
         self.quote = {
             "side": side,
-            "price": round(price, 2),
+            "price": round(price, self.price_decimals),
             "qty": qty,
             "remaining_qty": qty,
             "queue_ahead_btc": queue,
+            "queue_ahead_base": queue,
             "placed_at": time.time(),
             "activation_exchange_at": watermark,
             "edge_metric": metric,
@@ -542,8 +719,8 @@ class CryptalMakerPaperBot:
         }
         self.quote_count += 1
         self._note(
-            f"PAPER {side} {qty:.6f} BTC @ {price:,.2f}; "
-            f"visible queue ahead {queue:.6f} BTC", "quote")
+            f"PAPER {side} {qty:.8f} {self.base_asset} @ {price:,.8f}; "
+            f"visible queue ahead {queue:.8f} {self.base_asset}", "quote")
         return True
 
     def _remember_trade(self, trade_id: str) -> None:
@@ -601,7 +778,7 @@ class CryptalMakerPaperBot:
     def _fill_bid(self, qty: float, price: float, snapshot: dict) -> None:
         market = self._snapshot_market(snapshot)
         hedge_price = market["binance_bid"] * (1.0 - HEDGE_SLIPPAGE_BPS / 1e4)
-        spot_cost = qty * price * (1.0 + CRYPTAL_MAKER_FEE_RATE)
+        spot_cost = qty * price * (1.0 + self.maker_fee_rate)
         hedge_fee = qty * hedge_price * BINANCE_TAKER_FEE_RATE
         if spot_cost > self.cryptal_cash_usd + 1e-9 or hedge_fee > self.binance_balance_usdt:
             self.enabled = False
@@ -624,7 +801,7 @@ class CryptalMakerPaperBot:
             (self.short_entry_usdt * old_short + hedge_price * qty) / self.short_qty)
         self.fill_count += 1
         self._note(
-            f"PAPER FILL bought {qty:.6f} BTC on Cryptal @ {price:,.2f}; "
+            f"PAPER FILL bought {qty:.8f} {self.base_asset} on Cryptal @ {price:,.8f}; "
             f"short hedge @ {hedge_price:,.2f}", "open")
 
     def _fill_ask(self, qty: float, price: float, snapshot: dict,
@@ -634,7 +811,7 @@ class CryptalMakerPaperBot:
         if qty <= 0:
             return
         close_price = market["binance_ask"] * (1.0 + HEDGE_SLIPPAGE_BPS / 1e4)
-        spot_proceeds = qty * price * (1.0 - CRYPTAL_MAKER_FEE_RATE)
+        spot_proceeds = qty * price * (1.0 - self.maker_fee_rate)
         hedge_pnl = qty * (self.short_entry_usdt - close_price)
         close_fee = qty * close_price * BINANCE_TAKER_FEE_RATE
         self.cryptal_cash_usd += spot_proceeds
@@ -651,9 +828,9 @@ class CryptalMakerPaperBot:
             record = {
                 "opened_at": self._cycle_opened_at or time.time(),
                 "closed_at": time.time(),
-                "buy": round(self._cycle_buy_price, 2),
-                "sell": round(price, 2),
-                "hedge_close": round(close_price, 2),
+                "buy": round(self._cycle_buy_price, self.price_decimals),
+                "sell": round(price, self.price_decimals),
+                "hedge_close": round(close_price, 8),
                 "pnl": round(pnl, 6),
                 "return_bps": round(pnl / max(ORDER_NOTIONAL_USD, 1.0) * 1e4, 2),
                 "reason": reason,
@@ -664,7 +841,7 @@ class CryptalMakerPaperBot:
             self._cycle_opened_at = 0.0
             self._cycle_buy_price = 0.0
             self._note(
-                f"PAPER CYCLE {reason} @ {price:,.2f}; "
+                f"PAPER CYCLE {reason} @ {price:,.8f}; "
                 f"net P&L {pnl:+.4f} USD-equivalent",
                 "win" if pnl > 0 else "loss")
 
@@ -694,6 +871,7 @@ class CryptalMakerPaperBot:
             queue -= consumed
             traded -= consumed
             self.quote["queue_ahead_btc"] = queue
+            self.quote["queue_ahead_base"] = queue
             if traded <= 0:
                 continue
             remaining = _number(self.quote.get("remaining_qty"))
@@ -719,7 +897,10 @@ class CryptalMakerPaperBot:
                 return
             price, qty, projected = desired
             self._place_or_reprice("ASK", price, qty, projected, snapshot)
-            self.status = "spot BTC held and delta-hedged; passive Cryptal ask working"
+            self.status = (
+                f"spot {self.base_asset} held and delta-hedged; "
+                "passive Cryptal ask working"
+            )
             return
         if not self.enabled:
             self.quote = None
@@ -810,7 +991,9 @@ class CryptalMakerPaperBot:
                     self.data_error = f"{type(exc).__name__}: {str(exc)[:140]}"
                     self.status = "public market-data error; quote cancelled"
                     self.quote = None
-                await asyncio.sleep(max(0.1, POLL_SEC - (time.time() - started)))
+                delay = max(0.1, POLL_SEC - (time.time() - started))
+                delay = max(delay, self.data_hub.retry_delay())
+                await asyncio.sleep(delay)
 
     def set_enabled(self, enabled: bool) -> dict:
         self.enabled = bool(enabled)
@@ -882,11 +1065,14 @@ class CryptalMakerPaperBot:
             "live_trading_enabled": self.live_trading_enabled,
             "status": self.status,
             "data_error": self.data_error,
+            "public_data_health": self.data_hub.state(),
             "persistence_error": self.persistence_error,
             "pair": self.pair,
             "display_pair": self.display_pair,
+            "base_asset": self.base_asset,
             "quote_currency": self.quote_currency,
-            "hedge": "Binance BTCUSDT perpetual",
+            "hedge_symbol": self.hedge_symbol,
+            "hedge": f"Binance {self.hedge_symbol} perpetual",
             "poll_sec": POLL_SEC,
             "max_hedged_hold_sec": MAX_HEDGED_HOLD_SEC,
             "last_good_at": self.last_good_at,
@@ -898,10 +1084,12 @@ class CryptalMakerPaperBot:
             "quote": quote,
             "inventory": {
                 "spot_qty": round(self.spot_qty, 8),
-                "spot_entry": round(self.spot_entry, 2),
+                "spot_entry": round(self.spot_entry, self.price_decimals),
                 "short_qty": round(self.short_qty, 8),
-                "short_entry": round(self.short_entry_usdt, 2),
+                "short_entry": round(self.short_entry_usdt, 8),
                 "delta_btc": round(self.spot_qty - self.short_qty, 8),
+                "base_asset": self.base_asset,
+                "delta_base": round(self.spot_qty - self.short_qty, 8),
             },
             "cryptal_cash_usd": round(self.cryptal_cash_usd, 4),
             "cryptal_cash_quote": round(self.cryptal_cash_usd, 4),
@@ -925,7 +1113,7 @@ class CryptalMakerPaperBot:
             "trades": len(self.history),
             "wins": wins,
             "fees": {
-                "cryptal_maker_bps_each_fill": CRYPTAL_MAKER_FEE_RATE * 1e4,
+                "cryptal_maker_bps_each_fill": self.maker_fee_rate * 1e4,
                 "binance_taker_bps_each_hedge": BINANCE_TAKER_FEE_RATE * 1e4,
                 "hedge_slippage_bps_each": HEDGE_SLIPPAGE_BPS,
                 "funding_basis_reserve_bps": FUNDING_AND_BASIS_RESERVE_BPS,
@@ -944,7 +1132,12 @@ class CryptalMakerPaperBot:
 class CryptalGelMakerPaperBot(CryptalMakerPaperBot):
     """Independent $100 paper ledger for Cryptal's live BTC-TOGEL order book."""
 
-    def __init__(self, state_path: str | None = None):
+    def __init__(
+        self,
+        state_path: str | None = None,
+        *,
+        data_hub: CryptalPublicDataHub | None = None,
+    ):
         super().__init__(
             state_path=state_path or GEL_STATE_PATH,
             pair=CRYPTAL_GEL_PAIR,
@@ -952,4 +1145,5 @@ class CryptalGelMakerPaperBot(CryptalMakerPaperBot):
             display_pair="BTC-TOGEL",
             quote_currency="GEL",
             minimum_cost_quote=10.0,
+            data_hub=data_hub,
         )
