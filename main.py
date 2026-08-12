@@ -78,6 +78,7 @@ import onchain_radar_paper
 import polymarket_copy_paper
 import apex_vwap_paper
 import lucid_pass_paper
+import lucid_pass_audited_paper
 import lucid_continuous_paper
 import nq_mr_15m_paper
 import nr7_paper
@@ -125,7 +126,9 @@ async def main():
     tsbot = trend_sweep_paper.TrendSweepPaperBot(market)  # Trend-Sweep VWAP PAPER bot (Binance strat)
     apexvwapbot = apex_vwap_paper.ApexVWAPPaperBot()  # ES 5m VWAP + Opening Range Apex-style PAPER bot
     lucidcontbot = lucid_continuous_paper.LucidContinuousPaperBot()  # Lucid basket PAPER bot, keeps trading after pass
-    lucidpassbot = lucid_pass_paper.LucidPassPaperBot()  # Lucid 50K monthly pass basket PAPER bot
+    # Only the pass-stop panel uses audited execution. Continuous deliberately
+    # remains on the original class and its independent P&L/state population.
+    lucidpassbot = lucid_pass_audited_paper.AuditedLucidPassPaperBot()
     lucid_alert_token = getattr(config, "TELEGRAM_ALERT_BOT_TOKEN", "")
     lucid_alert_chat_id = getattr(config, "TELEGRAM_ALERT_CHAT_ID", "")
     lucidcontbot.set_telegram_bot(lucid_alert_token, lucid_alert_chat_id)
