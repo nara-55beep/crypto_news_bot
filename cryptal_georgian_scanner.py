@@ -21,7 +21,7 @@ import cryptal_maker_paper as maker
 
 
 NAME = "Cryptal Georgian All-Market Maker + Binance Hedge"
-SCAN_INTERVAL_SEC = 60
+SCAN_INTERVAL_SEC = 5 * 60
 MAX_TRADE_AGE_SEC = 15 * 60
 MAX_DISPLAY_MARKETS = 60
 SWITCH_IMPROVEMENT_BPS = 25.0
@@ -108,7 +108,7 @@ class CryptalGeorgianMarketScanner:
 
     async def scan_once(self, session: aiohttp.ClientSession) -> None:
         # Manual refresh and the scheduled loop can meet on the same event-loop
-        # turn. Coalesce them rather than doubling a 120-request universe scan.
+        # turn. Coalesce them rather than doubling a universe scan.
         if self.scan_in_progress:
             return
         scan_started_at = time.time()
@@ -119,6 +119,14 @@ class CryptalGeorgianMarketScanner:
             pairs = await self.data_hub.get(
                 session, pairs_url, cache_ttl_sec=60 * 60
             )
+            tickers_url = f"{maker.CRYPTAL_BASE}/api/v1/public/ticker"
+            ticker_rows = await self.data_hub.get(
+                session, tickers_url, cache_ttl_sec=30.0
+            )
+            tickers = {
+                str(row.get("pair") or ""): row
+                for row in ticker_rows if isinstance(row, dict)
+            } if isinstance(ticker_rows, list) else {}
             exchange_info, hedge_books = await asyncio.gather(
                 self._json(session, "https://fapi.binance.com/fapi/v1/exchangeInfo"),
                 self._json(session, "https://fapi.binance.com/fapi/v1/ticker/bookTicker"),
@@ -162,17 +170,10 @@ class CryptalGeorgianMarketScanner:
             for pair_meta, hedge_meta in eligible:
                 pair = str(pair_meta["pair"])
                 try:
-                    book_url = f"{maker.CRYPTAL_BASE}/api/v1/public/orderbook/{pair}"
-                    trades_url = f"{maker.CRYPTAL_BASE}/api/v1/public/trades/{pair}"
-                    book = await self.data_hub.get(
-                        session, book_url, {"limit": 25}, cache_ttl_sec=1.0
-                    )
-                    trades = await self.data_hub.get(
-                        session, trades_url, {"limit": 100}, cache_ttl_sec=1.0
-                    )
-                    bids = _levels(book.get("bids"), reverse=True)
-                    asks = _levels(book.get("asks"))
-                    if not bids or not asks or bids[0][0] >= asks[0][0]:
+                    ticker = tickers.get(pair) or {}
+                    bid = _n(ticker.get("bidPrice"))
+                    ask = _n(ticker.get("askPrice"))
+                    if bid <= 0 or ask <= bid:
                         raise ValueError("empty, one-sided, locked or crossed book")
 
                     base = str(pair_meta["baseCurrency"]).upper()
@@ -185,7 +186,6 @@ class CryptalGeorgianMarketScanner:
                     if quote_per_usdt <= 0:
                         raise ValueError("missing quote conversion")
                     fair = hedge_mid * quote_per_usdt
-                    bid, ask = bids[0][0], asks[0][0]
                     mid = (bid + ask) / 2.0
                     spread_bps = (ask - bid) / mid * 1e4
                     bid_discount = (fair - bid) / fair * 1e4
@@ -202,19 +202,6 @@ class CryptalGeorgianMarketScanner:
                         projected_net - 2 * maker.ADVERSE_SELECTION_RESERVE_BPS
                     )
 
-                    stamps = [
-                        _trade_time(row.get("timestamp"))
-                        for row in trades or []
-                        if isinstance(row, dict) and _trade_time(row.get("timestamp")) > 0
-                    ]
-                    newest = max(stamps) if stamps else 0.0
-                    age = max(0.0, time.time() - newest) if newest else math.inf
-                    unique_trades = len({
-                        str(row.get("id")) for row in trades or []
-                        if isinstance(row, dict) and row.get("id") is not None
-                    })
-                    tape_span = max(stamps) - min(stamps) if len(stamps) > 1 else 0.0
-
                     cryptal_step = 10 ** -int(pair_meta.get("baseScale") or 0)
                     price_tick = 10 ** -int(pair_meta.get("quoteScale") or 0)
                     lot_filter = _filter(hedge_meta, "LOT_SIZE")
@@ -227,14 +214,16 @@ class CryptalGeorgianMarketScanner:
                     notional_filter = _filter(hedge_meta, "MIN_NOTIONAL")
                     hedge_min_notional = _n(notional_filter.get("notional"))
                     min_cost_quote = _n(pair_meta.get("minCost"))
-                    if quote == "BTC":
-                        min_cost_usd = min_cost_quote / quote_per_usdt * settlement_mid
-                    else:
-                        min_cost_usd = min_cost_quote / quote_per_usdt * settlement_mid
+                    min_cost_usd = (
+                        min_cost_quote / quote_per_usdt * settlement_mid
+                    )
 
-                    qualified = (
-                        age <= MAX_TRADE_AGE_SEC
-                        and unique_trades >= 2
+                    # The bulk ticker screens every catalog market with one public
+                    # call. Per-pair tape is fetched only for a market that could
+                    # pass all non-time conditions; it supplies the timestamped,
+                    # uniquely identified prints the ticker deliberately lacks.
+                    static_candidate = (
+                        int(_n(ticker.get("tradeCount"))) >= 2
                         and bid_discount >= maker.CryptalMakerPaperBot._required_half_spread_bps(
                             maker_fee_rate
                         )
@@ -242,6 +231,33 @@ class CryptalGeorgianMarketScanner:
                         and conservative_net >= maker.MIN_PROJECTED_NET_BPS
                         and min_cost_usd <= maker.ORDER_NOTIONAL_USD
                         and hedge_min_notional <= maker.ORDER_NOTIONAL_USD
+                    )
+                    trades: list[dict] = []
+                    if static_candidate:
+                        trades_url = (
+                            f"{maker.CRYPTAL_BASE}/api/v1/public/trades/{pair}"
+                        )
+                        payload = await self.data_hub.get(
+                            session, trades_url, {"limit": 25}, cache_ttl_sec=2.0
+                        )
+                        trades = payload if isinstance(payload, list) else []
+                    stamps = [
+                        _trade_time(row.get("timestamp"))
+                        for row in trades
+                        if isinstance(row, dict) and _trade_time(row.get("timestamp")) > 0
+                    ]
+                    newest = max(stamps) if stamps else 0.0
+                    age = max(0.0, time.time() - newest) if newest else math.inf
+                    unique_trades = len({
+                        str(row.get("id")) for row in trades
+                        if isinstance(row, dict) and row.get("id") is not None
+                    })
+                    tape_span = max(stamps) - min(stamps) if len(stamps) > 1 else 0.0
+
+                    qualified = (
+                        static_candidate
+                        and age <= MAX_TRADE_AGE_SEC
+                        and unique_trades >= 2
                     )
                     score = conservative_net - min(age / 60.0, 60.0)
                     rows.append({
@@ -272,6 +288,8 @@ class CryptalGeorgianMarketScanner:
                         "qualified": qualified,
                         "screen_score": round(score, 1),
                         "paper_only": True,
+                        "screen_book_source": "Cryptal bulk public ticker",
+                        "tape_checked": static_candidate,
                     })
                 except maker.CryptalRateLimitError:
                     raise
@@ -337,9 +355,10 @@ class CryptalGeorgianMarketScanner:
             "excluded": self.excluded,
             "public_data_health": self.data_hub.state(),
             "method": (
-                "Every active Cryptal market with a live Binance USDT perpetual is "
-                "checked against executable conversion books, recent public trades, "
-                "both fee legs, hedge slippage, funding/basis and adverse selection."
+                "The bulk ticker screens every active Cryptal market with a live "
+                "Binance USDT perpetual; only cost-qualified survivors request a "
+                "timestamped trade tape for freshness, then pay both fee legs, "
+                "hedge slippage, funding/basis and adverse-selection reserves."
             ),
             "evidentiary": False,
         }
@@ -530,6 +549,7 @@ class CryptalBestGeorgianMarketPaperBot:
                 "live_trading_enabled": False,
                 "status": self.status,
                 "data_error": self.data_error or self.scanner.data_error,
+                "public_data_health": self.data_hub.state(),
                 "persistence_error": "",
                 "pair": "",
                 "display_pair": "WAITING",
