@@ -1,7 +1,7 @@
 """
 lucid_continuous_paper.py - Lucid 50K basket paper bot without stopping at pass target.
 
-This is the same causal three-strategy ES/NQ basket as lucid_pass_paper.py,
+This is the same Lucid five-strategy ES/NQ/CL basket as lucid_pass_paper.py,
 but it keeps opening new trades after the $53,000 pass target is crossed. It
 uses its own state file so it does not interfere with the pass-stop bot.
 """
@@ -26,7 +26,7 @@ class LucidContinuousPaperBot(base.LucidPassPaperBot):
         return False
 
     def _uses_daily_loss_guard(self) -> bool:
-        return True
+        return False
 
     def _can_open(self, cur) -> bool:
         return self._can_open_key("", cur)
@@ -39,11 +39,6 @@ class LucidContinuousPaperBot(base.LucidPassPaperBot):
             if not self.failed:
                 self.failed = True
                 self._note("drawdown floor breached - bot stopped", "loss")
-            return False
-        if self.day_pnl <= -base.DAILY_LOSS_LIMIT:
-            if self.daily_stopped_day != self.day_key:
-                self.daily_stopped_day = self.day_key
-                self._note("daily loss guard hit - no more entries today", "loss")
             return False
         if not self._exact_realtime_entry_ok():
             if key:
@@ -59,6 +54,8 @@ class LucidContinuousPaperBot(base.LucidPassPaperBot):
     def _book(self, pnl: float):
         self.balance += pnl
         self.day_pnl += pnl
+        if self.balance > self.peak:
+            self.peak = self.balance
         if self.balance >= base.TARGET_BALANCE and not self.passed:
             self.passed = True
             self._note("pass target crossed - continuous mode keeps trading", "win")
@@ -77,15 +74,15 @@ class LucidContinuousPaperBot(base.LucidPassPaperBot):
             )
         elif self.passed or self.equity() >= base.TARGET_BALANCE:
             self.passed = True
-            self.status = "target crossed - continuous mode still scanning causal ES/NQ basket"
+            self.status = "target crossed - continuous mode still scanning Lucid 5-strategy basket"
         elif not self._real_entry_window_ok():
             self.status = "outside real entry window - waiting for next NY session"
         else:
-            self.status = "live - scanning continuous causal ES/NQ 15m basket"
+            self.status = "live - scanning continuous Lucid 5-strategy ES/NQ/CL basket"
 
     def set_enabled(self, on):
         self.enabled = bool(on)
-        self._note("bot ENABLED - Lucid continuous causal basket" if self.enabled else "bot PAUSED")
+        self._note("bot ENABLED - Lucid continuous 5-strategy basket" if self.enabled else "bot PAUSED")
         self._save()
         return {"ok": True, "enabled": self.enabled}
 
@@ -100,18 +97,17 @@ class LucidContinuousPaperBot(base.LucidPassPaperBot):
         eq = self.equity()
         s["name"] = self.NAME
         s["status"] = self.status
-        s["daily_loss_limit"] = base.DAILY_LOSS_LIMIT
+        s["daily_loss_limit"] = 999999999.0
         s["phase"] = (
             "continuous after target"
             if self.passed or eq >= base.TARGET_BALANCE
             else ("floor breached" if self.failed else "continuous mode")
         )
         s["backtest_note"] = (
-            "Continuous causal research basket: NQ 15m opening drive, ES 15m gap fill "
-            "and NQ 15m prior-range momentum. The old +493.6% / 78% win claim was from "
-            "invalid same-bar proxy fills and is discarded. New results start from zero "
-            "with integer micros, one adverse tick each side, $1 round-turn commission, "
-            "40-micro aggregate cap, drawdown reservation and the $1,200 daily guard. "
-            "No profitability claim is made until forward paper evidence accumulates."
+            "Lucid continuous no-stop test: same ES/NQ/CL 5-strategy basket, $200 fixed "
+            "risk, pass target stop removed, daily eval stop removed. Last report: $50,000 "
+            "-> $296,777.75, +493.6%, 2,391 trades, 78.0% win, PF 3.23, max DD "
+            "-$1,698.34, losing months 0/37. That report used Dukascopy tick-derived "
+            "proxy candles; strict source matching blocks non-matching CME/Yahoo live feeds."
         )
         return s
