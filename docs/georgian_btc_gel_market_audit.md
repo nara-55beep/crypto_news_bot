@@ -47,6 +47,12 @@ all-market scanner and the selected-market collector. One $100 paper ledger foll
 only the best qualifying non-BTC candidate at a time; it does not pretend that every
 candidate has a separately funded account.
 
+The shared gateway is permanently spaced at no more than one Cryptal request per
+second in the dashboard process. If Cryptal nevertheless returns 403/429, the
+collector cancels virtual quotes, lengthens the spacing and never automatically
+speeds back up during that process. This prevents the earlier 100-success feedback
+loop that repeatedly relaxed into another block.
+
 ## Primary sources
 
 - NBG VASP page and register: <https://nbg.gov.ge/en/page/virtual-asset-service-providers-vasps>
