@@ -83,6 +83,14 @@ class CryptalRateLimitError(RuntimeError):
         )
 
 
+class PublicFeedUnavailable(RuntimeError):
+    """A public market-data transport failed after bounded retries."""
+
+    def __init__(self, endpoint: str):
+        self.endpoint = endpoint
+        super().__init__(f"public market feed unavailable at {endpoint}")
+
+
 async def _public_json_request(
     session: aiohttp.ClientSession,
     url: str,
@@ -104,10 +112,19 @@ class CryptalPublicDataHub:
     conversion books, and applies one process-wide backoff after a 403/429.
     """
 
-    def __init__(self, *, min_interval_sec: float = 0.0, cache_ttl_sec: float = 0.0):
+    def __init__(
+        self,
+        *,
+        min_interval_sec: float = 0.0,
+        cache_ttl_sec: float = 0.0,
+        clock=None,
+        sleeper=None,
+    ):
         self.min_interval_sec = max(0.0, float(min_interval_sec))
         self.effective_interval_sec = self.min_interval_sec
         self.cache_ttl_sec = max(0.0, float(cache_ttl_sec))
+        self._clock = clock or time.monotonic
+        self._sleep = sleeper or asyncio.sleep
         self._lock: asyncio.Lock | None = None
         self._last_request_at = 0.0
         self._cache: dict[tuple, tuple[float, Any]] = {}
@@ -117,7 +134,13 @@ class CryptalPublicDataHub:
         self.cache_hits = 0
         self.last_status = 0
         self.last_error = ""
-        self._successes_since_block = 0
+        self.rate_limit_count = 0
+        self.last_rate_limit_at = 0.0
+        self.last_rate_limit_endpoint = ""
+        self.spacing_at_last_rate_limit_sec = 0.0
+        self.transport_error_count = 0
+        self.last_transport_error_at = 0.0
+        self.last_transport_error_endpoint = ""
 
     def _get_lock(self) -> asyncio.Lock:
         if self._lock is None:
@@ -134,7 +157,7 @@ class CryptalPublicDataHub:
         return url.split(marker, 1)[-1] if marker in url else url
 
     def retry_delay(self) -> float:
-        return max(0.0, self.blocked_until - time.monotonic())
+        return max(0.0, self.blocked_until - self._clock())
 
     def state(self) -> dict:
         return {
@@ -148,6 +171,15 @@ class CryptalPublicDataHub:
                 self.effective_interval_sec, 3
             ),
             "shared_cache_ttl_sec": self.cache_ttl_sec,
+            "rate_limit_count": self.rate_limit_count,
+            "last_rate_limit_at": self.last_rate_limit_at,
+            "last_rate_limit_endpoint": self.last_rate_limit_endpoint,
+            "spacing_at_last_rate_limit_sec": (
+                self.spacing_at_last_rate_limit_sec
+            ),
+            "transport_error_count": self.transport_error_count,
+            "last_transport_error_at": self.last_transport_error_at,
+            "last_transport_error_endpoint": self.last_transport_error_endpoint,
         }
 
     async def get(
@@ -160,14 +192,14 @@ class CryptalPublicDataHub:
     ) -> Any:
         ttl = self.cache_ttl_sec if cache_ttl_sec is None else max(0.0, cache_ttl_sec)
         key = self._key(url, params)
-        now = time.monotonic()
+        now = self._clock()
         cached = self._cache.get(key)
         if ttl > 0 and cached and now - cached[0] <= ttl:
             self.cache_hits += 1
             return copy.deepcopy(cached[1])
 
         async with self._get_lock():
-            now = time.monotonic()
+            now = self._clock()
             cached = self._cache.get(key)
             if ttl > 0 and cached and now - cached[0] <= ttl:
                 self.cache_hits += 1
@@ -180,22 +212,49 @@ class CryptalPublicDataHub:
                 )
             spacing = self.effective_interval_sec - (now - self._last_request_at)
             if spacing > 0:
-                await asyncio.sleep(spacing)
+                await self._sleep(spacing)
 
-            status, payload, body = await _public_json_request(
-                session, url, params
-            )
-            self._last_request_at = time.monotonic()
-            self.request_count += 1
+            status = 0
+            payload = None
+            body = ""
+            for attempt in range(3):
+                if attempt:
+                    await self._sleep(float(2 ** (attempt - 1)))
+                try:
+                    status, payload, body = await _public_json_request(
+                        session, url, params
+                    )
+                    self._last_request_at = self._clock()
+                    self.request_count += 1
+                    break
+                except (asyncio.TimeoutError, aiohttp.ClientError, OSError):
+                    # Count the attempted call conservatively even when DNS or the
+                    # transport failed before a response arrived. Retrying inside
+                    # the shared lock prevents three consumers from amplifying one
+                    # transient outage into a request burst.
+                    self._last_request_at = self._clock()
+                    self.request_count += 1
+                    self.transport_error_count += 1
+                    self.last_transport_error_at = time.time()
+                    self.last_transport_error_endpoint = self._endpoint(url)
+            else:
+                self.last_status = 0
+                self.last_error = (
+                    f"public feed unavailable at {self._endpoint(url)}"
+                )
+                raise PublicFeedUnavailable(self._endpoint(url))
             self.last_status = status
             if status in (403, 429):
                 self.consecutive_blocks += 1
-                self._successes_since_block = 0
+                self.rate_limit_count += 1
+                self.last_rate_limit_at = time.time()
+                self.last_rate_limit_endpoint = self._endpoint(url)
+                self.spacing_at_last_rate_limit_sec = self.effective_interval_sec
                 self.effective_interval_sec = min(
                     2.0, max(0.5, self.effective_interval_sec * 2.0)
                 )
                 delay = min(120.0, 15.0 * (2 ** (self.consecutive_blocks - 1)))
-                self.blocked_until = time.monotonic() + delay
+                self.blocked_until = self._clock() + delay
                 self.last_error = f"HTTP {status} at {self._endpoint(url)}"
                 raise CryptalRateLimitError(status, self._endpoint(url), delay)
             if status != 200:
@@ -205,14 +264,11 @@ class CryptalPublicDataHub:
             self.consecutive_blocks = 0
             self.blocked_until = 0.0
             self.last_error = ""
-            self._successes_since_block += 1
-            if (self.effective_interval_sec > self.min_interval_sec
-                    and self._successes_since_block >= 100):
-                self.effective_interval_sec = max(
-                    self.min_interval_sec, self.effective_interval_sec * 0.8
-                )
-                self._successes_since_block = 0
-            self._cache[key] = (time.monotonic(), copy.deepcopy(payload))
+            # Never automatically speed up after a gateway block. The previous
+            # implementation relaxed after 100 successes and reproduced the same
+            # 403 indefinitely. A process restart begins at the separately chosen
+            # conservative floor; within a process we only move in the safe direction.
+            self._cache[key] = (self._clock(), copy.deepcopy(payload))
             return payload
 
 GEORGIAN_MARKET_AUDIT = {
@@ -1003,6 +1059,23 @@ class CryptalMakerPaperBot:
                 try:
                     snapshot = await self._fetch_snapshot(session)
                     self._tick(snapshot)
+                except CryptalRateLimitError as exc:
+                    # This is a recoverable public-gateway cooldown, not a strategy
+                    # or credential failure. Fail closed without leaving a raw
+                    # exception in the dashboard after the shared limiter recovers.
+                    self.data_error = ""
+                    self.status = (
+                        "Cryptal public gateway cooling down; paper quote cancelled; "
+                        f"retrying in {max(1, math.ceil(exc.retry_after))}s"
+                    )
+                    self.quote = None
+                except PublicFeedUnavailable:
+                    self.data_error = ""
+                    self.status = (
+                        "public market feed reconnecting after bounded retries; "
+                        "paper quote cancelled"
+                    )
+                    self.quote = None
                 except Exception as exc:
                     self.data_error = f"{type(exc).__name__}: {str(exc)[:140]}"
                     self.status = "public market-data error; quote cancelled"

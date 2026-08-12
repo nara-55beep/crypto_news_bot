@@ -38,9 +38,44 @@ class FakeSession:
         self.calls.append((url, params))
         value = self.routes[url]
         if (isinstance(value, list) and value
-                and isinstance(value[0], FakeResponse)):
+                and isinstance(value[0], (FakeResponse, BaseException))):
             value = value.pop(0)
+        if isinstance(value, BaseException):
+            raise value
         return value if isinstance(value, FakeResponse) else FakeResponse(value)
+
+
+class FakeClock:
+    def __init__(self, now=100.0):
+        self.now = float(now)
+
+    def __call__(self):
+        return self.now
+
+    async def sleep(self, seconds):
+        self.now += max(0.0, float(seconds))
+
+
+class GuardedSession:
+    """Fake gateway that rejects calls closer than its sustainable spacing."""
+
+    def __init__(self, clock, minimum_spacing=1.0):
+        self.clock = clock
+        self.minimum_spacing = minimum_spacing
+        self.call_times = []
+        self.rejected = 0
+
+    def get(self, _url, params=None):
+        now = self.clock()
+        too_fast = bool(
+            self.call_times
+            and now - self.call_times[-1] < self.minimum_spacing - 1e-9
+        )
+        self.call_times.append(now)
+        if too_fast:
+            self.rejected += 1
+            return FakeResponse(status=403, body="forbidden")
+        return FakeResponse({"ok": True, "params": params})
 
 
 def _pair(pair, base, quote, *, fee=0.0025, enabled=True):
@@ -184,9 +219,132 @@ class TestSharedCryptalPublicDataHub(unittest.TestCase):
         self.assertEqual(len(session.calls), 1)
         self.assertGreater(hub.retry_delay(), 0)
         self.assertGreaterEqual(hub.state()["effective_request_spacing_sec"], 0.5)
+        self.assertEqual(hub.state()["rate_limit_count"], 1)
+
+    def test_production_floor_survives_a_long_sustained_request_load(self):
+        clock = FakeClock()
+        session = GuardedSession(clock, minimum_spacing=1.0)
+        hub = maker.CryptalPublicDataHub(
+            min_interval_sec=1.0, clock=clock, sleeper=clock.sleep
+        )
+
+        async def run():
+            for index in range(600):
+                await hub.get(session, f"https://public.test/{index}")
+
+        asyncio.run(run())
+        self.assertEqual(session.rejected, 0)
+        self.assertEqual(hub.state()["rate_limit_count"], 0)
+        deltas = [
+            later - earlier
+            for earlier, later in zip(session.call_times, session.call_times[1:])
+        ]
+        self.assertTrue(deltas)
+        self.assertGreaterEqual(min(deltas), 1.0)
+
+    def test_a_learned_safe_spacing_never_relaxes_after_successes(self):
+        clock = FakeClock()
+        hub = maker.CryptalPublicDataHub(
+            min_interval_sec=0.25, clock=clock, sleeper=clock.sleep
+        )
+        blocked_url = "https://public.test/blocked"
+        first = FakeSession({
+            blocked_url: FakeResponse(status=403, body="forbidden")
+        })
+
+        async def run():
+            with self.assertRaises(maker.CryptalRateLimitError):
+                await hub.get(first, blocked_url)
+            learned = hub.effective_interval_sec
+            await clock.sleep(hub.retry_delay())
+            healthy = GuardedSession(clock, minimum_spacing=learned)
+            for index in range(300):
+                await hub.get(healthy, f"https://public.test/recovered/{index}")
+            return learned, healthy
+
+        learned, healthy = asyncio.run(run())
+        self.assertEqual(healthy.rejected, 0)
+        self.assertEqual(hub.effective_interval_sec, learned)
+        self.assertEqual(hub.state()["rate_limit_count"], 1)
+
+    def test_transient_transport_timeout_retries_inside_the_shared_lock(self):
+        clock = FakeClock()
+        url = "https://public.test/transient"
+        session = FakeSession({
+            url: [asyncio.TimeoutError(), FakeResponse({"ok": True})]
+        })
+        hub = maker.CryptalPublicDataHub(
+            min_interval_sec=1.0, clock=clock, sleeper=clock.sleep
+        )
+
+        result = asyncio.run(hub.get(session, url))
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(len(session.calls), 2)
+        self.assertEqual(hub.state()["transport_error_count"], 1)
+        self.assertEqual(hub.state()["last_status"], 200)
+        self.assertEqual(hub.state()["last_error"], "")
+
+    def test_three_transport_failures_become_sanitized_reconnecting_state(self):
+        clock = FakeClock()
+        url = "https://public.test/down"
+        session = FakeSession({
+            url: [asyncio.TimeoutError(), asyncio.TimeoutError(), OSError("dns")]
+        })
+        hub = maker.CryptalPublicDataHub(
+            min_interval_sec=1.0, clock=clock, sleeper=clock.sleep
+        )
+
+        with self.assertRaises(maker.PublicFeedUnavailable) as caught:
+            asyncio.run(hub.get(session, url))
+
+        self.assertNotIn("TimeoutError", str(caught.exception))
+        self.assertNotIn("dns", str(caught.exception))
+        self.assertEqual(hub.state()["transport_error_count"], 3)
 
 
 class TestAllMarketScanner(unittest.TestCase):
+    def test_scheduled_loop_rechecks_due_time_after_a_manual_scan_reschedules(self):
+        clock = FakeClock()
+        sleep_calls = []
+        scanner = None
+
+        async def sleeper(seconds):
+            nonlocal scanner
+            sleep_calls.append(seconds)
+            clock.now += seconds
+            if len(sleep_calls) == 1:
+                # A manual scan completed while the scheduled loop was asleep.
+                scanner.next_scan_at = clock() + geo.SCAN_INTERVAL_SEC
+
+        scanner = geo.CryptalGeorgianMarketScanner(
+            maker.CryptalPublicDataHub(), clock=clock, sleeper=sleeper
+        )
+        scanner.next_scan_at = clock() + 100
+
+        asyncio.run(scanner._wait_until_due())
+
+        self.assertEqual(sleep_calls, [100, geo.SCAN_INTERVAL_SEC])
+        self.assertEqual(clock(), 100 + 100 + geo.SCAN_INTERVAL_SEC)
+
+    def test_gateway_cooldown_is_fail_closed_without_raw_dashboard_error(self):
+        url = f"{maker.CRYPTAL_BASE}/api/v1/public/pairs"
+        scanner = geo.CryptalGeorgianMarketScanner(
+            maker.CryptalPublicDataHub()
+        )
+        scanner.data_error = "old error"
+        session = FakeSession({
+            url: FakeResponse(status=403, body="<html>forbidden</html>")
+        })
+
+        with self.assertRaises(maker.CryptalRateLimitError):
+            asyncio.run(scanner.scan_once(session))
+
+        self.assertEqual(scanner.data_error, "")
+        self.assertIn("gateway cooling down", scanner.status)
+        self.assertNotIn("403", scanner.status)
+        self.assertFalse(scanner.scan_in_progress)
+
     def test_scans_every_hedgeable_cryptal_pair_and_ranks_candidates(self):
         session = FakeSession(_routes())
         scanner = geo.CryptalGeorgianMarketScanner(
@@ -201,6 +359,10 @@ class TestAllMarketScanner(unittest.TestCase):
             "MANA-GEL", "ETH-USD"
         })
         self.assertEqual(scanner.opportunities[0]["pair"], "MANA-GEL")
+        self.assertEqual(
+            scanner.next_scan_at,
+            scanner.last_scan_at + geo.SCAN_INTERVAL_SEC,
+        )
         called = {url for url, _params in session.calls}
         self.assertIn(f"{maker.CRYPTAL_BASE}/api/v1/public/ticker", called)
         for pair in ("MANA-GEL", "ETH-USD"):
@@ -331,7 +493,7 @@ class TestSelectedMarketCollector(unittest.TestCase):
         self.assertIn('web.post("/api/cryptalgeo/scan"', dashboard)
         self.assertIn("CRYPTALGEOSCANNER.manage_loop()", dashboard)
         self.assertIn("CRYPTALGEOBOT.manage_loop()", dashboard)
-        self.assertIn("min_interval_sec=0.25, cache_ttl_sec=2.0", dashboard)
+        self.assertIn("min_interval_sec=1.0, cache_ttl_sec=4.0", dashboard)
 
 
 if __name__ == "__main__":

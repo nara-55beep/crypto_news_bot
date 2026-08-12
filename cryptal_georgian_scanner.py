@@ -51,8 +51,16 @@ def _filter(symbol: dict, name: str) -> dict:
 
 
 class CryptalGeorgianMarketScanner:
-    def __init__(self, data_hub: maker.CryptalPublicDataHub):
+    def __init__(
+        self,
+        data_hub: maker.CryptalPublicDataHub,
+        *,
+        clock=None,
+        sleeper=None,
+    ):
         self.data_hub = data_hub
+        self._clock = clock or time.time
+        self._sleep = sleeper or asyncio.sleep
         self.running = False
         self.scan_in_progress = False
         self.status = "waiting for first all-market scan"
@@ -69,11 +77,18 @@ class CryptalGeorgianMarketScanner:
     @staticmethod
     async def _json(session: aiohttp.ClientSession, url: str,
                     params: dict | None = None) -> Any:
-        async with session.get(url, params=params) as response:
-            if response.status != 200:
-                body = (await response.text())[:100]
-                raise RuntimeError(f"HTTP {response.status} at {url}: {body}")
-            return await response.json()
+        for attempt in range(3):
+            try:
+                async with session.get(url, params=params) as response:
+                    if response.status != 200:
+                        await response.text()
+                        raise maker.PublicFeedUnavailable(url)
+                    return await response.json()
+            except (asyncio.TimeoutError, aiohttp.ClientError, OSError):
+                if attempt == 2:
+                    raise maker.PublicFeedUnavailable(url)
+                await asyncio.sleep(float(2 ** attempt))
+        raise maker.PublicFeedUnavailable(url)
 
     @staticmethod
     def _conversion_pair(quote: str) -> str | None:
@@ -111,8 +126,8 @@ class CryptalGeorgianMarketScanner:
         # turn. Coalesce them rather than doubling a universe scan.
         if self.scan_in_progress:
             return
-        scan_started_at = time.time()
         self.scan_in_progress = True
+        self.data_error = ""
         self.status = "scanning every hedgeable Cryptal market"
         try:
             pairs_url = f"{maker.CRYPTAL_BASE}/api/v1/public/pairs"
@@ -301,19 +316,51 @@ class CryptalGeorgianMarketScanner:
             self.opportunities = [row for row in rows if row["qualified"]]
             self.scanned_count = len(rows)
             self.excluded = (excluded + errors)[:80]
-            self.last_scan_at = time.time()
-            self.next_scan_at = scan_started_at + SCAN_INTERVAL_SEC
+            self.last_scan_at = self._clock()
+            # A full rate-safe scan can itself take several minutes while the
+            # active collectors share the gateway. Start the interval after
+            # completion; measuring from start made slow scans run back-to-back
+            # forever and consumed the entire public-data budget.
+            self.next_scan_at = self.last_scan_at + SCAN_INTERVAL_SEC
             self.data_error = ""
             self.status = (
                 f"scanned {self.scanned_count}/{self.eligible_count} hedgeable "
                 f"Cryptal markets; {len(self.opportunities)} paper candidates"
             )
+        except maker.CryptalRateLimitError as exc:
+            self.data_error = ""
+            self.status = (
+                "Cryptal public gateway cooling down; keeping the last complete "
+                f"ranking and retrying in {max(1, math.ceil(exc.retry_after))}s"
+            )
+            raise
+        except maker.PublicFeedUnavailable:
+            self.data_error = ""
+            self.status = (
+                "public market feeds reconnecting after bounded retries; keeping "
+                "the last complete ranking"
+            )
+            raise
         except Exception as exc:
             self.data_error = f"{type(exc).__name__}: {str(exc)[:180]}"
             self.status = "all-market scan paused until public data recovers"
             raise
         finally:
             self.scan_in_progress = False
+
+    async def _wait_until_due(self) -> None:
+        while True:
+            # Check the authoritative due time *before* every scheduled scan.
+            # A manual scan may finish while this loop sleeps and move the due
+            # time forward; re-checking prevents an immediate duplicate scan.
+            delay = self.next_scan_at - self._clock()
+            if delay > 0:
+                await self._sleep(delay)
+                continue
+            if self.scan_in_progress:
+                await self._sleep(1.0)
+                continue
+            return
 
     async def manage_loop(self) -> None:
         self.running = True
@@ -323,12 +370,13 @@ class CryptalGeorgianMarketScanner:
         )
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             while True:
+                await self._wait_until_due()
                 try:
                     await self.scan_once(session)
-                    delay = max(1.0, self.next_scan_at - time.time())
                 except Exception:
-                    delay = max(15.0, self.data_hub.retry_delay())
-                await asyncio.sleep(delay)
+                    self.next_scan_at = self._clock() + max(
+                        15.0, self.data_hub.retry_delay()
+                    )
 
     def best_executable(self, *, exclude: set[str] | None = None) -> dict | None:
         excluded = exclude or set()
@@ -513,6 +561,23 @@ class CryptalBestGeorgianMarketPaperBot:
                             f"collecting {self.bot.display_pair}: {self.bot.status}"
                         )
                         self.data_error = ""
+                except maker.CryptalRateLimitError as exc:
+                    self.data_error = ""
+                    self.status = (
+                        "Cryptal public gateway cooling down; selected-market "
+                        f"quote cancelled; retrying in "
+                        f"{max(1, math.ceil(exc.retry_after))}s"
+                    )
+                    if self.bot:
+                        self.bot.quote = None
+                except maker.PublicFeedUnavailable:
+                    self.data_error = ""
+                    self.status = (
+                        "public market feeds reconnecting after bounded retries; "
+                        "selected-market quote cancelled"
+                    )
+                    if self.bot:
+                        self.bot.quote = None
                 except Exception as exc:
                     self.data_error = f"{type(exc).__name__}: {str(exc)[:160]}"
                     self.status = "best-market collector waiting for public data"
