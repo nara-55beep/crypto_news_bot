@@ -4772,7 +4772,7 @@ PAPER_HTML = r"""<!doctype html>
 
   async function loadLucidPass(){
     let s; try{ s=await(await fetch('/api/lucidpass/state')).json(); }catch(e){ return; }
-    if(!s.running){ $('lucidpass-panel').innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">Lucid 50K Monthly Pass Basket (paper)</span></div><div class="empty">bot not running</div>'; return; }
+    if(!s.running){ $('lucidpass-panel').innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">Lucid 50K Monthly Pass Basket - Execution Audited (paper)</span></div><div class="empty">bot not running</div>'; return; }
     const dot=lucidDot(s);
     const invalid=!!s.strategy_invalidated;
     const tgl=invalid?'Invalidated':(s.enabled?'Pause':'Enable'); const tglCls=s.enabled?'on':'off';
@@ -4792,7 +4792,7 @@ PAPER_HTML = r"""<!doctype html>
     const nextTxt=s.next_signal_window? '<div class="sub" style="padding:0 14px 8px;color:#facc15">'+esc(s.next_signal_window)+'</div>':'';
     const note=s.backtest_note? '<div class="sub" style="padding:0 14px 8px;color:var(--red)">'+esc(s.backtest_note)+'</div>':'';
     $('lucidpass-panel').innerHTML =
-      '<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">Lucid 50K Monthly Pass Basket (paper)</span>'+
+      '<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">Lucid 50K Monthly Pass Basket - Execution Audited (paper)</span>'+
         '<span class="badge">'+esc(s.symbols||'')+' - '+esc(s.timeframe||'')+'</span>'+phase+
         '<span class="spacer"></span>'+
         '<button class="btn '+tglCls+'" onclick="toggleLucidPass()" '+(invalid?'disabled':'')+'>'+tgl+'</button>'+
@@ -4819,7 +4819,7 @@ PAPER_HTML = r"""<!doctype html>
   }
   async function toggleLucidPass(){ let s; try{s=await(await fetch('/api/lucidpass/state')).json();}catch(e){return;} await fetch('/api/lucidpass/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadLucidPass(); }
   async function toggleLucidPassNotify(){ let s; try{s=await(await fetch('/api/lucidpass/state')).json();}catch(e){return;} await fetch('/api/lucidpass/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.telegram_enabled})}); loadLucidPass(); }
-  async function resetLucidPass(){ if(!confirm('Reset the Lucid 50K Monthly Pass Basket paper account to $50,000? The invalidated strategy will remain paused.'))return; await fetch('/api/lucidpass/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadLucidPass(); }
+  async function resetLucidPass(){ if(!confirm('Reset the execution-audited Lucid pass ledger to $50,000? Its audited trade history will be cleared.'))return; await fetch('/api/lucidpass/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadLucidPass(); }
 
   async function loadNQMR15(){
     let s; try{ s=await(await fetch('/api/nqmr15/state')).json(); }catch(e){ return; }
