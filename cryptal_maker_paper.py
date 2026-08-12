@@ -106,6 +106,7 @@ class CryptalPublicDataHub:
 
     def __init__(self, *, min_interval_sec: float = 0.0, cache_ttl_sec: float = 0.0):
         self.min_interval_sec = max(0.0, float(min_interval_sec))
+        self.effective_interval_sec = self.min_interval_sec
         self.cache_ttl_sec = max(0.0, float(cache_ttl_sec))
         self._lock: asyncio.Lock | None = None
         self._last_request_at = 0.0
@@ -116,6 +117,7 @@ class CryptalPublicDataHub:
         self.cache_hits = 0
         self.last_status = 0
         self.last_error = ""
+        self._successes_since_block = 0
 
     def _get_lock(self) -> asyncio.Lock:
         if self._lock is None:
@@ -142,6 +144,9 @@ class CryptalPublicDataHub:
             "last_error": self.last_error,
             "backoff_remaining_sec": round(self.retry_delay(), 1),
             "minimum_request_spacing_sec": self.min_interval_sec,
+            "effective_request_spacing_sec": round(
+                self.effective_interval_sec, 3
+            ),
             "shared_cache_ttl_sec": self.cache_ttl_sec,
         }
 
@@ -173,7 +178,7 @@ class CryptalPublicDataHub:
                 raise CryptalRateLimitError(
                     self.last_status or 429, self._endpoint(url), blocked
                 )
-            spacing = self.min_interval_sec - (now - self._last_request_at)
+            spacing = self.effective_interval_sec - (now - self._last_request_at)
             if spacing > 0:
                 await asyncio.sleep(spacing)
 
@@ -185,7 +190,11 @@ class CryptalPublicDataHub:
             self.last_status = status
             if status in (403, 429):
                 self.consecutive_blocks += 1
-                delay = min(120.0, 5.0 * (2 ** (self.consecutive_blocks - 1)))
+                self._successes_since_block = 0
+                self.effective_interval_sec = min(
+                    2.0, max(0.5, self.effective_interval_sec * 2.0)
+                )
+                delay = min(120.0, 15.0 * (2 ** (self.consecutive_blocks - 1)))
                 self.blocked_until = time.monotonic() + delay
                 self.last_error = f"HTTP {status} at {self._endpoint(url)}"
                 raise CryptalRateLimitError(status, self._endpoint(url), delay)
@@ -196,6 +205,13 @@ class CryptalPublicDataHub:
             self.consecutive_blocks = 0
             self.blocked_until = 0.0
             self.last_error = ""
+            self._successes_since_block += 1
+            if (self.effective_interval_sec > self.min_interval_sec
+                    and self._successes_since_block >= 100):
+                self.effective_interval_sec = max(
+                    self.min_interval_sec, self.effective_interval_sec * 0.8
+                )
+                self._successes_since_block = 0
             self._cache[key] = (time.monotonic(), copy.deepcopy(payload))
             return payload
 

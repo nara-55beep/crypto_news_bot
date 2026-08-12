@@ -103,8 +103,17 @@ def _routes(*, mana_fee=0.0025, old_mana=False):
         {"symbol": "MANAUSDT", "bidPrice": "0.399", "askPrice": "0.401"},
         {"symbol": "ETHUSDT", "bidPrice": "1999", "askPrice": "2001"},
     ]
+    tickers = [
+        {"pair": "MANA-GEL", "bidPrice": "0.90", "askPrice": "1.30",
+         "tradeCount": 20},
+        {"pair": "ETH-USD", "bidPrice": "1900", "askPrice": "2100",
+         "tradeCount": 20},
+        {"pair": "NOHEDGE-GEL", "bidPrice": "1", "askPrice": "2",
+         "tradeCount": 20},
+    ]
     return {
         f"{base}/api/v1/public/pairs": pairs,
+        f"{base}/api/v1/public/ticker": tickers,
         "https://fapi.binance.com/fapi/v1/exchangeInfo": exchange_info,
         "https://fapi.binance.com/fapi/v1/ticker/bookTicker": hedge_books,
         f"{base}/api/v1/public/orderbook/USDT-USD": _book(0.999, 1.001),
@@ -174,6 +183,7 @@ class TestSharedCryptalPublicDataHub(unittest.TestCase):
         self.assertIn("shared collector backing off", message)
         self.assertEqual(len(session.calls), 1)
         self.assertGreater(hub.retry_delay(), 0)
+        self.assertGreaterEqual(hub.state()["effective_request_spacing_sec"], 0.5)
 
 
 class TestAllMarketScanner(unittest.TestCase):
@@ -192,13 +202,15 @@ class TestAllMarketScanner(unittest.TestCase):
         })
         self.assertEqual(scanner.opportunities[0]["pair"], "MANA-GEL")
         called = {url for url, _params in session.calls}
+        self.assertIn(f"{maker.CRYPTAL_BASE}/api/v1/public/ticker", called)
         for pair in ("MANA-GEL", "ETH-USD"):
-            self.assertIn(
+            self.assertNotIn(
                 f"{maker.CRYPTAL_BASE}/api/v1/public/orderbook/{pair}", called
             )
             self.assertIn(
                 f"{maker.CRYPTAL_BASE}/api/v1/public/trades/{pair}", called
             )
+        self.assertTrue(all(row["tape_checked"] for row in scanner.opportunities))
 
     def test_stale_flow_and_real_market_fee_fail_closed(self):
         stale = geo.CryptalGeorgianMarketScanner(maker.CryptalPublicDataHub())
@@ -216,8 +228,8 @@ class TestAllMarketScanner(unittest.TestCase):
         scanner = geo.CryptalGeorgianMarketScanner(maker.CryptalPublicDataHub())
         state = scanner.state()
         self.assertFalse(state["evidentiary"])
-        self.assertEqual(state["scan_interval_sec"], 60)
-        self.assertIn("Every active Cryptal market", state["method"])
+        self.assertEqual(state["scan_interval_sec"], 300)
+        self.assertIn("screens every active Cryptal market", state["method"])
 
 
 class TestSelectedMarketCollector(unittest.TestCase):
@@ -319,6 +331,7 @@ class TestSelectedMarketCollector(unittest.TestCase):
         self.assertIn('web.post("/api/cryptalgeo/scan"', dashboard)
         self.assertIn("CRYPTALGEOSCANNER.manage_loop()", dashboard)
         self.assertIn("CRYPTALGEOBOT.manage_loop()", dashboard)
+        self.assertIn("min_interval_sec=0.25, cache_ttl_sec=2.0", dashboard)
 
 
 if __name__ == "__main__":

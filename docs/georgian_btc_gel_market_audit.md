@@ -41,7 +41,7 @@ public trade during the prior 24 hours. The largest screened two-sided spreads a
 that snapshot were in markets such as MANA-GEL, AXS-GEL, GRT-GEL and CHZ-GEL.
 Those are candidates for forward paper collection, not verified profits.
 
-The application now performs a complete scan every minute and shares one
+The application now performs a complete scan every five minutes and shares one
 rate-limited Cryptal public-data hub across the two fixed BTC collectors, the
 all-market scanner and the selected-market collector. One $100 paper ledger follows
 only the best qualifying non-BTC candidate at a time; it does not pretend that every

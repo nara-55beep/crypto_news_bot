@@ -106,7 +106,7 @@ NEWSAI = news_reactor_bot.NewsReactorBot()   # News Reactor: AI reads the feed, 
 SNIPER = news_sniper_bot.NewsSniperBot()     # News Sniper: NO-AI rules engine, reacts instantly
 CROSSARB = cross_arb_paper.CrossArbBot()     # Cross-exchange arbitrage: Binance vs Hyperliquid, hedged
 CRYPTAL_DATA = cryptal_maker_paper.CryptalPublicDataHub(
-    min_interval_sec=0.08, cache_ttl_sec=1.0
+    min_interval_sec=0.25, cache_ttl_sec=2.0
 )
 CRYPTALMAKER = cryptal_maker_paper.CryptalMakerPaperBot(
     data_hub=CRYPTAL_DATA
