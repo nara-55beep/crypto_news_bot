@@ -31,10 +31,14 @@ import config
 
 NAME = "Cryptal Maker + Binance Hedge"
 STATE_PATH = os.path.join(config.DATA_DIR, "cryptal_maker_state.json")
+GEL_STATE_PATH = os.path.join(config.DATA_DIR, "cryptal_maker_btc_gel_state.json")
 
 CRYPTAL_BASE = "https://exchange.cryptal.com/exchange"
 CRYPTAL_PAIR = "BTC-USD"       # displayed as BTC-TOUSD in Cryptal's web UI
 STABLE_PAIR = "USDT-USD"       # TOUSD value of one USDT
+CRYPTAL_GEL_PAIR = "BTC-GEL"   # displayed as BTC-TOGEL in Cryptal's web UI
+GEL_STABLE_PAIR = "USDT-GEL"   # TOGEL value of one USDT
+SETTLEMENT_PAIR = "USDT-USD"   # marks both ledgers in a common USD equivalent
 BINANCE_BOOK_URL = "https://fapi.binance.com/fapi/v1/ticker/bookTicker"
 
 POLL_SEC = 2.0
@@ -62,6 +66,22 @@ MIN_PROJECTED_NET_BPS = 50.0
 ADVERSE_SELECTION_RESERVE_BPS = 40.0
 REPRICE_BPS = 8.0
 MIN_PAPER_CYCLES = 30
+
+GEORGIAN_MARKET_AUDIT = {
+    "as_of": "2026-08-12",
+    "nbg_register_as_of": "2026-08-06",
+    "registered_vasps_in_scope": 42,
+    "qualification": "public BTC/GEL CLOB + timestamped trade tape + fees",
+    "included": ["Cryptal BTC-TOUSD", "Cryptal BTC-TOGEL"],
+    "excluded": {
+        "WhiteBIT Georgia": "live public catalog contained 0 GEL spot pairs",
+        "Bybit Georgia": "live public catalog contained 0 GEL spot pairs",
+        "Mycoins": "no public CLOB plus timestamped trade tape found",
+        "Coinmania": "wallet/P2P surface; no public CLOB plus trade tape found",
+        "other_registered_vasps": "no verifiable public BTC/GEL CLOB and tape found",
+    },
+    "report": "docs/georgian_btc_gel_market_audit.md",
+}
 
 
 def _number(value: Any) -> float:
@@ -92,11 +112,35 @@ def _book_levels(rows: Any, reverse: bool) -> list[tuple[float, float]]:
 
 
 class CryptalMakerPaperBot:
-    def __init__(self, state_path: str | None = None):
+    def __init__(
+        self,
+        state_path: str | None = None,
+        *,
+        pair: str | None = None,
+        stable_pair: str | None = None,
+        display_pair: str | None = None,
+        quote_currency: str = "USD",
+        minimum_cost_quote: float = 5.0,
+    ):
+        self.pair = pair or CRYPTAL_PAIR
+        self.stable_pair = stable_pair or STABLE_PAIR
+        self.display_pair = display_pair or "BTC-TOUSD"
+        self.quote_currency = str(quote_currency or "USD").upper()
+        self.minimum_cost_quote = max(0.0, _number(minimum_cost_quote))
         self.state_path = state_path or STATE_PATH
+        self.instance_name = (
+            NAME if self.pair == CRYPTAL_PAIR
+            else f"Cryptal {self.display_pair} Maker + Binance Hedge"
+        )
         self.enabled = True
         self.live_trading_enabled = False
-        self.cryptal_cash_usd = START_CRYPTAL_USD
+        # This legacy attribute is native quote cash. It remains named ``_usd`` so
+        # existing BTC-TOUSD state and integrations stay backward compatible.
+        self.cryptal_cash_usd = (
+            START_CRYPTAL_USD if self.quote_currency == "USD" else 0.0
+        )
+        self.starting_quote_cash = self.cryptal_cash_usd
+        self._quote_cash_initialized = self.quote_currency == "USD"
         self.binance_balance_usdt = START_BINANCE_USDT
         self.spot_qty = 0.0
         self.spot_entry = 0.0
@@ -133,7 +177,7 @@ class CryptalMakerPaperBot:
     def _note(self, message: str, kind: str = "info") -> None:
         self.log.insert(0, {"t": time.time(), "kind": kind, "msg": message})
         self.log = self.log[:80]
-        print(f"[cryptal-maker] {message}")
+        print(f"[cryptal-maker {self.display_pair}] {message}")
 
     def _save(self) -> None:
         try:
@@ -143,8 +187,15 @@ class CryptalMakerPaperBot:
                 json.dump({
                     "paper_account_version": PAPER_ACCOUNT_VERSION,
                     "paper_bankroll_usd": PAPER_BANKROLL_USD,
+                    "market_pair": self.pair,
+                    "stable_pair": self.stable_pair,
+                    "display_pair": self.display_pair,
+                    "quote_currency": self.quote_currency,
                     "enabled": self.enabled,
                     "cryptal_cash_usd": self.cryptal_cash_usd,
+                    "cryptal_cash_quote": self.cryptal_cash_usd,
+                    "starting_quote_cash": self.starting_quote_cash,
+                    "quote_cash_initialized": self._quote_cash_initialized,
                     "binance_balance_usdt": self.binance_balance_usdt,
                     "spot_qty": self.spot_qty,
                     "spot_entry": self.spot_entry,
@@ -186,9 +237,25 @@ class CryptalMakerPaperBot:
                     "legacy $200 paper account ignored; starting the requested "
                     "$100 paper bankroll")
                 return
+            stored_pair = str(data.get("market_pair") or CRYPTAL_PAIR)
+            if stored_pair != self.pair:
+                self.persistence_error = (
+                    f"state for {stored_pair} ignored by the {self.pair} paper ledger")
+                return
             self.enabled = bool(data.get("enabled", self.enabled))
             self.cryptal_cash_usd = _number(
-                data.get("cryptal_cash_usd", self.cryptal_cash_usd))
+                data.get(
+                    "cryptal_cash_quote",
+                    data.get("cryptal_cash_usd", self.cryptal_cash_usd),
+                )
+            )
+            self._quote_cash_initialized = bool(
+                data.get("quote_cash_initialized", self.quote_currency == "USD")
+            )
+            self.starting_quote_cash = _number(data.get(
+                "starting_quote_cash",
+                START_CRYPTAL_USD if self.quote_currency == "USD" else 0.0,
+            ))
             self.binance_balance_usdt = _number(
                 data.get("binance_balance_usdt", self.binance_balance_usdt))
             self.spot_qty = _number(data.get("spot_qty"))
@@ -227,22 +294,36 @@ class CryptalMakerPaperBot:
             return await response.json()
 
     async def _fetch_snapshot(self, session: aiohttp.ClientSession) -> dict:
-        btc_url = f"{CRYPTAL_BASE}/api/v1/public/orderbook/{CRYPTAL_PAIR}"
-        stable_url = f"{CRYPTAL_BASE}/api/v1/public/orderbook/{STABLE_PAIR}"
-        trades_url = f"{CRYPTAL_BASE}/api/v1/public/trades/{CRYPTAL_PAIR}"
-        btc_book, stable_book, trades, binance = await asyncio.gather(
+        btc_url = f"{CRYPTAL_BASE}/api/v1/public/orderbook/{self.pair}"
+        stable_url = f"{CRYPTAL_BASE}/api/v1/public/orderbook/{self.stable_pair}"
+        trades_url = f"{CRYPTAL_BASE}/api/v1/public/trades/{self.pair}"
+        requests = [
             self._json(session, btc_url, {"limit": 25}),
             self._json(session, stable_url, {"limit": 25}),
             self._json(session, trades_url, {"limit": 100}),
             self._json(session, BINANCE_BOOK_URL, {"symbol": "BTCUSDT"}),
-        )
+        ]
+        needs_settlement = self.stable_pair != SETTLEMENT_PAIR
+        if needs_settlement:
+            settlement_url = (
+                f"{CRYPTAL_BASE}/api/v1/public/orderbook/{SETTLEMENT_PAIR}"
+            )
+            requests.append(self._json(session, settlement_url, {"limit": 25}))
+        results = await asyncio.gather(*requests)
+        btc_book, stable_book, trades, binance = results[:4]
+        settlement_book = results[4] if needs_settlement else stable_book
         bids = _book_levels(btc_book.get("bids"), reverse=True)
         asks = _book_levels(btc_book.get("asks"), reverse=False)
         stable_bids = _book_levels(stable_book.get("bids"), reverse=True)
         stable_asks = _book_levels(stable_book.get("asks"), reverse=False)
-        if not bids or not asks or not stable_bids or not stable_asks:
+        settlement_bids = _book_levels(settlement_book.get("bids"), reverse=True)
+        settlement_asks = _book_levels(settlement_book.get("asks"), reverse=False)
+        if (not bids or not asks or not stable_bids or not stable_asks
+                or not settlement_bids or not settlement_asks):
             raise ValueError("Cryptal returned an empty or one-sided order book")
-        if bids[0][0] >= asks[0][0] or stable_bids[0][0] >= stable_asks[0][0]:
+        if (bids[0][0] >= asks[0][0]
+                or stable_bids[0][0] >= stable_asks[0][0]
+                or settlement_bids[0][0] >= settlement_asks[0][0]):
             raise ValueError("Cryptal returned a locked or crossed order book")
         binance_bid = _number(binance.get("bidPrice"))
         binance_ask = _number(binance.get("askPrice"))
@@ -252,11 +333,18 @@ class CryptalMakerPaperBot:
             "received_at": time.time(),
             "cryptal_at": _number(btc_book.get("timestamp")) / 1000.0,
             "stable_at": _number(stable_book.get("timestamp")) / 1000.0,
+            "settlement_at": _number(settlement_book.get("timestamp")) / 1000.0,
             "binance_at": _number(binance.get("time")) / 1000.0,
+            "pair_label": self.pair,
+            "stable_pair_label": self.stable_pair,
+            "settlement_pair_label": SETTLEMENT_PAIR,
+            "quote_currency": self.quote_currency,
             "bids": bids,
             "asks": asks,
             "stable_bids": stable_bids,
             "stable_asks": stable_asks,
+            "settlement_bids": settlement_bids,
+            "settlement_asks": settlement_asks,
             "binance_bid": binance_bid,
             "binance_ask": binance_ask,
             "trades": [row for row in trades or [] if isinstance(row, dict)],
@@ -268,6 +356,11 @@ class CryptalMakerPaperBot:
         stable_bid = snapshot["stable_bids"][0][0]
         stable_ask = snapshot["stable_asks"][0][0]
         stable_mid = (stable_bid + stable_ask) / 2.0
+        settlement_bids = snapshot.get("settlement_bids") or snapshot["stable_bids"]
+        settlement_asks = snapshot.get("settlement_asks") or snapshot["stable_asks"]
+        settlement_bid = settlement_bids[0][0]
+        settlement_ask = settlement_asks[0][0]
+        settlement_mid = (settlement_bid + settlement_ask) / 2.0
         binance_bid, binance_ask = snapshot["binance_bid"], snapshot["binance_ask"]
         binance_mid = (binance_bid + binance_ask) / 2.0
         fair = binance_mid * stable_mid
@@ -278,10 +371,16 @@ class CryptalMakerPaperBot:
             "stable_bid": stable_bid,
             "stable_ask": stable_ask,
             "stable_mid": stable_mid,
+            "settlement_bid": settlement_bid,
+            "settlement_ask": settlement_ask,
+            "settlement_mid": settlement_mid,
             "binance_bid": binance_bid,
             "binance_ask": binance_ask,
             "binance_mid": binance_mid,
+            "fair_quote": fair,
+            # Backward-compatible name for the original BTC-TOUSD dashboard.
             "fair_usd": fair,
+            "fair_usd_equivalent": binance_mid * settlement_mid,
             "bid_discount_bps": (fair - bid) / fair * 1e4,
             "ask_premium_bps": (ask - fair) / fair * 1e4,
             "received_at": snapshot["received_at"],
@@ -290,9 +389,20 @@ class CryptalMakerPaperBot:
     @staticmethod
     def _data_error(snapshot: dict) -> str:
         now = _number(snapshot.get("received_at")) or time.time()
-        for key, label in (("cryptal_at", "BTC-USD book"),
-                           ("stable_at", "USDT-USD book"),
-                           ("binance_at", "Binance hedge book")):
+        checks = [
+            ("cryptal_at", f"{snapshot.get('pair_label') or 'BTC-USD'} book"),
+            ("stable_at", f"{snapshot.get('stable_pair_label') or 'USDT-USD'} book"),
+            ("binance_at", "Binance hedge book"),
+        ]
+        if snapshot.get("settlement_at") is not None and (
+            snapshot.get("settlement_pair_label")
+            != snapshot.get("stable_pair_label")
+        ):
+            checks.append((
+                "settlement_at",
+                f"{snapshot.get('settlement_pair_label') or SETTLEMENT_PAIR} book",
+            ))
+        for key, label in checks:
             stamp = _number(snapshot.get(key))
             if stamp <= 0:
                 return f"{label} has no exchange timestamp"
@@ -314,16 +424,21 @@ class CryptalMakerPaperBot:
 
     def _desired_bid(self, snapshot: dict) -> tuple[float, float, float] | None:
         market = self._snapshot_market(snapshot)
-        fair = market["fair_usd"]
+        fair = market["fair_quote"]
         max_safe = fair * (1.0 - self._required_half_spread_bps() / 1e4)
         price = _round_down(min(market["cryptal_bid"] + PRICE_TICK, max_safe))
         if price <= 0 or price >= market["cryptal_ask"]:
             return None
         affordable = self.cryptal_cash_usd / (price * (1.0 + CRYPTAL_MAKER_FEE_RATE))
         hedge_capacity = self.binance_balance_usdt / max(market["binance_mid"], 1.0)
-        qty = min(ORDER_NOTIONAL_USD / price, affordable, hedge_capacity)
+        quote_limit = ORDER_NOTIONAL_USD
+        if self.quote_currency != "USD":
+            # Convert the $40 cap into native quote currency at executable sides:
+            # TOGEL -> USDT at the local ask, then USDT -> TOUSD at the settlement bid.
+            quote_limit *= market["stable_ask"] / max(market["settlement_bid"], 1e-9)
+        qty = min(quote_limit / price, affordable, hedge_capacity)
         qty = math.floor(qty * 1_000_000) / 1_000_000
-        if qty <= 0 or qty * price < 5.0:
+        if qty <= 0 or qty * price < self.minimum_cost_quote:
             return None
         expected_gross_bps = (fair - price) / fair * 1e4
         return price, qty, expected_gross_bps
@@ -550,7 +665,7 @@ class CryptalMakerPaperBot:
             self._cycle_buy_price = 0.0
             self._note(
                 f"PAPER CYCLE {reason} @ {price:,.2f}; "
-                f"net P&L {pnl:+.4f} TOUSD-equivalent",
+                f"net P&L {pnl:+.4f} USD-equivalent",
                 "win" if pnl > 0 else "loss")
 
     def _force_expired_inventory(self, snapshot: dict) -> None:
@@ -622,16 +737,38 @@ class CryptalMakerPaperBot:
 
     def _equity(self, market: dict | None = None) -> float:
         market = market or self.market
-        fair = _number(market.get("fair_usd"))
+        fair = _number(market.get("fair_quote", market.get("fair_usd")))
         stable_bid = _number(market.get("stable_bid")) or 1.0
         stable_ask = _number(market.get("stable_ask")) or stable_bid
         spot_value = self.spot_qty * fair
         short_mark = _number(market.get("binance_ask"))
         short_pnl_usdt = self.short_qty * (self.short_entry_usdt - short_mark)
+        if self.quote_currency != "USD":
+            settlement_bid = _number(market.get("settlement_bid"))
+            settlement_ask = _number(market.get("settlement_ask")) or settlement_bid
+            if stable_ask <= 0 or settlement_bid <= 0:
+                return self.start_equity
+            local_assets_usdt = (self.cryptal_cash_usd + spot_value) / stable_ask
+            total_usdt = local_assets_usdt + self.binance_balance_usdt + short_pnl_usdt
+            settlement = settlement_bid if total_usdt >= 0 else settlement_ask
+            return total_usdt * settlement
         short_pnl_usd = short_pnl_usdt * (
             stable_bid if short_pnl_usdt >= 0 else stable_ask)
         return (self.cryptal_cash_usd + spot_value
                 + self.binance_balance_usdt * stable_bid + short_pnl_usd)
+
+    def _initialize_quote_cash(self, market: dict) -> None:
+        if self._quote_cash_initialized:
+            return
+        stable_ask = _number(market.get("stable_ask"))
+        settlement_bid = _number(market.get("settlement_bid"))
+        if stable_ask <= 0 or settlement_bid <= 0:
+            return
+        # Pre-fund $50-equivalent native quote cash. Executable conversion sides are
+        # deliberately used so the paper account cannot manufacture FX value.
+        self.cryptal_cash_usd = START_CRYPTAL_USD * stable_ask / settlement_bid
+        self.starting_quote_cash = self.cryptal_cash_usd
+        self._quote_cash_initialized = True
 
     def _tick(self, snapshot: dict) -> None:
         self.poll_count += 1
@@ -645,6 +782,7 @@ class CryptalMakerPaperBot:
         self.data_error = ""
         self.last_good_at = time.time()
         self.market = self._snapshot_market(snapshot)
+        self._initialize_quote_cash(self.market)
         if self.initial_equity_usd <= 0:
             self.initial_equity_usd = self._equity(self.market)
             self._cycle_start_equity = self.initial_equity_usd
@@ -686,7 +824,11 @@ class CryptalMakerPaperBot:
 
     def reset(self) -> dict:
         self.enabled = True
-        self.cryptal_cash_usd = START_CRYPTAL_USD
+        self.cryptal_cash_usd = (
+            START_CRYPTAL_USD if self.quote_currency == "USD" else 0.0
+        )
+        self.starting_quote_cash = self.cryptal_cash_usd
+        self._quote_cash_initialized = self.quote_currency == "USD"
         self.binance_balance_usdt = START_BINANCE_USDT
         self.spot_qty = self.spot_entry = self.spot_cost_usd = 0.0
         self.short_qty = self.short_entry_usdt = 0.0
@@ -699,6 +841,7 @@ class CryptalMakerPaperBot:
         self._seen_trade_set = set()
         self._absorbed_backlog = False
         self.initial_equity_usd = 0.0
+        self._initialize_quote_cash(self.market)
         if _number(self.market.get("stable_bid")) > 0:
             self.initial_equity_usd = self._equity(self.market)
         self._cycle_start_equity = self.start_equity
@@ -733,15 +876,16 @@ class CryptalMakerPaperBot:
         quote = dict(self.quote) if self.quote else None
         return {
             "running": True,
-            "name": NAME,
+            "name": self.instance_name,
             "enabled": self.enabled,
             "mode": "PAPER_ONLY",
             "live_trading_enabled": self.live_trading_enabled,
             "status": self.status,
             "data_error": self.data_error,
             "persistence_error": self.persistence_error,
-            "pair": CRYPTAL_PAIR,
-            "display_pair": "BTC-TOUSD",
+            "pair": self.pair,
+            "display_pair": self.display_pair,
+            "quote_currency": self.quote_currency,
             "hedge": "Binance BTCUSDT perpetual",
             "poll_sec": POLL_SEC,
             "max_hedged_hold_sec": MAX_HEDGED_HOLD_SEC,
@@ -760,14 +904,20 @@ class CryptalMakerPaperBot:
                 "delta_btc": round(self.spot_qty - self.short_qty, 8),
             },
             "cryptal_cash_usd": round(self.cryptal_cash_usd, 4),
+            "cryptal_cash_quote": round(self.cryptal_cash_usd, 4),
             "binance_balance_usdt": round(self.binance_balance_usdt, 4),
             "paper_bankroll_usd": PAPER_BANKROLL_USD,
             "starting_allocation": {
                 "cryptal_tousd": START_CRYPTAL_USD,
+                "cryptal_quote_currency": self.quote_currency,
+                "cryptal_quote_amount": round(self.starting_quote_cash, 4),
+                "cryptal_usd_equivalent": START_CRYPTAL_USD,
                 "binance_usdt": START_BINANCE_USDT,
                 "maximum_quote_notional": ORDER_NOTIONAL_USD,
+                "maximum_quote_notional_usd": ORDER_NOTIONAL_USD,
             },
             "marked_equity_tousd": round(marked_equity, 4),
+            "marked_equity_usd": round(marked_equity, 4),
             "balance": round(equity, 4),
             "equity": round(equity, 4),
             "start_balance": PAPER_BANKROLL_USD,
@@ -782,9 +932,24 @@ class CryptalMakerPaperBot:
                 "minimum_projected_net_bps": MIN_PROJECTED_NET_BPS,
             },
             "validation": self._validation(),
+            "georgian_market_audit": GEORGIAN_MARKET_AUDIT,
             "history": self.history[:40],
             "log": self.log[:30],
             "note": (
                 "Automated public-data paper simulation. It never calls Cryptal or "
                 "Binance private trading endpoints and cannot move real money."),
         }
+
+
+class CryptalGelMakerPaperBot(CryptalMakerPaperBot):
+    """Independent $100 paper ledger for Cryptal's live BTC-TOGEL order book."""
+
+    def __init__(self, state_path: str | None = None):
+        super().__init__(
+            state_path=state_path or GEL_STATE_PATH,
+            pair=CRYPTAL_GEL_PAIR,
+            stable_pair=GEL_STABLE_PAIR,
+            display_pair="BTC-TOGEL",
+            quote_currency="GEL",
+            minimum_cost_quote=10.0,
+        )

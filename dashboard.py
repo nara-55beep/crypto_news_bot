@@ -105,6 +105,7 @@ NEWSAI = news_reactor_bot.NewsReactorBot()   # News Reactor: AI reads the feed, 
 SNIPER = news_sniper_bot.NewsSniperBot()     # News Sniper: NO-AI rules engine, reacts instantly
 CROSSARB = cross_arb_paper.CrossArbBot()     # Cross-exchange arbitrage: Binance vs Hyperliquid, hedged
 CRYPTALMAKER = cryptal_maker_paper.CryptalMakerPaperBot()  # passive Cryptal spot + Binance hedge (paper)
+CRYPTALGELMAKER = cryptal_maker_paper.CryptalGelMakerPaperBot()  # BTC-TOGEL + the same Binance hedge (paper)
 AIRDROPS = airdrop_scanner.AirdropRadar(100.0)  # Airdrop Radar: tokenless protocols ranked for a small bankroll
 FVTRACK = fv_track_paper.FVTrackBot()        # Fair-value tracking: Lighter follower vs leader consensus (zero-fee edge)
 TREND = trend_breakout_paper.TrendBreakoutBot()  # Crypto Trend Breakout + ATR risk (daily, BTC/ETH/SOL, Goodman)
@@ -130,7 +131,7 @@ ICTLAB = ict_lab.ICTLab()                 # live visual ICT chart scanner, no tr
 # ---- per-bot "uptime since last reset" timer (shown on every panel header) -----
 _UPTIME_PATH = os.path.join(config.DATA_DIR, "bot_uptimes.json")
 BOT_RESET_TS: dict = {}
-KNOWN_BOT_KEYS = ["newsbot", "sniperbot", "arb", "cryptalmaker", "fv", "trend", "ainews", "claudehaiku", "tvstrats", "meanrev",
+KNOWN_BOT_KEYS = ["newsbot", "sniperbot", "arb", "cryptalmaker", "cryptalgelmaker", "fv", "trend", "ainews", "claudehaiku", "tvstrats", "meanrev",
                   "newsmomo", "newspaper", "rsi2noatr", "rsi2atr", "ictbot", "ictsm", "ictfreqbot", "freqbot", "freqtpbot",
                   "freqtrendbot", "freq5bot", "freqtfbot", "tsbot", "cotbot", "nwbot", "onchainbot", "ictlab",
                   "patternbots", "apexvwap", "lucidcont", "lucidpass", "nqmr15", "nr7", "nr7aggr", "penny"]
@@ -1702,6 +1703,20 @@ async def _cryptal_maker_toggle(request: web.Request):
 
 async def _cryptal_maker_reset(request: web.Request):
     return web.json_response(CRYPTALMAKER.reset())
+
+
+async def _cryptal_gel_maker_state(request: web.Request):
+    return web.json_response(CRYPTALGELMAKER.state())
+
+
+async def _cryptal_gel_maker_toggle(request: web.Request):
+    body = await request.json()
+    return web.json_response(CRYPTALGELMAKER.set_enabled(
+        body.get("enabled", not CRYPTALGELMAKER.enabled)))
+
+
+async def _cryptal_gel_maker_reset(request: web.Request):
+    return web.json_response(CRYPTALGELMAKER.reset())
 
 
 AIRDROPS_HTML = r"""<!doctype html>
@@ -3417,6 +3432,7 @@ PAPER_HTML = r"""<!doctype html>
   </div>
   <div id="wrap">
     <div class="bot cryptal-featured" id="cryptalmaker-panel"></div>
+    <div class="bot cryptal-featured" id="cryptalgelmaker-panel"></div>
     <div class="bot pinned" id="lucidcont-panel" style="grid-column:1/-1;border:3px solid #22c55e;box-shadow:0 0 18px rgba(34,197,94,.55)"></div>
     <div class="bot pinned" id="lucidpass-panel" style="grid-column:1/-1;border:3px solid #facc15;box-shadow:0 0 18px rgba(250,204,21,.6)"></div>
     <div class="bot pinned" id="nqmr15-panel" style="grid-column:1/-1;border:3px solid #fbbf24;box-shadow:0 0 16px rgba(251,191,36,.55)"></div>
@@ -3729,35 +3745,44 @@ PAPER_HTML = r"""<!doctype html>
   async function resetArb(){ if(!confirm('Reset the Cross-Exchange Arbitrage paper account?'))return; await fetch('/api/arb/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadArb(); }
   async function setArbLev(v){ const r=await(await fetch('/api/arb/lev',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lev:v})})).json(); if(!r.ok&&r.error) alert(r.error); loadArb(); }
 
-  // ---- CRYPTAL MAKER: passive BTC-TOUSD fill, immediate Binance hedge ----
+  // ---- CRYPTAL MAKER: BTC-TOUSD + BTC-TOGEL, immediate Binance hedge ----
   function cryptalMakerHist(s){
     if(!s.history || !s.history.length) return '<div class="empty">No completed maker/hedge cycles yet.</div>';
     return s.history.map(t=>'<div class="posrow" style="padding:6px 14px"><div class="top">'+
-      '<span class="src">Cryptal maker cycle</span><span style="color:'+(t.pnl>=0?'var(--green)':'var(--red)')+';font-weight:600">'+fmt(t.pnl)+'</span></div>'+
+      '<span class="src">'+esc(s.display_pair||'Cryptal')+' maker cycle</span><span style="color:'+(t.pnl>=0?'var(--green)':'var(--red)')+';font-weight:600">$'+Number(t.pnl||0).toFixed(4)+'</span></div>'+
       '<div class="det"><span>spot '+px1(t.buy)+' -> '+px1(t.sell)+'</span><span>hedge close '+px1(t.hedge_close)+'</span><span>'+fmt(t.return_bps)+' bps</span></div></div>').join('');
   }
-  async function loadCryptalMaker(){
-    let s; try{ s=await(await fetch('/api/cryptalmaker/state')).json(); }catch(e){ return; }
-    if(!s.running){ $('cryptalmaker-panel').innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">Cryptal Maker + Binance Hedge</span></div><div class="empty">bot not running</div>'; return; }
+  async function renderCryptalMaker(endpoint,panelId,toggleFn,resetFn,fallbackName){
+    let s; try{ s=await(await fetch(endpoint+'/state')).json(); }catch(e){ return; }
+    if(!s.running){ $(panelId).innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">'+esc(fallbackName)+'</span></div><div class="empty">bot not running</div>'; return; }
     const m=s.market||{}, q=s.quote||{}, inv=s.inventory||{}, val=s.validation||{};
+    const alloc=s.starting_allocation||{};
     const dot=s.enabled&&!s.data_error?'on':'off';
     const tgl=s.enabled?'Pause':'Resume';
+    const localCode=(s.display_pair||'BTC-TOUSD').split('-')[1]||s.quote_currency||'quote';
     const quoteText=s.quote
       ? esc(q.side)+' '+Number(q.qty||0).toFixed(6)+' BTC @ '+px1(q.price)+'; queue '+Number(q.queue_ahead_btc||0).toFixed(6)+' BTC; '+esc(String(q.edge_metric||'edge').replaceAll('_',' '))+' '+Number(q.edge_metric_bps||0).toFixed(1)+' bps'
       : 'No virtual maker order working.';
-    const marketText=m.fair_usd
-      ? 'Cryptal '+px1(m.cryptal_bid)+' / '+px1(m.cryptal_ask)+'; fair '+px1(m.fair_usd)+'; spread '+Number(m.cryptal_spread_bps||0).toFixed(1)+' bps; Binance '+px1(m.binance_bid)+' / '+px1(m.binance_ask)+'; USDT/TOUSD '+Number(m.stable_mid||0).toFixed(4)
+    const marketText=m.fair_quote
+      ? 'Cryptal '+px1(m.cryptal_bid)+' / '+px1(m.cryptal_ask)+' '+localCode+'; fair '+px1(m.fair_quote)+'; spread '+Number(m.cryptal_spread_bps||0).toFixed(1)+' bps; Binance '+px1(m.binance_bid)+' / '+px1(m.binance_ask)+'; USDT/'+localCode+' '+Number(m.stable_mid||0).toFixed(4)+(s.quote_currency==='GEL'?'; USDT/TOUSD settlement '+Number(m.settlement_mid||0).toFixed(4):'')
       : 'Waiting for Cryptal and Binance public order books.';
     const inventoryText='Cryptal spot '+Number(inv.spot_qty||0).toFixed(6)+' BTC; Binance short '+Number(inv.short_qty||0).toFixed(6)+' BTC; net delta '+Number(inv.delta_btc||0).toFixed(6)+' BTC';
     const problems=[s.data_error,s.persistence_error].filter(Boolean).map(x=>'<div class="sub" style="padding:6px 14px;color:var(--red)">'+esc(x)+'</div>').join('');
-    $('cryptalmaker-panel').innerHTML =
-      '<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">Cryptal Maker + Binance Hedge</span>'+
-        '<span class="badge cryptal-new-badge">NEW STRATEGY</span><span class="badge">PAPER ONLY</span><span class="badge">'+esc(s.display_pair||'BTC-TOUSD')+'</span><span class="spacer"></span>'+
-        '<button class="btn '+(s.enabled?'on':'off')+'" onclick="toggleCryptalMaker()">'+tgl+'</button>'+
-        '<button class="btn reset" onclick="resetCryptalMaker()">reset</button></div>'+
+    const venueAudit=s.quote_currency==='GEL'&&s.georgian_market_audit
+      ? '<div class="sub" style="padding:6px 14px;color:var(--muted)">Georgian venue audit: '+Number(s.georgian_market_audit.registered_vasps_in_scope||0)+' VASPs were in the official NBG register used as scope; only Cryptal exposed a qualifying public BTC/GEL order book and timestamped trade tape. WhiteBIT Georgia and Bybit Georgia had zero GEL spot pairs; dealer, wallet, P2P and OTC quotes fail closed.</div>'
+      : '';
+    const nativeAlloc=s.quote_currency==='GEL'&&Number(alloc.cryptal_quote_amount||0)>0
+      ? ' (~'+Number(alloc.cryptal_quote_amount).toFixed(2)+' '+localCode+')':'';
+    const marketBadge=s.quote_currency==='GEL'?'<span class="badge">BTC/GEL ADDED</span>':'';
+    $(panelId).innerHTML =
+      '<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">'+esc(s.name||fallbackName)+'</span>'+
+        '<span class="badge cryptal-new-badge">NEW STRATEGY</span>'+marketBadge+'<span class="badge">PAPER ONLY</span><span class="badge">'+esc(s.display_pair||'BTC-TOUSD')+'</span><span class="spacer"></span>'+
+        '<button class="btn '+(s.enabled?'on':'off')+'" onclick="'+toggleFn+'()">'+tgl+'</button>'+
+        '<button class="btn reset" onclick="'+resetFn+'()">reset</button></div>'+
       statHead(s)+
-      '<div class="sub" style="padding:7px 14px">'+esc(s.status||'')+'; $'+Number(s.paper_bankroll_usd||100).toFixed(0)+' total paper capital ($'+Number((s.starting_allocation||{}).cryptal_tousd||50).toFixed(0)+' Cryptal + $'+Number((s.starting_allocation||{}).binance_usdt||50).toFixed(0)+' Binance hedge collateral); maximum quote $'+Number((s.starting_allocation||{}).maximum_quote_notional||40).toFixed(0)+'. Polls every '+Number(s.poll_sec||2)+'s; unresolved inventory is force-closed after '+Math.round(Number(s.max_hedged_hold_sec||86400)/3600)+'h. No private API or real-order code exists.</div>'+
+      '<div class="sub" style="padding:7px 14px">'+esc(s.status||'')+'; isolated $'+Number(s.paper_bankroll_usd||100).toFixed(0)+' paper trial ($'+Number(alloc.cryptal_usd_equivalent||50).toFixed(0)+'-equivalent Cryptal '+localCode+nativeAlloc+' + $'+Number(alloc.binance_usdt||50).toFixed(0)+' Binance hedge collateral); maximum quote $'+Number(alloc.maximum_quote_notional_usd||alloc.maximum_quote_notional||40).toFixed(0)+' equivalent. Polls every '+Number(s.poll_sec||2)+'s; unresolved inventory is force-closed after '+Math.round(Number(s.max_hedged_hold_sec||86400)/3600)+'h. No private API or real-order code exists.</div>'+
       problems+
+      venueAudit+
       '<div class="ph">Executable market and conversion</div><div class="sub" style="padding:8px 14px">'+marketText+'</div>'+
       '<div class="ph">Working paper quote</div><div class="sub" style="padding:8px 14px">'+quoteText+'</div>'+
       '<div class="ph">Hedged inventory</div><div class="sub" style="padding:8px 14px">'+inventoryText+'</div>'+
@@ -3765,8 +3790,12 @@ PAPER_HTML = r"""<!doctype html>
       '<div class="ph">Activity</div><div class="feed">'+logBlock(s)+'</div>'+
       '<div class="ph">Closed paper cycles</div><div class="hist">'+cryptalMakerHist(s)+'</div>';
   }
+  async function loadCryptalMaker(){ return renderCryptalMaker('/api/cryptalmaker','cryptalmaker-panel','toggleCryptalMaker','resetCryptalMaker','Cryptal BTC-TOUSD Maker + Binance Hedge'); }
+  async function loadCryptalGelMaker(){ return renderCryptalMaker('/api/cryptalgelmaker','cryptalgelmaker-panel','toggleCryptalGelMaker','resetCryptalGelMaker','Cryptal BTC-TOGEL Maker + Binance Hedge'); }
   async function toggleCryptalMaker(){ let s; try{s=await(await fetch('/api/cryptalmaker/state')).json();}catch(e){return;} await fetch('/api/cryptalmaker/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadCryptalMaker(); }
   async function resetCryptalMaker(){ if(!confirm('Reset the Cryptal maker paper collector?'))return; await fetch('/api/cryptalmaker/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadCryptalMaker(); }
+  async function toggleCryptalGelMaker(){ let s; try{s=await(await fetch('/api/cryptalgelmaker/state')).json();}catch(e){return;} await fetch('/api/cryptalgelmaker/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadCryptalGelMaker(); }
+  async function resetCryptalGelMaker(){ if(!confirm('Reset the Cryptal BTC-TOGEL maker paper collector?'))return; await fetch('/api/cryptalgelmaker/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadCryptalGelMaker(); }
 
   // ---- FAIR-VALUE TRACKING: Lighter follower vs leader consensus (zero-fee edge) ----
   function fvPriceBlock(s){
@@ -4388,7 +4417,7 @@ PAPER_HTML = r"""<!doctype html>
   }
 
   // ================= per-bot "up since reset" timer badge (all panels) =================
-  const BOT_PANELS={'news-panel':'newsbot','sniper-panel':'sniperbot','arb-panel':'arb','cryptalmaker-panel':'cryptalmaker','fv-panel':'fv',
+  const BOT_PANELS={'news-panel':'newsbot','sniper-panel':'sniperbot','arb-panel':'arb','cryptalmaker-panel':'cryptalmaker','cryptalgelmaker-panel':'cryptalgelmaker','fv-panel':'fv',
     'trend-panel':'trend','ainews-panel':'ainews','tvstrats-panel':'tvstrats','meanrev-panel':'meanrev',
     'newsmomo-panel':'newsmomo','rsi2noatr-panel':'rsi2noatr','rsi2atr-panel':'rsi2atr','newspaper-panel':'newspaper','ictsm-panel':'ictsm','ict-panel':'ictbot','ictfreq-panel':'ictfreqbot',
     'freq-panel':'freqbot','freqtp-panel':'freqtpbot','freqtrend-panel':'freqtrendbot','freq5-panel':'freq5bot',
@@ -4960,7 +4989,7 @@ PAPER_HTML = r"""<!doctype html>
   async function toggleCOT(){ let s; try{s=await(await fetch('/api/cotbot/state')).json();}catch(e){return;} await fetch('/api/cotbot/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadCOT(); }
   async function resetCOT(){ if(!confirm('Reset the COT paper account?'))return; await fetch('/api/cotbot/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadCOT(); }
 
-  function loadAll(){ loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
+  function loadAll(){ loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadCryptalGelMaker(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
   loadAll(); setInterval(loadAll, 2000);
 </script>
 </body>
@@ -5059,6 +5088,9 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.get("/api/cryptalmaker/state", _cryptal_maker_state),
         web.post("/api/cryptalmaker/toggle", _cryptal_maker_toggle),
         web.post("/api/cryptalmaker/reset", _cryptal_maker_reset),
+        web.get("/api/cryptalgelmaker/state", _cryptal_gel_maker_state),
+        web.post("/api/cryptalgelmaker/toggle", _cryptal_gel_maker_toggle),
+        web.post("/api/cryptalgelmaker/reset", _cryptal_gel_maker_reset),
         web.get("/api/fv/state", _fv_state),
         web.post("/api/fv/toggle", _fv_toggle),
         web.post("/api/fv/reset", _fv_reset),
@@ -5212,6 +5244,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
     CROSSARB.attach(market, WHALES)             # cross-exchange arb: Binance + Hyperliquid prices
     asyncio.create_task(CROSSARB.manage_loop()) # cross-exchange arb: watch gap, hedge, converge
     asyncio.create_task(CRYPTALMAKER.manage_loop()) # Cryptal maker fill -> Binance delta hedge (paper)
+    asyncio.create_task(CRYPTALGELMAKER.manage_loop()) # Cryptal BTC-TOGEL maker -> Binance hedge (paper)
     asyncio.create_task(AIRDROPS.manage_loop())  # Airdrop Radar: rescan DeFiLlama for tokenless protocols
     FVTRACK.attach(market, WHALES)              # fair-value tracking: leaders' consensus vs Lighter
     asyncio.create_task(FVTRACK.manage_loop())  # fair-value tracking: trade Lighter's deviation -> FV
