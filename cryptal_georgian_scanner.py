@@ -1,9 +1,9 @@
-"""All-market Cryptal opportunity scanner and best-candidate paper collector.
+"""Georgian multi-venue opportunity monitor and Cryptal paper collector.
 
-The Georgian side is always Cryptal. Binance is used only as the external fair-value
-and delta-hedge reference. The scanner evaluates every active Cryptal pair whose base
-asset has a live Binance USDT perpetual; the collector follows one best candidate at
-a time so one $100 paper bankroll is not falsely presented as sixty funded accounts.
+The execution collector remains Cryptal-only because it is the only registered local
+venue with a verified public order book and timestamped trade tape.  A companion
+scanner supplies honest fixed-quote screens for other registered Georgian venues.
+Binance is used as the external fair-value and delta-hedge reference.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import config
 import cryptal_maker_paper as maker
 
 
-NAME = "Cryptal Georgian All-Market Maker + Binance Hedge"
+NAME = "Georgian Multi-Venue Arbitrage Monitor + Cryptal Maker"
 SCAN_INTERVAL_SEC = 5 * 60
 MAX_TRADE_AGE_SEC = 15 * 60
 MAX_DISPLAY_MARKETS = 60
@@ -57,10 +57,12 @@ class CryptalGeorgianMarketScanner:
         *,
         clock=None,
         sleeper=None,
+        venue_scanner=None,
     ):
         self.data_hub = data_hub
         self._clock = clock or time.time
         self._sleep = sleeper or asyncio.sleep
+        self.venue_scanner = venue_scanner
         self.running = False
         self.scan_in_progress = False
         self.status = "waiting for first all-market scan"
@@ -386,7 +388,7 @@ class CryptalGeorgianMarketScanner:
         return None
 
     def state(self) -> dict:
-        return {
+        state = {
             "running": self.running,
             "scan_in_progress": self.scan_in_progress,
             "status": self.status,
@@ -410,6 +412,9 @@ class CryptalGeorgianMarketScanner:
             ),
             "evidentiary": False,
         }
+        if self.venue_scanner is not None:
+            state["georgian_venues"] = self.venue_scanner.state()
+        return state
 
 
 class CryptalBestGeorgianMarketPaperBot:
@@ -653,8 +658,8 @@ class CryptalBestGeorgianMarketPaperBot:
                 "markets are not summed as separately funded accounts."
             ),
             "note": (
-                "All-market Georgian discovery with public Cryptal books/trades and "
-                "Binance hedge references. Paper fills remain non-evidentiary."
+                "Cryptal order-book collection plus registered Georgian fixed-quote "
+                "screens against Binance. Dealer quotes never become simulated fills."
             ),
         })
         return state

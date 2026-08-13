@@ -47,6 +47,7 @@ import news_sniper_bot
 import cross_arb_paper
 import cryptal_maker_paper
 import cryptal_georgian_scanner
+import georgian_venue_scanner
 import airdrop_scanner
 import confirmed_airdrops
 import fv_track_paper
@@ -114,8 +115,11 @@ CRYPTALMAKER = cryptal_maker_paper.CryptalMakerPaperBot(
 CRYPTALGELMAKER = cryptal_maker_paper.CryptalGelMakerPaperBot(
     data_hub=CRYPTAL_DATA
 )  # BTC-TOGEL + the same Binance hedge (paper)
-CRYPTALGEOSCANNER = cryptal_georgian_scanner.CryptalGeorgianMarketScanner(
+GEORGIANVENUES = georgian_venue_scanner.GeorgianVenueOpportunityScanner(
     CRYPTAL_DATA
+)
+CRYPTALGEOSCANNER = cryptal_georgian_scanner.CryptalGeorgianMarketScanner(
+    CRYPTAL_DATA, venue_scanner=GEORGIANVENUES
 )
 CRYPTALGEOBOT = cryptal_georgian_scanner.CryptalBestGeorgianMarketPaperBot(
     CRYPTALGEOSCANNER, CRYPTAL_DATA
@@ -1758,7 +1762,11 @@ async def _cryptal_geo_scan(request: web.Request):
         )
         async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
             try:
-                await CRYPTALGEOSCANNER.scan_once(session)
+                await asyncio.gather(
+                    CRYPTALGEOSCANNER.scan_once(session),
+                    GEORGIANVENUES.scan_once(session),
+                    return_exceptions=True,
+                )
             except Exception:
                 pass
 
@@ -3806,7 +3814,10 @@ PAPER_HTML = r"""<!doctype html>
     const rows=(u.opportunities||[]).slice(0,18);
     const table=rows.length?rows.map((r,i)=>'<div class="posrow" style="padding:6px 14px"><div class="top"><span><b>'+(i+1)+'. '+esc(r.display_pair||r.pair)+'</b> <span class="src">hedge '+esc(r.hedge_symbol||'')+'</span></span><span style="color:var(--green)">'+Number(r.conservative_net_bps||0).toFixed(1)+' bps screened</span></div><div class="det"><span>book '+cryptalPx(r.cryptal_bid)+' / '+cryptalPx(r.cryptal_ask)+'</span><span>spread '+Number(r.spread_bps||0).toFixed(1)+' bps</span><span>last print '+Math.round(Number(r.last_trade_age_sec||0)/60)+'m ago</span></div></div>').join(''):'<div class="empty">No market currently clears the conservative paper screen.</div>';
     const every=Number(u.scan_interval_sec||60), cadence=every<120?Math.round(every)+' seconds':Math.round(every/60)+' minutes';
-    return '<div class="ph">All Georgian-exchange markets</div><div class="sub" style="padding:7px 14px">'+esc(u.status||'')+'; catalog '+Number(u.catalog_count||0)+', hedgeable '+Number(u.eligible_count||0)+', scanned '+Number(u.scanned_count||0)+'. Full universe refresh every '+cadence+'; the selected market remains on a 2-second fill loop. <button class="btn" onclick="scanCryptalGeo()">scan now</button></div>'+table;
+    const v=u.georgian_venues||{}, vr=(v.opportunities&&v.opportunities.length?v.opportunities:v.rows||[]).slice(0,16);
+    const venueRows=vr.length?vr.map(r=>'<div class="posrow" style="padding:6px 14px"><div class="top"><span><b>'+esc(r.venue||'venue')+' · '+esc(r.pair||'')+'</b> <span class="src">'+esc(r.quote_kind||'fixed quote')+'</span></span><span style="color:'+(Number(r.net_edge_bps||0)>=100?'var(--green)':'var(--muted)')+'">'+Number(r.net_edge_bps||0).toFixed(1)+' bps after reserves</span></div><div class="det"><span>'+esc(r.direction||'')+'</span><span>gross '+Number(r.gross_edge_bps||0).toFixed(1)+' bps</span><span>'+esc(r.reason||r.detail||'screen only')+'</span></div></div>').join(''):'<div class="empty">Waiting for public fixed quotes from Coinet, Mycoins and PlatformaEX.</div>';
+    const venueBlock='<div class="ph">Other registered Georgian venues — fixed-quote screen, no assumed fills</div><div class="sub" style="padding:7px 14px">'+esc(v.status||'waiting for multi-venue scan')+'; '+Number(v.registered_vasp_count||42)+' active VASPs audited, '+Number(v.machine_readable_local_count||4)+' verified machine-readable local feeds, and only '+Number(v.same_as_cryptal_count||1)+' Cryptal-style public order book. Screen cadence '+Number(v.scan_interval_sec||15)+'s at $'+Number(v.paper_notional_usd||100).toFixed(0)+'. '+esc(v.limitations||'')+'</div>'+venueRows;
+    return '<div class="ph">Cryptal order-book markets</div><div class="sub" style="padding:7px 14px">'+esc(u.status||'')+'; catalog '+Number(u.catalog_count||0)+', hedgeable '+Number(u.eligible_count||0)+', scanned '+Number(u.scanned_count||0)+'. Full Cryptal universe refresh every '+cadence+'; the selected market remains on a 2-second fill loop. <button class="btn" onclick="scanCryptalGeo()">scan now</button></div>'+table+venueBlock;
   }
   async function renderCryptalMaker(endpoint,panelId,toggleFn,resetFn,fallbackName){
     let s; try{ s=await(await fetch(endpoint+'/state')).json(); }catch(e){ return; }
@@ -3851,7 +3862,7 @@ PAPER_HTML = r"""<!doctype html>
   }
   async function loadCryptalMaker(){ return renderCryptalMaker('/api/cryptalmaker','cryptalmaker-panel','toggleCryptalMaker','resetCryptalMaker','Cryptal BTC-TOUSD Maker + Binance Hedge'); }
   async function loadCryptalGelMaker(){ return renderCryptalMaker('/api/cryptalgelmaker','cryptalgelmaker-panel','toggleCryptalGelMaker','resetCryptalGelMaker','Cryptal BTC-TOGEL Maker + Binance Hedge'); }
-  async function loadCryptalGeo(){ return renderCryptalMaker('/api/cryptalgeo','cryptalgeo-panel','toggleCryptalGeo','resetCryptalGeo','Cryptal Georgian All-Market Maker + Binance Hedge'); }
+  async function loadCryptalGeo(){ return renderCryptalMaker('/api/cryptalgeo','cryptalgeo-panel','toggleCryptalGeo','resetCryptalGeo','Georgian Multi-Venue Arbitrage Monitor + Cryptal Maker'); }
   async function toggleCryptalMaker(){ let s; try{s=await(await fetch('/api/cryptalmaker/state')).json();}catch(e){return;} await fetch('/api/cryptalmaker/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadCryptalMaker(); }
   async function resetCryptalMaker(){ if(!confirm('Reset the Cryptal maker paper collector?'))return; await fetch('/api/cryptalmaker/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadCryptalMaker(); }
   async function toggleCryptalGelMaker(){ let s; try{s=await(await fetch('/api/cryptalgelmaker/state')).json();}catch(e){return;} await fetch('/api/cryptalgelmaker/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadCryptalGelMaker(); }
@@ -5311,6 +5322,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
     CROSSARB.attach(market, WHALES)             # cross-exchange arb: Binance + Hyperliquid prices
     asyncio.create_task(CROSSARB.manage_loop()) # cross-exchange arb: watch gap, hedge, converge
     asyncio.create_task(CRYPTALGEOSCANNER.manage_loop()) # every hedgeable Georgian-exchange market
+    asyncio.create_task(GEORGIANVENUES.manage_loop()) # registered Georgian fixed-quote venues
     asyncio.create_task(CRYPTALMAKER.manage_loop()) # Cryptal maker fill -> Binance delta hedge (paper)
     asyncio.create_task(CRYPTALGELMAKER.manage_loop()) # Cryptal BTC-TOGEL maker -> Binance hedge (paper)
     asyncio.create_task(CRYPTALGEOBOT.manage_loop()) # one $100 collector follows the best non-BTC market
