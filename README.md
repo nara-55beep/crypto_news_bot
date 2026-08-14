@@ -44,6 +44,18 @@ You'll see live prices, then a stream of `[SKIP]` / `[OPEN]` / `[CLOSE]` /
 `[status]` lines. Every news item (traded or not) is logged to `data/trades.db`
 (SQLite) — query it later to learn what you skipped and how it moved.
 
+### Lucid Strategy Lab
+
+Open `http://127.0.0.1:8080/lucid-lab` while the dashboard is running. The Lab is
+a separate, read-only futures-evaluation research page: it compares source-linked
+Lucid rules, sizes integer micro contracts, exposes the exact causal strategy,
+and reports chronological pass, breach and unfinished outcomes under execution
+stress. It cannot route orders and does not change the existing Lucid paper bots.
+
+The committed result is labeled **EXPERIMENTAL — PROXY EVIDENCE**, not validated
+or guaranteed. Reproduction instructions, official-source dates, assumptions and
+limitations are in [`docs/lucid/`](docs/lucid/).
+
 ---
 
 ## Read this — honest expectations
