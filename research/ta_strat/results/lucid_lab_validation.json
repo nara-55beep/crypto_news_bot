@@ -356,6 +356,7 @@
       "parameter_stability": "limited",
       "profit_factor": 1.0739,
       "reason": "Positive sparse sleeve, but too many unfinished evaluation windows alone.",
+      "strategy_version": "nq_drive_standalone_v1",
       "stressed_pass_rate": 0.185374,
       "trades": 140,
       "validation_status": "REJECTED_STANDALONE",
@@ -375,6 +376,7 @@
       "parameter_stability": "limited",
       "profit_factor": 1.7553,
       "reason": "Diversifies NQ but is too sparse alone.",
+      "strategy_version": "es_gap_fill_standalone_v1",
       "stressed_pass_rate": 0.333333,
       "trades": 128,
       "validation_status": "REJECTED_STANDALONE",
@@ -394,6 +396,7 @@
       "parameter_stability": "limited",
       "profit_factor": 1.3885,
       "reason": "Adds frequency at lower risk; weaker standalone payoff and cost sensitivity.",
+      "strategy_version": "nq_prior_breakout_standalone_v1",
       "stressed_pass_rate": 0.0,
       "trades": 161,
       "validation_status": "REJECTED_STANDALONE",
@@ -413,6 +416,7 @@
       "parameter_stability": "moderate",
       "profit_factor": 1.3814,
       "reason": "Best balance of frequency and development-selected sleeves; still proxy evidence only.",
+      "strategy_version": "lucid_lab_portfolio_v1",
       "stressed_pass_rate": 0.370748,
       "trades": 429,
       "validation_status": "EXPERIMENTAL_PROXY",
@@ -433,6 +437,7 @@
       "profit_factor": 1.02,
       "reason": "The attractive 98% result used future information and optimistic fills; causal repair collapsed it.",
       "source": "research/ta_strat/LUCID_CAUSAL_REBUILD_REPORT.md",
+      "strategy_version": "invalidated_legacy_v0",
       "stressed_pass_rate": null,
       "trades": 7839,
       "validation_status": "INVALIDATED",
@@ -452,6 +457,20 @@
       {
         "name": "Slippage",
         "value": 1092.75
+      }
+    ],
+    "outcome_distribution": [
+      {
+        "count": 278,
+        "name": "Pass"
+      },
+      {
+        "count": 0,
+        "name": "Breach"
+      },
+      {
+        "count": 310,
+        "name": "Unfinished"
       }
     ],
     "pass_duration_histogram": [
@@ -630,10 +649,13 @@
     ],
     "representative_timeline": [
       {
+        "consistency_pct": null,
         "daily_net_pnl": -78.97,
         "day": 1,
         "drawdown_floor": 24000.0,
         "ending_balance": 24921.03,
+        "largest_profitable_day": 0.0,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 921.03,
         "session": "2024-02-08",
@@ -642,10 +664,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 175.17,
         "daily_net_pnl": 184.01,
         "day": 2,
         "drawdown_floor": 24105.05,
         "ending_balance": 25105.05,
+        "largest_profitable_day": 184.01,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 1000.0,
         "session": "2024-02-09",
@@ -654,10 +679,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 1852.55,
         "daily_net_pnl": -95.12,
         "day": 3,
         "drawdown_floor": 24105.05,
         "ending_balance": 25009.93,
+        "largest_profitable_day": 184.01,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 904.88,
         "session": "2024-02-12",
@@ -666,10 +694,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 98.17,
         "daily_net_pnl": 177.52,
         "day": 4,
         "drawdown_floor": 24187.45,
         "ending_balance": 25187.45,
+        "largest_profitable_day": 184.01,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 1000.0,
         "session": "2024-02-13",
@@ -678,10 +709,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 193.86,
         "daily_net_pnl": -92.53,
         "day": 5,
         "drawdown_floor": 24187.45,
         "ending_balance": 25094.92,
+        "largest_profitable_day": 184.01,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 907.47,
         "session": "2024-02-14",
@@ -690,10 +724,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 193.86,
         "daily_net_pnl": 0.0,
         "day": 6,
         "drawdown_floor": 24187.45,
         "ending_balance": 25094.92,
+        "largest_profitable_day": 184.01,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 907.47,
         "session": "2024-02-15",
@@ -702,10 +739,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 88.87,
         "daily_net_pnl": 758.2,
         "day": 7,
         "drawdown_floor": 24853.12,
         "ending_balance": 25853.12,
+        "largest_profitable_day": 758.2,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 1000.0,
         "session": "2024-02-16",
@@ -714,10 +754,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 104.9,
         "daily_net_pnl": -130.36,
         "day": 8,
         "drawdown_floor": 24853.12,
         "ending_balance": 25722.76,
+        "largest_profitable_day": 758.2,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 869.64,
         "session": "2024-02-20",
@@ -726,10 +769,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 104.9,
         "daily_net_pnl": 0.0,
         "day": 9,
         "drawdown_floor": 24853.12,
         "ending_balance": 25722.76,
+        "largest_profitable_day": 758.2,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 869.64,
         "session": "2024-02-21",
@@ -738,10 +784,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 85.81,
         "daily_net_pnl": 160.77,
         "day": 10,
         "drawdown_floor": 24883.54,
         "ending_balance": 25883.54,
+        "largest_profitable_day": 758.2,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 1000.0,
         "session": "2024-02-22",
@@ -750,10 +799,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 71.96,
         "daily_net_pnl": 170.17,
         "day": 11,
         "drawdown_floor": 25053.71,
         "ending_balance": 26053.71,
+        "largest_profitable_day": 758.2,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 1000.0,
         "session": "2024-02-23",
@@ -762,10 +814,13 @@
         "warning": ""
       },
       {
+        "consistency_pct": 49.02,
         "daily_net_pnl": 493.07,
         "day": 12,
         "drawdown_floor": 25100.0,
         "ending_balance": 26546.77,
+        "largest_profitable_day": 758.2,
+        "permitted_contracts": "2 minis / 20 micros",
         "permitted_micros": 20,
         "remaining_drawdown": 1446.77,
         "session": "2024-02-26",
@@ -1060,6 +1115,88 @@
     "pass_rate": 0.4754,
     "paths": 5000,
     "seed": 20260814,
+    "terminal_profit_histogram": [
+      {
+        "count": 972,
+        "hi": -810.88,
+        "lo": -1000.79
+      },
+      {
+        "count": 232,
+        "hi": -620.96,
+        "lo": -810.88
+      },
+      {
+        "count": 353,
+        "hi": -431.05,
+        "lo": -620.96
+      },
+      {
+        "count": 316,
+        "hi": -241.14,
+        "lo": -431.05
+      },
+      {
+        "count": 278,
+        "hi": -51.23,
+        "lo": -241.14
+      },
+      {
+        "count": 347,
+        "hi": 138.68,
+        "lo": -51.23
+      },
+      {
+        "count": 50,
+        "hi": 328.59,
+        "lo": 138.68
+      },
+      {
+        "count": 23,
+        "hi": 518.5,
+        "lo": 328.59
+      },
+      {
+        "count": 14,
+        "hi": 708.41,
+        "lo": 518.5
+      },
+      {
+        "count": 15,
+        "hi": 898.32,
+        "lo": 708.41
+      },
+      {
+        "count": 14,
+        "hi": 1088.23,
+        "lo": 898.32
+      },
+      {
+        "count": 208,
+        "hi": 1278.14,
+        "lo": 1088.23
+      },
+      {
+        "count": 1192,
+        "hi": 1468.05,
+        "lo": 1278.14
+      },
+      {
+        "count": 648,
+        "hi": 1657.97,
+        "lo": 1468.05
+      },
+      {
+        "count": 281,
+        "hi": 1847.88,
+        "lo": 1657.97
+      },
+      {
+        "count": 57,
+        "hi": 2037.79,
+        "lo": 1847.88
+      }
+    ],
     "terminal_profit_median": 139.64,
     "terminal_profit_p05": -991.48,
     "terminal_profit_p25": -585.91,
@@ -1076,7 +1213,7 @@
     "historical_gap_through_stops_in_raw_test_signals": 3,
     "risk_rejections": 17862
   },
-  "run_id": "9dd7658a37e8dcf6",
+  "run_id": "db5b31c94d3cd7b7",
   "schema_version": 1,
   "seed": 20260814,
   "selected": {
@@ -1208,6 +1345,218 @@
       "pass_rate": 0.437075,
       "prior_risk": 125.0,
       "unfinished_rate": 0.562925
+    }
+  ],
+  "signal_sensitivity": [
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_threshold",
+      "expectancy": 54.66,
+      "pass_rate": 0.520408,
+      "selected": false,
+      "trades": 461,
+      "unfinished_rate": 0.479592,
+      "value": 0.2
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_threshold",
+      "expectancy": 44.29,
+      "pass_rate": 0.472789,
+      "selected": true,
+      "trades": 429,
+      "unfinished_rate": 0.527211,
+      "value": 0.25
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_threshold",
+      "expectancy": 50.82,
+      "pass_rate": 0.493197,
+      "selected": false,
+      "trades": 393,
+      "unfinished_rate": 0.506803,
+      "value": 0.3
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_target_rr",
+      "expectancy": 47.05,
+      "pass_rate": 0.559524,
+      "selected": false,
+      "trades": 429,
+      "unfinished_rate": 0.440476,
+      "value": 1.5
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_target_rr",
+      "expectancy": 44.29,
+      "pass_rate": 0.472789,
+      "selected": true,
+      "trades": 429,
+      "unfinished_rate": 0.527211,
+      "value": 2.0
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_target_rr",
+      "expectancy": 42.0,
+      "pass_rate": 0.520408,
+      "selected": false,
+      "trades": 429,
+      "unfinished_rate": 0.479592,
+      "value": 2.5
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_entry_minute",
+      "expectancy": 53.18,
+      "pass_rate": 0.482993,
+      "selected": false,
+      "trades": 398,
+      "unfinished_rate": 0.517007,
+      "value": 10.0
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_entry_minute",
+      "expectancy": 44.29,
+      "pass_rate": 0.472789,
+      "selected": true,
+      "trades": 429,
+      "unfinished_rate": 0.527211,
+      "value": 15.0
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "nq_drive_entry_minute",
+      "expectancy": 45.12,
+      "pass_rate": 0.467687,
+      "selected": false,
+      "trades": 429,
+      "unfinished_rate": 0.532313,
+      "value": 20.0
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "es_gap_threshold",
+      "expectancy": 41.34,
+      "pass_rate": 0.440476,
+      "selected": false,
+      "trades": 438,
+      "unfinished_rate": 0.559524,
+      "value": 0.05
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "es_gap_threshold",
+      "expectancy": 44.29,
+      "pass_rate": 0.472789,
+      "selected": true,
+      "trades": 429,
+      "unfinished_rate": 0.527211,
+      "value": 0.1
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "es_gap_threshold",
+      "expectancy": 46.81,
+      "pass_rate": 0.488095,
+      "selected": false,
+      "trades": 422,
+      "unfinished_rate": 0.511905,
+      "value": 0.15
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "es_gap_target_rr",
+      "expectancy": 39.48,
+      "pass_rate": 0.416667,
+      "selected": false,
+      "trades": 429,
+      "unfinished_rate": 0.583333,
+      "value": 1.25
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "es_gap_target_rr",
+      "expectancy": 44.29,
+      "pass_rate": 0.472789,
+      "selected": true,
+      "trades": 429,
+      "unfinished_rate": 0.527211,
+      "value": 1.5
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "es_gap_target_rr",
+      "expectancy": 44.49,
+      "pass_rate": 0.442177,
+      "selected": false,
+      "trades": 429,
+      "unfinished_rate": 0.557823,
+      "value": 1.75
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "prior_breakout_threshold",
+      "expectancy": 41.77,
+      "pass_rate": 0.435374,
+      "selected": false,
+      "trades": 416,
+      "unfinished_rate": 0.564626,
+      "value": 0.2
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "prior_breakout_threshold",
+      "expectancy": 44.29,
+      "pass_rate": 0.472789,
+      "selected": true,
+      "trades": 429,
+      "unfinished_rate": 0.527211,
+      "value": 0.25
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "prior_breakout_threshold",
+      "expectancy": 43.1,
+      "pass_rate": 0.471088,
+      "selected": false,
+      "trades": 429,
+      "unfinished_rate": 0.528912,
+      "value": 0.3
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "prior_breakout_target_rr",
+      "expectancy": 41.45,
+      "pass_rate": 0.47619,
+      "selected": false,
+      "trades": 429,
+      "unfinished_rate": 0.52381,
+      "value": 1.5
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "prior_breakout_target_rr",
+      "expectancy": 44.29,
+      "pass_rate": 0.472789,
+      "selected": true,
+      "trades": 429,
+      "unfinished_rate": 0.527211,
+      "value": 2.0
+    },
+    {
+      "breach_rate": 0.0,
+      "dimension": "prior_breakout_target_rr",
+      "expectancy": 45.83,
+      "pass_rate": 0.503401,
+      "selected": false,
+      "trades": 429,
+      "unfinished_rate": 0.496599,
+      "value": 2.5
     }
   ],
   "split_results": {
@@ -1673,16 +2022,169 @@
     "average_loss": -215.69,
     "average_win": 347.6,
     "commissions": 1161.0,
-    "cost_pct_of_positive_gross": 14.97,
+    "concentration": {
+      "largest_positive_day_share_pct": 2.22,
+      "largest_positive_month_share_pct": 14.96,
+      "largest_winning_trade_share_pct": 1.15,
+      "trades_by_year": {
+        "2024": 177,
+        "2025": 171,
+        "2026": 81
+      }
+    },
+    "cost_pct_of_positive_gross": 4.74,
     "expectancy": 44.29,
     "gross_before_costs": 22348.69,
     "max_drawdown": -3775.11,
     "net": 19002.19,
     "payoff_ratio": 1.6116,
+    "positive_gross_profit": 70557.03,
     "profit_factor": 1.3814,
     "slippage_cost": 1092.75,
     "spread_cost": 1092.75,
     "trades": 429,
     "win_rate": 0.461538
-  }
+  },
+  "walk_forward": [
+    {
+      "breach_rate": 0.0,
+      "breaches": 0,
+      "duration": {
+        "conditional_on_pass": true,
+        "fastest": 2,
+        "mean": 14.075757575757576,
+        "median": 13.0,
+        "p10": 4.100000000000001,
+        "p25": 8.0,
+        "p75": 18.0,
+        "p90": 26.0,
+        "restricted_mean": 24.891625615763548
+      },
+      "median_max_drawdown": -417.53,
+      "median_terminal_profit": 1328.69,
+      "pass_rate": 0.650246,
+      "pass_wilson_95": [
+        0.582406,
+        0.712506
+      ],
+      "passes": 132,
+      "unfinished": 71,
+      "unfinished_rate": 0.349754,
+      "windows": 203,
+      "worst_max_drawdown": -998.91,
+      "year": 2022
+    },
+    {
+      "breach_rate": 0.0,
+      "breaches": 0,
+      "duration": {
+        "conditional_on_pass": true,
+        "fastest": 1,
+        "mean": 22.59090909090909,
+        "median": 20.5,
+        "p10": 5.0,
+        "p25": 12.0,
+        "p75": 34.75,
+        "p90": 41.0,
+        "restricted_mean": 32.55050505050505
+      },
+      "median_max_drawdown": -919.1,
+      "median_terminal_profit": 1282.92,
+      "pass_rate": 0.555556,
+      "pass_wilson_95": [
+        0.485939,
+        0.623058
+      ],
+      "passes": 110,
+      "unfinished": 88,
+      "unfinished_rate": 0.444444,
+      "windows": 198,
+      "worst_max_drawdown": -1115.29,
+      "year": 2023
+    },
+    {
+      "breach_rate": 0.0,
+      "breaches": 0,
+      "duration": {
+        "conditional_on_pass": true,
+        "fastest": 1,
+        "mean": 12.849315068493151,
+        "median": 11.0,
+        "p10": 5.0,
+        "p25": 7.0,
+        "p75": 17.0,
+        "p90": 22.799999999999997,
+        "restricted_mean": 33.551219512195125
+      },
+      "median_max_drawdown": -973.44,
+      "median_terminal_profit": -173.52,
+      "pass_rate": 0.356098,
+      "pass_wilson_95": [
+        0.293747,
+        0.423742
+      ],
+      "passes": 73,
+      "unfinished": 132,
+      "unfinished_rate": 0.643902,
+      "windows": 205,
+      "worst_max_drawdown": -1112.36,
+      "year": 2024
+    },
+    {
+      "breach_rate": 0.0,
+      "breaches": 0,
+      "duration": {
+        "conditional_on_pass": true,
+        "fastest": 1,
+        "mean": 15.991666666666667,
+        "median": 11.5,
+        "p10": 4.0,
+        "p25": 6.75,
+        "p75": 23.0,
+        "p90": 37.10000000000001,
+        "restricted_mean": 27.595
+      },
+      "median_max_drawdown": -595.66,
+      "median_terminal_profit": 1312.66,
+      "pass_rate": 0.6,
+      "pass_wilson_95": [
+        0.530837,
+        0.665394
+      ],
+      "passes": 120,
+      "unfinished": 80,
+      "unfinished_rate": 0.4,
+      "windows": 200,
+      "worst_max_drawdown": -1113.75,
+      "year": 2025
+    },
+    {
+      "breach_rate": 0.0,
+      "breaches": 0,
+      "duration": {
+        "conditional_on_pass": true,
+        "fastest": 1,
+        "mean": 10.545454545454545,
+        "median": 10.0,
+        "p10": 3.3,
+        "p25": 7.0,
+        "p75": 14.0,
+        "p90": 17.700000000000003,
+        "restricted_mean": 29.042105263157893
+      },
+      "median_max_drawdown": -936.89,
+      "median_terminal_profit": 150.72,
+      "pass_rate": 0.463158,
+      "pass_wilson_95": [
+        0.366276,
+        0.562903
+      ],
+      "passes": 44,
+      "unfinished": 51,
+      "unfinished_rate": 0.536842,
+      "windows": 95,
+      "worst_max_drawdown": -1039.05,
+      "year": 2026
+    }
+  ]
 }

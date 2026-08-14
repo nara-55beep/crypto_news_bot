@@ -129,6 +129,7 @@ def simulate_sequence(
     gross_profit = commission = spread = slippage = 0.0
     contract_cap_limited = risk_rejected = dll_blocked = 0
     timeline: list[dict] = []
+    daily_history: list[float] = []
     outcome = "unfinished"
 
     for used, day_trades in enumerate(sequence, 1):
@@ -208,6 +209,7 @@ def simulate_sequence(
 
         if positions and outcome == "unfinished":
             raise AssertionError("selected strategy left a position open past its session")
+        daily_history.append(day_pnl)
         eod_peak = max(eod_peak, balance)
         floor = rules.locked_floor if eod_peak > rules.lock_trigger else max(floor, eod_peak - rules.max_loss)
         if balance <= floor and outcome == "unfinished":
@@ -224,9 +226,15 @@ def simulate_sequence(
                 "starting_balance": round(rules.target_profit * 0 + start_balance + (25_000 if rules.name == "25K" else 50_000 if rules.name == "50K" else 100_000 if rules.name == "100K" else 150_000), 2),
                 "ending_balance": round(balance + (25_000 if rules.name == "25K" else 50_000 if rules.name == "50K" else 100_000 if rules.name == "100K" else 150_000), 2),
                 "daily_net_pnl": round(day_pnl, 2),
+                "largest_profitable_day": round(max((value for value in daily_history if value > 0), default=0.0), 2),
+                "consistency_pct": (
+                    round(max((value for value in daily_history if value > 0), default=0.0) / balance * 100, 2)
+                    if balance > 0 else None
+                ),
                 "drawdown_floor": round(floor + (25_000 if rules.name == "25K" else 50_000 if rules.name == "50K" else 100_000 if rules.name == "100K" else 150_000), 2),
                 "remaining_drawdown": round(balance - floor, 2),
                 "permitted_micros": rules.max_micros,
+                "permitted_contracts": f"{rules.max_micros // 10} minis / {rules.max_micros} micros",
                 "warning": "terminal path" if outcome != "unfinished" else "",
                 "status": outcome.upper() if outcome != "unfinished" else "ACTIVE",
             })
@@ -329,6 +337,7 @@ def monte_carlo(
     counts = Counter(row.outcome for row in outcomes)
     terminal = np.array([row.terminal_profit for row in outcomes], dtype=float)
     pass_days = [row.used_days for row in outcomes if row.outcome == "pass"]
+    counts_hist, edges_hist = np.histogram(terminal, bins=16)
     return {
         "method": "5-session circular block resampling with full path-dependent account replay",
         "seed": SEED,
@@ -343,13 +352,20 @@ def monte_carlo(
         "terminal_profit_p75": round(float(np.percentile(terminal, 75)), 2),
         "terminal_profit_p95": round(float(np.percentile(terminal, 95)), 2),
         "median_days_conditional_on_pass": float(np.median(pass_days)) if pass_days else None,
+        "terminal_profit_histogram": [
+            {"lo": round(float(edges_hist[i]), 2), "hi": round(float(edges_hist[i + 1]), 2), "count": int(counts_hist[i])}
+            for i in range(len(counts_hist))
+        ],
         "warning": "Resampling quantifies historical path variation; it cannot repair proxy-data or model error.",
     }
 
 
 def _trade_stats(trades: list[L.Trade], policy: P.Policy, preset: dict) -> dict:
     rows = []
-    commissions = spread = slippage = gross = 0.0
+    commissions = spread = slippage = gross_signed = positive_gross = 0.0
+    daily_net: dict[str, float] = {}
+    monthly_net: dict[str, float] = {}
+    yearly_trades: Counter[str] = Counter()
     for trade in trades:
         stressed = _stress_trade(trade, preset)
         if stressed is None:
@@ -364,16 +380,24 @@ def _trade_stats(trades: list[L.Trade], policy: P.Policy, preset: dict) -> dict:
         sp = float(preset["spread"]) * tick_value * qty
         sl = float(preset["slippage"] + (preset["stop_extra"] if trade.reason == "stop" else 0.0)) * tick_value * qty
         rows.append(net)
+        day_key, month_key, year_key = str(trade.day), str(trade.day)[:7], str(trade.day)[:4]
+        daily_net[day_key] = daily_net.get(day_key, 0.0) + net
+        monthly_net[month_key] = monthly_net.get(month_key, 0.0) + net
+        yearly_trades[year_key] += 1
         commissions += c
         spread += sp
         slippage += sl
-        gross += net + c + sp + sl
+        trade_gross = net + c + sp + sl
+        gross_signed += trade_gross
+        positive_gross += max(0.0, trade_gross)
     pos = sum(value for value in rows if value > 0)
     neg = -sum(value for value in rows if value <= 0)
     wins = [value for value in rows if value > 0]
     losses = [value for value in rows if value <= 0]
     curve = np.cumsum(rows) if rows else np.array([])
     peaks = np.maximum.accumulate(np.r_[0.0, curve])[:-1] if rows else np.array([])
+    positive_days = [value for value in daily_net.values() if value > 0]
+    positive_months = [value for value in monthly_net.values() if value > 0]
     return {
         "trades": len(rows),
         "net": round(sum(rows), 2),
@@ -387,8 +411,15 @@ def _trade_stats(trades: list[L.Trade], policy: P.Policy, preset: dict) -> dict:
         "commissions": round(commissions, 2),
         "spread_cost": round(spread, 2),
         "slippage_cost": round(slippage, 2),
-        "gross_before_costs": round(gross, 2),
-        "cost_pct_of_positive_gross": round((commissions + spread + slippage) / gross * 100, 2) if gross > 0 else None,
+        "gross_before_costs": round(gross_signed, 2),
+        "positive_gross_profit": round(positive_gross, 2),
+        "cost_pct_of_positive_gross": round((commissions + spread + slippage) / positive_gross * 100, 2) if positive_gross > 0 else None,
+        "concentration": {
+            "largest_winning_trade_share_pct": round(max(wins, default=0.0) / sum(wins) * 100, 2) if wins else None,
+            "largest_positive_day_share_pct": round(max(positive_days, default=0.0) / sum(positive_days) * 100, 2) if positive_days else None,
+            "largest_positive_month_share_pct": round(max(positive_months, default=0.0) / sum(positive_months) * 100, 2) if positive_months else None,
+            "trades_by_year": dict(sorted(yearly_trades.items())),
+        },
     }
 
 
@@ -514,6 +545,7 @@ def build_report(cache: Path) -> dict:
                 "es_gap_fill": "MES 09:45 gap fill",
                 "nq_prior_breakout": "MNQ prior-range breakout",
             }[key],
+            "strategy_version": "lucid_lab_portfolio_v1" if key == "selected_portfolio" else f"{key}_standalone_v1",
             "instrument": "MES + MNQ" if key == "selected_portfolio" else ("MES" if key == "es_gap_fill" else "MNQ"),
             "account": "LucidPro 25K evaluation",
             "trades": stats["trades"],
@@ -533,6 +565,7 @@ def build_report(cache: Path) -> dict:
     candidates.append({
         "id": "original_five_basket",
         "name": "Original VWAP/Turtle/NR7 five-basket",
+        "strategy_version": "invalidated_legacy_v0",
         "instrument": "MES + MNQ + MCL",
         "account": "LucidPro 50K evaluation",
         "trades": 7839,
@@ -563,6 +596,69 @@ def build_report(cache: Path) -> dict:
                 "breach_rate": result["breach_rate"],
                 "unfinished_rate": result["unfinished_rate"],
             })
+
+    def test_only(rows: list[L.Trade]) -> list[L.Trade]:
+        return [row for row in rows if row.day >= TEST_START]
+
+    signal_sensitivity = []
+    variant_specs: list[tuple[str, float, list[L.Trade]]] = []
+    for value in (0.20, 0.25, 0.30):
+        variant_specs.append(("nq_drive_threshold", value, test_only(R.morning_regime(
+            days["nq"], R.PConfig("morning_regime", "nq", entry_minute=15, threshold=value, target_rr=2.0, stop_mode="open", mode="drive", location=0.80)
+        )) + gap + prior))
+    for value in (1.50, 2.00, 2.50):
+        variant_specs.append(("nq_drive_target_rr", value, test_only(R.morning_regime(
+            days["nq"], R.PConfig("morning_regime", "nq", entry_minute=15, threshold=0.25, target_rr=value, stop_mode="open", mode="drive", location=0.80)
+        )) + gap + prior))
+    for value in (10.0, 15.0, 20.0):
+        variant_specs.append(("nq_drive_entry_minute", value, test_only(R.morning_regime(
+            days["nq"], R.PConfig("morning_regime", "nq", entry_minute=int(value), threshold=0.25, target_rr=2.0, stop_mode="open", mode="drive", location=0.80)
+        )) + gap + prior))
+    for value in (0.05, 0.10, 0.15):
+        variant_specs.append(("es_gap_threshold", value, drive + test_only(R.morning_regime(
+            days["es"], R.PConfig("morning_regime", "es", entry_minute=15, threshold=value, target_rr=1.5, stop_mode="range", mode="gap_fill", location=0.80)
+        )) + prior))
+    for value in (1.25, 1.50, 1.75):
+        variant_specs.append(("es_gap_target_rr", value, drive + test_only(R.morning_regime(
+            days["es"], R.PConfig("morning_regime", "es", entry_minute=15, threshold=0.10, target_rr=value, stop_mode="range", mode="gap_fill", location=0.80)
+        )) + prior))
+    for value in (0.20, 0.25, 0.30):
+        variant_specs.append(("prior_breakout_threshold", value, drive + gap + test_only(L.generate(
+            days["nq"], L.Config("prior_breakout", tf=15, k=value, stop_mode="bar", rr=2.0)
+        ))))
+    for value in (1.50, 2.00, 2.50):
+        variant_specs.append(("prior_breakout_target_rr", value, drive + gap + test_only(L.generate(
+            days["nq"], L.Config("prior_breakout", tf=15, k=0.25, stop_mode="bar", rr=value)
+        ))))
+    selected_values = {
+        "nq_drive_threshold": 0.25, "nq_drive_target_rr": 2.0,
+        "nq_drive_entry_minute": 15.0, "es_gap_threshold": 0.10,
+        "es_gap_target_rr": 1.50, "prior_breakout_threshold": 0.25,
+        "prior_breakout_target_rr": 2.0,
+    }
+    for dimension, value, rows in variant_specs:
+        rows = sorted(rows, key=lambda t: (t.entry_ts, P.signal_priority(t), t.exit_ts))
+        variant_daily = _stressed_days(test_days, rows, PRESETS["normal"])
+        result, _ = evaluate_sequences(variant_daily, 45, selected_policy, selected_rules, PRESETS["normal"])
+        variant_stats = _trade_stats(rows, selected_policy, PRESETS["normal"])
+        signal_sensitivity.append({
+            "dimension": dimension,
+            "value": value,
+            "selected": value == selected_values[dimension],
+            "trades": variant_stats["trades"],
+            "expectancy": variant_stats["expectancy"],
+            "pass_rate": result["pass_rate"],
+            "breach_rate": result["breach_rate"],
+            "unfinished_rate": result["unfinished_rate"],
+        })
+
+    walk_forward = []
+    for year in range(2022, 2027):
+        year_days = [day for day in all_days if day.year == year]
+        year_trades = [trade for trade in all_trades if trade.day.year == year]
+        year_daily = _stressed_days(year_days, year_trades, PRESETS["normal"])
+        result, _ = evaluate_sequences(year_daily, 45, selected_policy, selected_rules, PRESETS["normal"])
+        walk_forward.append({"year": year, **result})
 
     pass_paths = [p for p in normal_paths if p.outcome == "pass"]
     representative = min(pass_paths, key=lambda p: abs(p.used_days - (median([x.used_days for x in pass_paths]) if pass_paths else 0))) if pass_paths else None
@@ -669,11 +765,18 @@ def build_report(cache: Path) -> dict:
         "monte_carlo": mc,
         "candidates": candidates,
         "sensitivity": sensitivity,
+        "signal_sensitivity": signal_sensitivity,
+        "walk_forward": walk_forward,
         "charts": {
             "representative_timeline": representative_timeline,
             "rolling_pass_probability": rolling,
             "pass_duration_histogram": [{"days": day, "count": duration_hist[day]} for day in sorted(duration_hist)],
             "terminal_profit_histogram": terminal_bins,
+            "outcome_distribution": [
+                {"name": "Pass", "count": horizons["45"]["passes"]},
+                {"name": "Breach", "count": horizons["45"]["breaches"]},
+                {"name": "Unfinished", "count": horizons["45"]["unfinished"]},
+            ],
             "cost_breakdown": [
                 {"name": "Commission", "value": stats["commissions"]},
                 {"name": "Spread", "value": stats["spread_cost"]},

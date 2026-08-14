@@ -34,6 +34,7 @@ class VerifiedRule(Generic[T]):
     program: str
     stage: str
     source: RuleSource
+    account_size: int | None = None
     confidence: Confidence = "verified"
     notes: str = ""
 
@@ -46,6 +47,7 @@ class VerifiedRule(Generic[T]):
             "unit": self.unit,
             "program": self.program,
             "stage": self.stage,
+            "account_size": self.account_size,
             "source": self.source.to_dict(),
             "confidence": self.confidence,
             "notes": self.notes,
@@ -220,6 +222,7 @@ class AccountRules:
     news_rule: str
     evidence_compatible: bool
     source_keys: tuple[str, ...]
+    rule_metadata: dict[str, VerifiedRule[Any]] = field(default_factory=dict)
     conflicts: tuple[str, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, Any]:
@@ -232,6 +235,9 @@ class AccountRules:
             value = data[key]
             data[key] = None if value is None else str(value)
         data["sources"] = [SOURCES[key].to_dict() for key in self.source_keys]
+        data["rule_metadata"] = {
+            key: rule.to_dict() for key, rule in self.rule_metadata.items()
+        }
         data["target_to_drawdown"] = (
             None if self.profit_target is None
             else str((self.profit_target / self.max_loss).quantize(Decimal("0.01")))
@@ -276,17 +282,32 @@ def get_account_rules(
 
     if program == "lucidpro":
         label, consistency, dll, drawdown = "LucidPro", None, pro_dll, "eod"
-        source_keys = ("pro_eval", "pro_drawdown", "pro_dll", "times", "products")
+        source_keys = ("pro_eval", "pro_drawdown", "pro_dll", "times", "activities", "products")
+        eval_source, drawdown_source = "pro_eval", "pro_drawdown"
+        dll_source, consistency_source = "pro_dll", "pro_eval"
+        cutoff_confidence: Confidence = "verified"
+        news_source, news_confidence = "activities", "verified"
+        overnight_allowed = True
         news = "Allowed; strategy still filters scheduled high-impact releases for execution risk."
     elif program == "lucidflex":
         label, consistency, dll, drawdown = "LucidFlex", Decimal("50"), None, "eod"
-        source_keys = ("flex_eval", "flex_consistency", "flex_drawdown", "times", "products")
+        source_keys = ("flex_eval", "flex_consistency", "flex_drawdown", "times", "activities", "products")
+        eval_source, drawdown_source = "flex_eval", "flex_drawdown"
+        dll_source, consistency_source = "flex_eval", "flex_consistency"
+        cutoff_confidence = "verified"
+        news_source, news_confidence = "activities", "verified"
+        overnight_allowed = True
         news = "Allowed; strategy still filters scheduled high-impact releases for execution risk."
     elif program == "lucidblack":
         if size == 150_000:
             raise ValueError("LucidBlack evaluation has no verified 150K option")
         label, consistency, dll, drawdown = "LucidBlack", Decimal("60"), None, "eod"
-        source_keys = ("black_eval", "black_consistency", "black_drawdown", "products")
+        source_keys = ("black_eval", "black_consistency", "black_drawdown", "times", "activities", "products")
+        eval_source, drawdown_source = "black_eval", "black_drawdown"
+        dll_source, consistency_source = "black_eval", "black_consistency"
+        cutoff_confidence = "ambiguous"
+        news_source, news_confidence = "activities", "ambiguous"
+        overnight_allowed = False
         news = "Official general article does not name Black; Lab blocks high-impact windows."
         conflicts.append("The official cutoff/news articles do not explicitly name LucidBlack.")
     elif program == "luciddaily":
@@ -297,12 +318,51 @@ def get_account_rules(
         drawdown = daily_drawdown
         source_keys = (
             "daily_eval", "daily_custom", "daily_consistency",
-            "daily_drawdown", "daily_dll", "products",
+            "daily_drawdown", "daily_dll", "times", "activities", "products",
         )
-        news = "USD high-impact red-folder window blocked from 1 minute before through 1 minute after."
+        eval_source, drawdown_source = "daily_eval", "daily_drawdown"
+        dll_source, consistency_source = "daily_dll", "daily_consistency"
+        cutoff_confidence = "ambiguous"
+        news_source, news_confidence = "activities", "verified"
+        overnight_allowed = False
+        news = "News trading is not allowed for LucidDaily; the strategy also blocks scheduled high-impact windows."
         conflicts.append("The general cutoff page does not explicitly name LucidDaily.")
     else:
         raise ValueError(f"unsupported public evaluation program: {program}")
+
+    metadata: dict[str, VerifiedRule[Any]] = {
+        "profit_target": VerifiedRule(target, "USD", label, stage, SOURCES[eval_source], size),
+        "maximum_loss": VerifiedRule(max_loss, "USD", label, stage, SOURCES[drawdown_source], size),
+        "drawdown_type": VerifiedRule(drawdown, "mechanism", label, stage, SOURCES[drawdown_source], size),
+        "daily_loss_limit": VerifiedRule(dll, "USD", label, stage, SOURCES[dll_source], size),
+        "consistency_limit": VerifiedRule(
+            consistency, "percent", label, stage, SOURCES[consistency_source], size,
+            "verified" if consistency is None or program == "lucidblack" else "ambiguous",
+            "The favorable variable cushion is ignored; the strict headline ratio is used." if consistency is not None else "No evaluation consistency rule is listed.",
+        ),
+        "maximum_contracts": VerifiedRule(
+            {"minis": max_minis, "micros": max_micros}, "aggregate contracts", label, stage,
+            SOURCES[eval_source], size,
+        ),
+        "scaling": VerifiedRule(
+            "fixed evaluation cap", "tier", label, stage, SOURCES[eval_source], size,
+            "ambiguous", "No evaluation scaling transition is modeled; funded scaling is deliberately out of scope.",
+        ),
+        "minimum_trading_days": VerifiedRule(1, "trading day", label, stage, SOURCES[eval_source], size),
+        "trail_trigger": VerifiedRule(trail_trigger, "balance USD", label, stage, SOURCES[drawdown_source], size),
+        "locked_floor": VerifiedRule(locked_floor, "balance USD", label, stage, SOURCES[drawdown_source], size),
+        "forced_close": VerifiedRule(
+            "16:45", "America/New_York", label, stage, SOURCES["times"], size,
+            cutoff_confidence, "The strategy exits by 16:00; Black/Daily are kept conservative where the general page does not name them.",
+        ),
+        "overnight": VerifiedRule(
+            overnight_allowed, "boolean", label, stage, SOURCES["times"], size,
+            cutoff_confidence, "Official session access is separate from the selected strategy, which is always flat intraday.",
+        ),
+        "weekend": VerifiedRule(False, "boolean", label, stage, SOURCES["times"], size, cutoff_confidence),
+        "news": VerifiedRule(news, "policy", label, stage, SOURCES[news_source], size, news_confidence),
+        "commission_micro": VerifiedRule(Decimal("0.50"), "USD per side", label, stage, SOURCES["products"], size),
+    }
 
     return AccountRules(
         program_id=program,
@@ -321,11 +381,12 @@ def get_account_rules(
         trail_trigger=trail_trigger,
         locked_floor=locked_floor,
         forced_close_ny="16:45",
-        overnight_allowed=False,
+        overnight_allowed=overnight_allowed,
         weekend_allowed=False,
         news_rule=news,
         evidence_compatible=(program == "lucidpro" and drawdown == "eod"),
         source_keys=source_keys,
+        rule_metadata=metadata,
         conflicts=tuple(conflicts),
     )
 

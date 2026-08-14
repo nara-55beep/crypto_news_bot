@@ -33,6 +33,12 @@ The selection did not choose the largest point estimate. It favored the combined
 
 The former five-strategy basket is retained in the candidate table as **INVALIDATED**. Its attractive 98% result used future information and optimistic fills and must not be used as evidence.
 
+## Sensitivity reality
+
+The artifact varies seven signal parameters one at a time at two neighboring settings as well as the frozen selected setting. Forty-five-session pass rates span 41.67%–55.95% across those alternatives; the chosen configuration remains 47.28%. Several alternatives look better on this already-inspected test interval—for example the 1.5R NQ drive target reports 55.95%—but they are **not** adopted, because choosing them now would be test-set tuning. The table on `/lucid-lab` exposes all 21 rows, trade counts, expectancy, pass, breach and unfinished rates.
+
+Annual forward slices are also heterogeneous: 65.02% in 2022, 55.56% in 2023, 35.61% in 2024, 60.00% in 2025 and 46.32% in the partial 2026 slice. This is evidence of regime dependence, not a stable guaranteed pass rate. The selected version remains frozen until genuinely new point-in-time data can judge it.
+
 ## What would change the status
 
 Promotion requires point-in-time CME futures data, bid/ask or defensible execution observations, a frozen rule version, a new untouched forward period, verified current Lucid rules, independent reproduction, and a result that remains useful after realistic costs and uncertainty. Until then, the only accurate label is experimental proxy research.

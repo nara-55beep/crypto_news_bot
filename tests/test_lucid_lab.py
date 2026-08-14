@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -15,7 +16,9 @@ from lucid_lab.engine import (
     LucidAccount,
     PositionSizeInput,
     TradeFill,
+    WorkingLimitOrder,
     calculate_position_size,
+    marketable_fill_price,
     new_york_time,
     resolve_bar_exit,
     validate_market_data,
@@ -111,6 +114,26 @@ class TestVerifiedRuleSelection(unittest.TestCase):
         }
         self.assertEqual(ratios, {25_000: D("1.25"), 50_000: D("1.50"), 100_000: D("2.00"), 150_000: D("2.00")})
 
+    def test_each_displayed_rule_carries_exact_scope_and_source(self):
+        for option in public_evaluation_options():
+            rules = get_account_rules(option["id"], "evaluation", option["sizes"][0])
+            for key in (
+                "profit_target", "maximum_loss", "drawdown_type", "daily_loss_limit",
+                "consistency_limit", "maximum_contracts", "scaling", "minimum_trading_days",
+                "forced_close", "overnight", "weekend", "news", "commission_micro",
+            ):
+                item = rules.rule_metadata[key]
+                self.assertEqual(item.program, rules.program_label)
+                self.assertEqual(item.stage, "evaluation")
+                self.assertEqual(item.account_size, rules.account_size)
+                self.assertIn(item.source, [SOURCES[name] for name in rules.source_keys])
+
+    def test_official_session_permission_is_distinct_from_flat_strategy_policy(self):
+        self.assertTrue(get_account_rules("lucidpro", "evaluation", 25_000).overnight_allowed)
+        self.assertTrue(get_account_rules("lucidflex", "evaluation", 25_000).overnight_allowed)
+        self.assertFalse(get_account_rules("lucidblack", "evaluation", 25_000).overnight_allowed)
+        self.assertIn("strategy", get_account_rules("lucidpro", "evaluation", 25_000).rule_metadata["overnight"].notes.lower())
+
 
 class TestAccountStateMachine(unittest.TestCase):
     def test_one_cent_above_floor_survives_but_equality_breaches(self):
@@ -192,6 +215,52 @@ class TestAccountStateMachine(unittest.TestCase):
         row = account.end_day()
         self.assertTrue(any("force-closed" in warning for warning in row.warnings))
 
+    def test_target_boundary_requires_the_last_cent(self):
+        rules = get_account_rules("lucidpro", "evaluation", 25_000)
+        short = LucidAccount(rules)
+        short.process_fill(fill("2026-08-03", "1249.99"))
+        short.end_day()
+        self.assertFalse(short.passed)
+        exact = LucidAccount(rules)
+        exact.process_fill(fill("2026-08-03", "1250.00"))
+        exact.end_day()
+        self.assertTrue(exact.passed)
+        self.assertEqual(exact.scaling_tier, "evaluation-fixed")
+        self.assertEqual(exact.remaining_micros, rules.max_micros)
+
+    def test_open_exposure_is_aggregate_and_blocks_session_close(self):
+        account = LucidAccount(get_account_rules("lucidpro", "evaluation", 25_000))
+        account.start_day("2026-08-03")
+        account.reserve_exposure("NQ", 1)
+        account.reserve_exposure("MNQ", 9)
+        self.assertEqual(account.open_micro_equivalents, 19)
+        self.assertEqual(account.remaining_micros, 1)
+        self.assertEqual(account.state()["open_exposure_by_instrument"], {"MNQ": 9, "NQ": 1})
+        with self.assertRaises(ValueError):
+            account.reserve_exposure("MNQ", 2)
+        with self.assertRaises(ValueError):
+            account.release_exposure("MES", 1)
+        with self.assertRaises(RuntimeError):
+            account.end_day()
+        account.release_exposure("MNQ", 9)
+        account.release_exposure("NQ", 1)
+        row = account.end_day()
+        self.assertEqual(row.open_micro_equivalents, 0)
+        self.assertEqual(row.scaling_tier, "evaluation-fixed")
+
+    def test_open_equity_can_breach_intraday_floor(self):
+        account = LucidAccount(get_account_rules(
+            "luciddaily", "evaluation", 25_000,
+            daily_drawdown="intraday", daily_loss_enabled=False,
+        ))
+        account.start_day("2026-08-03")
+        account.reserve_exposure("MNQ", 1)
+        account.mark_to_market("500", observed_peak_equity="25500")
+        self.assertEqual(account.floor, Decimal("24500.00"))
+        account.mark_to_market("-500", observed_low_equity="24500")
+        self.assertTrue(account.breached)
+        self.assertIn("open equity", account.reason)
+
 
 class TestExecutionAndSizing(unittest.TestCase):
     def test_stop_first_and_gap_worse_long(self):
@@ -245,6 +314,53 @@ class TestExecutionAndSizing(unittest.TestCase):
         with self.assertRaises(ValueError):
             new_york_time("2026-03-09T13:30:00")
 
+    def test_trade_print_order_lifecycle_is_timestamp_and_queue_aware(self):
+        placed = datetime(2026, 8, 3, 13, 30, tzinfo=timezone.utc)
+        order = WorkingLimitOrder(
+            "o1", "buy", D("100"), 3, placed,
+            latency_ms=10, queue_ahead=D("2"),
+        )
+        self.assertEqual(order.process_trade(timestamp=placed + timedelta(milliseconds=10), price=99, quantity=10), 0)
+        self.assertEqual(order.process_trade(timestamp=placed + timedelta(milliseconds=11), price=101, quantity=10), 0)
+        self.assertEqual(order.process_trade(timestamp=placed + timedelta(milliseconds=12), price=100, quantity=3), 1)
+        self.assertEqual(order.status, "partial")
+        self.assertEqual(order.process_trade(timestamp=placed + timedelta(milliseconds=13), price=99, quantity=1), 1)
+        self.assertEqual(order.process_trade(timestamp=placed + timedelta(milliseconds=14), price=99, quantity=2), 1)
+        self.assertEqual(order.status, "filled")
+        self.assertEqual(sum(item.quantity for item in order.fills), 3)
+
+    def test_cancelled_and_rejected_limits_never_fill(self):
+        placed = datetime(2026, 8, 3, 13, 30, tzinfo=timezone.utc)
+        cancelled = WorkingLimitOrder("o1", "sell", D("100"), 1, placed)
+        cancelled.cancel(placed + timedelta(milliseconds=1))
+        self.assertEqual(cancelled.process_trade(timestamp=placed + timedelta(seconds=1), price=101, quantity=1), 0)
+        rejected = WorkingLimitOrder("o2", "buy", D("100"), 1, placed)
+        rejected.reject("risk")
+        self.assertEqual(rejected.process_trade(timestamp=placed + timedelta(seconds=1), price=99, quantity=1), 0)
+
+    def test_marketable_fill_uses_the_executable_side_and_adverse_slippage(self):
+        self.assertEqual(
+            marketable_fill_price(side="buy", bid=100, ask=100.25, tick_size=.25, slippage_ticks=1),
+            Decimal("100.50"),
+        )
+        self.assertEqual(
+            marketable_fill_price(side="sell", bid=100, ask=100.25, tick_size=.25, slippage_ticks=1),
+            Decimal("99.75"),
+        )
+        with self.assertRaises(ValueError):
+            marketable_fill_price(side="buy", bid=100, ask=100, tick_size=.25, slippage_ticks=0)
+        with self.assertRaises(ValueError):
+            marketable_fill_price(side="sell", bid=.1, ask=.2, tick_size=.25, slippage_ticks=1)
+
+    def test_size_result_exposes_auditable_cost_decomposition(self):
+        result = calculate_position_size(PositionSizeInput(
+            "MNQ", D("25000"), D("24000"), None, D("40"), D("400"), D("100"), 0, "normal"
+        ), get_account_rules("lucidpro", "evaluation", 25_000))
+        self.assertEqual(result.commission_round_trip, Decimal("1.00"))
+        self.assertEqual(result.spread_cost_per_contract, Decimal("0.50"))
+        self.assertEqual(result.slippage_cost_per_contract, Decimal("0.50"))
+        self.assertEqual(result.usable_risk_buffer, Decimal("400.00"))
+
 
 class TestMarketDataValidation(unittest.TestCase):
     def test_valid_production_shaped_csv(self):
@@ -292,6 +408,61 @@ class TestMarketDataValidation(unittest.TestCase):
         self.assertEqual(report.missing_intervals, 1)
         self.assertTrue(any("gap" in warning for warning in report.warnings))
 
+    def test_mixed_dst_offsets_are_parsed_as_one_utc_timeline(self):
+        content = (
+            "timestamp,open,high,low,close,volume,symbol,contract_expiration\n"
+            "2026-03-06T09:30:00-05:00,100,101,99,100,1,MNQ,2026-03-20\n"
+            "2026-03-09T09:30:00-04:00,100,101,99,100,1,MNQ,2026-03-20\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "dst.csv"
+            path.write_text(content, encoding="utf-8")
+            report = validate_market_data(path, expected_symbol="MNQ")
+        self.assertTrue(report.ok, report.errors)
+        self.assertEqual(report.timezone, "UTC")
+        self.assertEqual(report.session_count, 2)
+
+    def test_friday_evening_is_not_mistaken_for_a_live_futures_session(self):
+        content = (
+            "timestamp,open,high,low,close,volume,symbol,contract_expiration\n"
+            "2026-08-07T22:00:00Z,100,101,99,100,1,MNQ,2026-09-18\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "weekend.csv"
+            path.write_text(content, encoding="utf-8")
+            report = validate_market_data(path, expected_symbol="MNQ")
+        self.assertFalse(report.ok)
+        self.assertEqual(report.outside_permitted_session_rows, 1)
+
+    def test_expired_contract_and_rollover_are_visible(self):
+        content = (
+            "timestamp,open,high,low,close,volume,symbol,contract_expiration\n"
+            "2026-08-03T13:30:00Z,100,101,99,100,0,MNQ,2026-06-19\n"
+            "2026-08-03T13:31:00Z,100,101,99,100,1,MNQ,2026-09-18\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "expiry.csv"
+            path.write_text(content, encoding="utf-8")
+            report = validate_market_data(path, expected_symbol="MNQ")
+        self.assertFalse(report.ok)
+        self.assertEqual(report.expiration_before_bar_rows, 1)
+        self.assertEqual(report.contract_rollovers, 1)
+        self.assertEqual(report.zero_volume_rows, 1)
+
+    def test_complete_rth_minute_session_is_not_flagged_incomplete(self):
+        start = datetime(2026, 8, 3, 13, 30, tzinfo=timezone.utc)
+        rows = ["timestamp,open,high,low,close,volume,symbol,contract_expiration"]
+        for offset in range(390):
+            stamp = (start + timedelta(minutes=offset)).isoformat().replace("+00:00", "Z")
+            rows.append(f"{stamp},100,101,99,100,1,MNQ,2026-09-18")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "full-rth.csv"
+            path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+            report = validate_market_data(path, expected_symbol="MNQ")
+        self.assertTrue(report.ok, report.errors)
+        self.assertEqual(report.incomplete_rth_sessions, 0)
+        self.assertEqual(report.session_count, 1)
+
 
 class TestEvidenceArtifact(unittest.TestCase):
     @classmethod
@@ -336,6 +507,47 @@ class TestEvidenceArtifact(unittest.TestCase):
         self.assertGreater(stats["slippage_cost"], 0)
         self.assertIn("risk_rejections", self.data["risk_controls"])
         self.assertGreaterEqual(self.data["risk_controls"]["historical_gap_through_stops_in_raw_test_signals"], 1)
+
+    def test_cost_ratio_uses_positive_gross_not_signed_gross(self):
+        stats = self.data["trade_statistics"]
+        modeled = stats["commissions"] + stats["spread_cost"] + stats["slippage_cost"]
+        expected = round(modeled / stats["positive_gross_profit"] * 100, 2)
+        self.assertEqual(stats["cost_pct_of_positive_gross"], expected)
+        self.assertNotEqual(stats["positive_gross_profit"], stats["gross_before_costs"])
+
+    def test_all_chart_distributions_reconcile(self):
+        chart_outcomes = sum(row["count"] for row in self.data["charts"]["outcome_distribution"])
+        self.assertEqual(chart_outcomes, self.data["horizons"]["45"]["windows"])
+        mc_hist = sum(row["count"] for row in self.data["monte_carlo"]["terminal_profit_histogram"])
+        self.assertEqual(mc_hist, self.data["monte_carlo"]["paths"])
+
+    def test_signal_sensitivity_and_walk_forward_are_complete(self):
+        rows = self.data["signal_sensitivity"]
+        dimensions = {row["dimension"] for row in rows}
+        self.assertEqual(dimensions, {
+            "nq_drive_threshold", "nq_drive_target_rr", "nq_drive_entry_minute",
+            "es_gap_threshold", "es_gap_target_rr", "prior_breakout_threshold", "prior_breakout_target_rr",
+        })
+        for dimension in dimensions:
+            group = [row for row in rows if row["dimension"] == dimension]
+            self.assertEqual(len(group), 3)
+            self.assertEqual(sum(bool(row["selected"]) for row in group), 1)
+            for row in group:
+                self.assertAlmostEqual(row["pass_rate"] + row["breach_rate"] + row["unfinished_rate"], 1.0, places=5)
+            selected = next(row for row in group if row["selected"])
+            self.assertEqual(selected["trades"], self.data["trade_statistics"]["trades"])
+            self.assertEqual(selected["expectancy"], self.data["trade_statistics"]["expectancy"])
+            self.assertEqual(selected["pass_rate"], self.data["horizons"]["45"]["pass_rate"])
+        self.assertEqual([row["year"] for row in self.data["walk_forward"]], [2022, 2023, 2024, 2025, 2026])
+
+    def test_candidates_are_versioned_and_concentration_is_reported(self):
+        self.assertTrue(all(row["strategy_version"] for row in self.data["candidates"]))
+        concentration = self.data["trade_statistics"]["concentration"]
+        for key in (
+            "largest_winning_trade_share_pct", "largest_positive_day_share_pct",
+            "largest_positive_month_share_pct", "trades_by_year",
+        ):
+            self.assertIn(key, concentration)
 
 
 class TestServiceAndJobs(unittest.IsolatedAsyncioTestCase):
@@ -395,6 +607,8 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
         data = await response.json()
         self.assertTrue(data["ok"])
         self.assertTrue(data["evidence_applies"])
+        self.assertEqual(data["account"]["rule_metadata"]["profit_target"]["account_size"], 25_000)
+        self.assertIn("lucidtrading.com", data["account"]["rule_metadata"]["profit_target"]["source"]["url"])
         response = await self.client.post("/api/lucid-lab/position-size", json={
             "program": "lucidpro", "stage": "evaluation", "account_size": 25000,
             "instrument": "MNQ", "current_balance": 25000, "drawdown_floor": 24000,
@@ -404,6 +618,8 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         result = await response.json()
         self.assertEqual(result["result"]["final_quantity"], 18)
+        self.assertEqual(result["result"]["commission_round_trip"], "1.00")
+        self.assertEqual(result["result"]["spread_cost_per_contract"], "0.50")
 
     async def test_bad_rule_selection_returns_visible_error(self):
         response = await self.client.get("/api/lucid-lab/snapshot?program=lucidblack&size=150000")
@@ -419,8 +635,11 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
         for text in (
             "Loading verified rules", "No file selected", "notice error",
             "equity-chart", "drawdown-chart", "rolling-chart", "duration-bars",
-            "terminal-bars", "cost-bars", "@media(max-width:820px)",
+            "outcome-bars", "terminal-bars", "cost-bars", "@media(max-width:820px)",
             "prefers-reduced-motion", "Rule-compliance timeline", "Strategy comparison",
+            "signal-sensitivity", "selector-current", "selector-remaining",
+            "Costs / positive gross", "largest_profitable_day", "permitted_contracts",
+            "rule_metadata", "terminal_profit_histogram",
         ):
             self.assertIn(text, LUCID_LAB_HTML)
         self.assertNotIn("guaranteed profit", LUCID_LAB_HTML.lower())

@@ -19,6 +19,7 @@ Rules last checked: **2026-08-14**. Dollar values below are evaluation-stage val
 - A DLL is a soft stop: reaching it blocks new trades until the next session but is not itself account failure unless the MLL is also reached.
 - Evaluation contract limits are an aggregate mini-or-micro cap. One mini is treated as ten micros for cap accounting.
 - All modeled positions are forced flat by 16:00 New York—45 minutes earlier than the verified 16:45 cutoff—to avoid relying on the boundary or holiday auto-liquidation.
+- The official Pro/Flex session can span the 18:00 reopen through the next session cutoff. That availability is kept separate from the selected strategy's stricter flat-intraday policy; the page no longer mislabels the strategy choice as an official overnight prohibition. Black/Daily remain conservative where the general timing article does not name them.
 - MES/MNQ/MCL commission is $0.50 per side ($1.00 round turn) from the official product table.
 - News trading is allowed for Pro and Flex. The selected strategy still avoids scheduled high-impact windows because execution cost is unstable, not because Pro forbids it.
 - Automated systems are permitted if they obey all other rules. HFT, simulated-fill exploitation, hedging and microscalping are not.

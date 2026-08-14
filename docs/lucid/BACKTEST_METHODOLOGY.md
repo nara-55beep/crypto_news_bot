@@ -24,11 +24,12 @@ The account simulator processes exits before unrelated same-time entries, allows
 - Pass-time percentiles are explicitly conditional on passing. Restricted mean duration assigns the full horizon to non-passes.
 - Profit factor, expectancy, win rate and payoff use net trade P&L after modeled costs.
 - Cost consumption is commission + decomposed spread + slippage divided by positive gross P&L.
-- Parameter sensitivity changes one predeclared dimension around the selected setting; the final test period is not used to retune the chosen value.
+- Parameter sensitivity changes one predeclared dimension around the selected setting. Seven signal dimensions are each shown at the chosen setting and two neighboring values; the final test period is not used to retune the chosen value.
+- Annual 2022–2026 forward slices and largest winning-trade/day/month shares expose regime and concentration dependence instead of hiding it in one aggregate.
 - Monte Carlo uses session/block resampling and keeps path-dependent MLL logic. It is supplementary; it cannot add information absent from the source history.
 
 ## Validation gate
 
-The `VALIDATED` label requires positive net expectancy, chronological test evidence, at least 200 test trades and 100 rolling starts, pass rate above breach rate, survival under spread/slippage stress, broad parameter stability, no single-period domination, tested rule math, independent review and visible limitations.
+The `VALIDATED` label requires positive net expectancy, chronological test evidence, at least 200 test trades and 100 rolling starts, pass rate above breach rate, survival under spread/slippage stress, broad parameter stability, no single-period domination, tested rule math, independent review and visible limitations. The current artifact also carries version identifiers for every candidate so results from materially different selectors are not silently pooled.
 
 The current candidate is capped at `EXPERIMENTAL — PROXY EVIDENCE` because the source is not CME execution data and prior work has repeatedly inspected the test interval. A positive point estimate cannot override those defects.

@@ -26,8 +26,8 @@ The historical source is one-minute OHLCV from Dukascopy CFD/index proxies. It h
 | Base spread | 1 tick round trip | Conservative assumption because no bid/ask history |
 | Base slippage | 1 tick round trip | Conservative assumption |
 | Signal latency | next one-minute open | Conservative assumption / data-resolution constraint |
-| Limit fill | not used by selected strategy | Fail closed |
-| Partial fill | unsupported by one-minute OHLC; full quantity is capped and treated as marketable | Limitation; stresses include missed trades |
+| Historical limit fill | never inferred from OHLC | Fail closed |
+| Historical partial fill | unavailable from one-minute OHLC; selected-strategy replay uses capped marketable entries | Limitation; stresses include missed trades |
 | Stop gaps | worse of stop or next bar open | Market-derived conservative rule |
 | Rollover | continuous proxy series; no CME roll receipt | Known data limitation |
 
@@ -49,3 +49,9 @@ Normal is the historical base. Other presets add costs relative to normal:
 | combined severe | 1 tick RT | 2 ticks RT | +4 stop ticks, one-minute conceptual delay, 20% missed |
 
 The UI labels all spread/slippage inputs as estimated/configurable. It never describes them as Lucid rules.
+
+## Deterministic order lifecycle
+
+The reusable execution module also provides a timestamped working-limit-order model for forward replay and unit tests. It does **not** retrofit fills into the proxy backtest. A resting limit activates only after its configured latency; a print at or before the activation watermark is rejected; the print must trade through the limit; explicit queue-ahead volume is depleted first; fills may be partial; and cancellation/rejection is terminal. This prevents an OHLC high/low from being treated as proof that a limit filled.
+
+Marketable fills require a valid unlocked two-sided book. Buys begin at the ask and sells at the bid, then adverse slippage is applied. Crossed, locked, non-positive, or economically impossible books fail closed. The account layer separately reserves aggregate mini/micro exposure, marks open equity, blocks end-of-day completion while exposure remains, and exposes the forced-liquidation deadline.

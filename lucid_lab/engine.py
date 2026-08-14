@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Literal
@@ -107,6 +107,118 @@ EXECUTION_PRESETS: dict[str, ExecutionPreset] = {
 
 
 @dataclass(frozen=True)
+class OrderFill:
+    timestamp: datetime
+    price: Decimal
+    quantity: int
+
+
+@dataclass
+class WorkingLimitOrder:
+    """Deterministic trade-print-driven limit-order lifecycle.
+
+    OHLC bars are deliberately insufficient for this model. A fill requires a
+    timestamped trade after the latency watermark, price-through, and depletion
+    of any explicitly supplied queue ahead. Equality at activation is rejected
+    because millisecond timestamps cannot prove that the print followed the
+    order.
+    """
+
+    order_id: str
+    side: Literal["buy", "sell"]
+    limit_price: Decimal
+    quantity: int
+    placed_at: datetime
+    latency_ms: int = 0
+    queue_ahead: Decimal = Decimal("0")
+    filled_quantity: int = 0
+    status: Literal["working", "partial", "filled", "cancelled", "rejected"] = "working"
+    rejection_reason: str = ""
+    cancelled_at: datetime | None = None
+    fills: list[OrderFill] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.limit_price = D(self.limit_price)
+        self.queue_ahead = D(self.queue_ahead)
+        if self.side not in {"buy", "sell"}:
+            raise ValueError("limit side must be buy or sell")
+        if self.limit_price <= 0 or self.quantity <= 0:
+            raise ValueError("limit price and quantity must be positive")
+        if self.latency_ms < 0 or self.queue_ahead < 0:
+            raise ValueError("latency and queue ahead cannot be negative")
+        if self.placed_at.tzinfo is None:
+            raise ValueError("order timestamp must include a timezone")
+
+    @property
+    def activation_at(self) -> datetime:
+        return self.placed_at + timedelta(milliseconds=self.latency_ms)
+
+    @property
+    def remaining_quantity(self) -> int:
+        return max(0, self.quantity - self.filled_quantity)
+
+    def reject(self, reason: str) -> None:
+        if self.filled_quantity:
+            raise RuntimeError("a partially filled order cannot be rejected")
+        self.status = "rejected"
+        self.rejection_reason = reason.strip() or "rejected by risk or venue"
+
+    def cancel(self, timestamp: datetime) -> None:
+        if timestamp.tzinfo is None:
+            raise ValueError("cancellation timestamp must include a timezone")
+        if timestamp < self.placed_at:
+            raise ValueError("cancellation cannot precede placement")
+        if self.status in {"filled", "rejected"}:
+            return
+        self.cancelled_at = timestamp
+        self.status = "cancelled"
+
+    def process_trade(self, *, timestamp: datetime, price: Any, quantity: Any) -> int:
+        if timestamp.tzinfo is None:
+            raise ValueError("trade timestamp must include a timezone")
+        if self.status not in {"working", "partial"}:
+            return 0
+        if timestamp <= self.activation_at:
+            return 0
+        trade_price, available = D(price), D(quantity)
+        if trade_price <= 0 or available <= 0:
+            raise ValueError("trade price and quantity must be positive")
+        reaches = trade_price <= self.limit_price if self.side == "buy" else trade_price >= self.limit_price
+        if not reaches:
+            return 0
+        queue_used = min(self.queue_ahead, available)
+        self.queue_ahead -= queue_used
+        available -= queue_used
+        if available <= 0:
+            return 0
+        executed = min(self.remaining_quantity, int(available.to_integral_value(rounding=ROUND_FLOOR)))
+        if executed <= 0:
+            return 0
+        self.filled_quantity += executed
+        self.fills.append(OrderFill(timestamp, self.limit_price, executed))
+        self.status = "filled" if self.remaining_quantity == 0 else "partial"
+        return executed
+
+
+def marketable_fill_price(
+    *, side: Literal["buy", "sell"], bid: Any, ask: Any,
+    tick_size: Any, slippage_ticks: Any,
+) -> Decimal:
+    """Return an adverse executable price from a valid two-sided book."""
+    bid, ask, tick, slippage = D(bid), D(ask), D(tick_size), D(slippage_ticks)
+    if bid <= 0 or ask <= bid or tick <= 0 or slippage < 0:
+        raise ValueError("a valid unlocked two-sided book and non-negative slippage are required")
+    if side == "buy":
+        return ask + slippage * tick
+    if side == "sell":
+        price = bid - slippage * tick
+        if price <= 0:
+            raise ValueError("adverse sell fill price must remain positive")
+        return price
+    raise ValueError("side must be buy or sell")
+
+
+@dataclass(frozen=True)
 class PositionSizeInput:
     instrument: str
     current_balance: Decimal
@@ -121,6 +233,12 @@ class PositionSizeInput:
 
 @dataclass(frozen=True)
 class PositionSizeResult:
+    tick_value: Decimal
+    commission_round_trip: Decimal
+    spread_cost_per_contract: Decimal
+    slippage_cost_per_contract: Decimal
+    usable_risk_buffer: Decimal
+    safety_reserve: Decimal
     risk_per_contract: Decimal
     maximum_by_account_cap: int
     maximum_by_risk: int
@@ -133,7 +251,12 @@ class PositionSizeResult:
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
-        for key in ("risk_per_contract", "expected_cost", "loss_if_stopped", "remaining_buffer_after_stop"):
+        for key in (
+            "tick_value", "commission_round_trip", "spread_cost_per_contract",
+            "slippage_cost_per_contract", "usable_risk_buffer", "safety_reserve",
+            "risk_per_contract", "expected_cost", "loss_if_stopped",
+            "remaining_buffer_after_stop",
+        ):
             data[key] = str(data[key])
         return data
 
@@ -163,8 +286,9 @@ def calculate_position_size(values: PositionSizeInput, rules: AccountRules) -> P
         raise ValueError("open contract usage cannot be negative")
 
     commission_rt = instrument.commission_per_side * D("2")
-    execution_ticks = preset.spread_ticks_rt + preset.slippage_ticks_rt
-    execution_cost = execution_ticks * instrument.tick_value + commission_rt
+    spread_cost = preset.spread_ticks_rt * instrument.tick_value
+    slippage_cost = preset.slippage_ticks_rt * instrument.tick_value
+    execution_cost = spread_cost + slippage_cost + commission_rt
     stop_cost = (stop_ticks + preset.stop_extra_ticks) * instrument.tick_value
     risk_per_contract = money(stop_cost + execution_cost)
     buffer = max(Decimal("0"), balance - floor - reserve)
@@ -191,6 +315,12 @@ def calculate_position_size(values: PositionSizeInput, rules: AccountRules) -> P
     if not rules.evidence_compatible:
         warnings.append("The selected configuration does not share the displayed historical evidence model.")
     return PositionSizeResult(
+        tick_value=money(instrument.tick_value),
+        commission_round_trip=money(commission_rt),
+        spread_cost_per_contract=money(spread_cost),
+        slippage_cost_per_contract=money(slippage_cost),
+        usable_risk_buffer=money(usable_budget),
+        safety_reserve=money(reserve),
         risk_per_contract=risk_per_contract,
         maximum_by_account_cap=maximum_by_account_cap,
         maximum_by_risk=maximum_by_risk,
@@ -228,11 +358,16 @@ class AccountSnapshot:
     starting_balance: Decimal
     ending_balance: Decimal
     daily_net_pnl: Decimal
+    ending_equity: Decimal
+    unrealized_pnl: Decimal
     largest_profitable_day: Decimal
     consistency_pct: Decimal | None
     drawdown_floor: Decimal
     remaining_drawdown: Decimal
     permitted_micros: int
+    open_micro_equivalents: int
+    scaling_tier: str
+    liquidation_deadline: str
     warnings: list[str]
     status: str
     reason: str
@@ -259,6 +394,9 @@ class LucidAccount:
     current_session: str = ""
     session_start_balance: Decimal = field(init=False)
     daily_pnl: Decimal = Decimal("0")
+    unrealized_pnl: Decimal = Decimal("0")
+    open_micro_equivalents: int = 0
+    open_exposure_by_instrument: dict[str, int] = field(default_factory=dict)
     daily_profit_history: list[Decimal] = field(default_factory=list)
     trading_days: int = 0
     restricted: bool = False
@@ -278,7 +416,72 @@ class LucidAccount:
 
     @property
     def remaining_drawdown(self) -> Decimal:
-        return money(self.balance - self.floor)
+        return money(self.current_equity - self.floor)
+
+    @property
+    def current_equity(self) -> Decimal:
+        return money(self.balance + self.unrealized_pnl)
+
+    @property
+    def remaining_micros(self) -> int:
+        return max(0, self.rules.max_micros - self.open_micro_equivalents)
+
+    @property
+    def scaling_tier(self) -> str:
+        return "evaluation-fixed"
+
+    def reserve_exposure(self, instrument: str, quantity: int) -> None:
+        if self.passed or self.breached:
+            raise RuntimeError("terminal account cannot open exposure")
+        if self.restricted:
+            raise RuntimeError("daily loss restriction blocks new exposure")
+        symbol = instrument.upper()
+        try:
+            item = INSTRUMENTS[symbol]
+        except KeyError as exc:
+            raise ValueError(f"unsupported instrument: {instrument}") from exc
+        if quantity <= 0:
+            raise ValueError("quantity must be positive")
+        requested = quantity * item.cap_units
+        if requested > self.remaining_micros:
+            raise ValueError("aggregate exposure exceeds the Lucid contract cap")
+        self.open_micro_equivalents += requested
+        self.open_exposure_by_instrument[symbol] = self.open_exposure_by_instrument.get(symbol, 0) + quantity
+
+    def release_exposure(self, instrument: str, quantity: int) -> None:
+        symbol = instrument.upper()
+        try:
+            item = INSTRUMENTS[symbol]
+        except KeyError as exc:
+            raise ValueError(f"unsupported instrument: {instrument}") from exc
+        held = self.open_exposure_by_instrument.get(symbol, 0)
+        released = quantity * item.cap_units
+        if quantity <= 0 or quantity > held:
+            raise ValueError("cannot release exposure that is not open")
+        self.open_micro_equivalents -= released
+        if quantity == held:
+            self.open_exposure_by_instrument.pop(symbol, None)
+        else:
+            self.open_exposure_by_instrument[symbol] = held - quantity
+        if self.open_micro_equivalents == 0:
+            self.unrealized_pnl = Decimal("0")
+
+    def mark_to_market(
+        self,
+        unrealized_pnl: Any,
+        *,
+        observed_peak_equity: Any | None = None,
+        observed_low_equity: Any | None = None,
+    ) -> None:
+        if self.open_micro_equivalents <= 0:
+            raise RuntimeError("cannot mark an account with no open exposure")
+        self.unrealized_pnl = money(unrealized_pnl)
+        peak = self.current_equity if observed_peak_equity is None else money(observed_peak_equity)
+        low = self.current_equity if observed_low_equity is None else money(observed_low_equity)
+        self._advance_intraday_floor(peak)
+        if low <= self.floor or self.current_equity <= self.floor:
+            self.breached = True
+            self.reason = "maximum loss limit reached by open equity"
 
     @property
     def total_profit(self) -> Decimal:
@@ -371,6 +574,8 @@ class LucidAccount:
     def end_day(self) -> AccountSnapshot:
         if not self.current_session:
             raise ValueError("no active session")
+        if self.open_micro_equivalents or self.unrealized_pnl:
+            raise RuntimeError("all exposure must be force-liquidated before session end")
         session = self.current_session
         self.trading_days += 1
         self.daily_profit_history.append(self.daily_pnl)
@@ -399,11 +604,16 @@ class LucidAccount:
             starting_balance=self.session_start_balance,
             ending_balance=self.balance,
             daily_net_pnl=self.daily_pnl,
+            ending_equity=self.current_equity,
+            unrealized_pnl=self.unrealized_pnl,
             largest_profitable_day=self.largest_profitable_day,
             consistency_pct=self.consistency_pct,
             drawdown_floor=self.floor,
             remaining_drawdown=self.remaining_drawdown,
             permitted_micros=self.rules.max_micros,
+            open_micro_equivalents=self.open_micro_equivalents,
+            scaling_tier=self.scaling_tier,
+            liquidation_deadline=self.rules.forced_close_ny,
             warnings=list(self.warnings),
             status=status,
             reason=self.reason,
@@ -418,6 +628,13 @@ class LucidAccount:
     def state(self) -> dict[str, Any]:
         return {
             "balance": str(self.balance),
+            "current_equity": str(self.current_equity),
+            "unrealized_pnl": str(self.unrealized_pnl),
+            "open_micro_equivalents": self.open_micro_equivalents,
+            "open_exposure_by_instrument": dict(sorted(self.open_exposure_by_instrument.items())),
+            "remaining_micros": self.remaining_micros,
+            "scaling_tier": self.scaling_tier,
+            "liquidation_deadline": self.rules.forced_close_ny,
             "gross_pnl": str(self.gross_pnl),
             "commissions": str(self.commissions),
             "spread_cost": str(self.spread_cost),
@@ -427,6 +644,7 @@ class LucidAccount:
             "remaining_drawdown": str(self.remaining_drawdown),
             "highest_qualifying_balance": str(self.highest_qualifying_balance),
             "daily_pnl": str(self.daily_pnl),
+            "active_session": self.current_session or None,
             "largest_profitable_day": str(self.largest_profitable_day),
             "consistency_pct": None if self.consistency_pct is None else str(self.consistency_pct),
             "trading_days": self.trading_days,
@@ -453,8 +671,14 @@ class DataValidationReport:
     out_of_order_rows: int
     invalid_price_rows: int
     invalid_volume_rows: int
+    zero_volume_rows: int
     symbol_mismatch_rows: int
     expiration_errors: int
+    expiration_before_bar_rows: int
+    outside_permitted_session_rows: int
+    incomplete_rth_sessions: int
+    session_count: int
+    contract_rollovers: int
     warnings: tuple[str, ...]
     errors: tuple[str, ...]
 
@@ -498,26 +722,34 @@ def validate_market_data(
     if missing:
         errors.append("missing required columns: " + ", ".join(missing))
     if errors:
-        return DataValidationReport(False, file_format, len(frame), expected_symbol, "unknown", None, None, 0, 0, 0, 0, 0, 0, 0, tuple(warnings), tuple(errors))
+        return DataValidationReport(
+            False, file_format, len(frame), expected_symbol, "unknown", None, None,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            tuple(warnings), tuple(errors),
+        )
 
     import pandas as pd
     raw_ts = frame[timestamp_name]
-    parsed = pd.to_datetime(raw_ts, errors="coerce", utc=False)
+    raw_ts_text = raw_ts.astype(str).str.strip()
+    explicit_zone = raw_ts_text.str.contains(r"(?:Z|[+-]\d{2}:?\d{2})$", regex=True, na=False)
+    parsed = pd.to_datetime(raw_ts, errors="coerce", utc=True)
     parse_bad = int(parsed.isna().sum())
     if parse_bad:
         errors.append(f"{parse_bad} timestamp(s) could not be parsed")
     timezone = "unknown"
     if not parsed.empty and not parsed.isna().all():
-        timezone = str(getattr(parsed.dt, "tz", None) or "naive")
-        if timezone == "naive":
+        timezone = "UTC"
+        if bool((parsed.notna() & ~explicit_zone).any()):
+            timezone = "naive"
             errors.append("timestamps have no timezone; explicit UTC/offset is required")
-        else:
-            parsed = parsed.dt.tz_convert("UTC")
 
     out_of_order = 0
     duplicate_rows = 0
     missing_intervals = 0
     first = last = None
+    outside_session_rows = 0
+    incomplete_rth_sessions = 0
+    session_count = 0
     if not parsed.isna().all():
         valid_ts = parsed.dropna()
         first = valid_ts.min().isoformat()
@@ -532,6 +764,34 @@ def validate_market_data(
             errors.append(f"{out_of_order} out-of-order timestamp transition(s)")
         if missing_intervals:
             warnings.append(f"{missing_intervals} interval gap(s) exceed {expected_interval_seconds} seconds")
+        if timezone != "naive":
+            ny = valid_ts.dt.tz_convert(NY)
+            minute = ny.dt.hour * 60 + ny.dt.minute
+            weekday = ny.dt.weekday
+            permitted_clock = (minute >= 18 * 60) | (minute < 16 * 60 + 45)
+            permitted_weekday = (
+                ((weekday < 4) & permitted_clock)
+                | ((weekday == 4) & (minute < 16 * 60 + 45))
+                | ((weekday == 6) & (minute >= 18 * 60))
+            )
+            outside_session_rows = int((~(permitted_clock & permitted_weekday)).sum())
+            if outside_session_rows:
+                errors.append(f"{outside_session_rows} row(s) fall outside the conservative Lucid futures session")
+            session_labels = ny.dt.date.astype(str)
+            after_reopen = minute >= 18 * 60
+            session_labels = pd.Series(
+                pd.to_datetime(session_labels) + pd.to_timedelta(after_reopen.astype(int), unit="D"),
+                index=valid_ts.index,
+            ).dt.date.astype(str)
+            session_count = int(session_labels.nunique())
+            rth = (minute >= 9 * 60 + 30) & (minute < 16 * 60)
+            if rth.any() and expected_interval_seconds == 60:
+                rth_counts = pd.Series(1, index=valid_ts.index)[rth].groupby(session_labels[rth]).sum()
+                incomplete_rth_sessions = int((rth_counts != 390).sum())
+                if incomplete_rth_sessions:
+                    warnings.append(
+                        f"{incomplete_rth_sessions} RTH session(s) do not contain exactly 390 one-minute bars; early close, gap, or partial export must be resolved"
+                    )
 
     numeric: dict[str, Any] = {}
     for name in required:
@@ -545,10 +805,13 @@ def validate_market_data(
     )
     invalid_price_rows = int(invalid_price.sum())
     invalid_volume_rows = int((numeric["volume"].isna() | (numeric["volume"] < 0)).sum())
+    zero_volume_rows = int((numeric["volume"] == 0).sum())
     if invalid_price_rows:
         errors.append(f"{invalid_price_rows} row(s) have impossible OHLC prices")
     if invalid_volume_rows:
         errors.append(f"{invalid_volume_rows} row(s) have invalid volume")
+    if zero_volume_rows:
+        warnings.append(f"{zero_volume_rows} zero-volume row(s) require source-specific review")
 
     symbol_mismatch = 0
     if "symbol" in columns:
@@ -560,12 +823,24 @@ def validate_market_data(
         warnings.append("no symbol column; instrument identity must come from import metadata")
 
     expiration_errors = 0
+    expiration_before_bar_rows = 0
+    contract_rollovers = 0
     expiry_key = next((columns[key] for key in ("contract_expiration", "expiration", "expiry") if key in columns), None)
     if expiry_key is not None:
         expiry = pd.to_datetime(frame[expiry_key], errors="coerce")
         expiration_errors = int(expiry.isna().sum())
         if expiration_errors:
             errors.append(f"{expiration_errors} contract expiration value(s) are invalid")
+        valid_expiry = expiry.notna() & parsed.notna()
+        if valid_expiry.any():
+            bar_dates = parsed[valid_expiry].dt.tz_convert(NY).dt.date
+            expiry_dates = expiry[valid_expiry].dt.date
+            expiration_before_bar_rows = int(sum(bar > exp for bar, exp in zip(bar_dates, expiry_dates)))
+            if expiration_before_bar_rows:
+                errors.append(f"{expiration_before_bar_rows} row(s) occur after contract expiration")
+            contract_rollovers = max(0, int(expiry.dropna().astype(str).ne(expiry.dropna().astype(str).shift()).sum()) - 1)
+            if contract_rollovers:
+                warnings.append(f"{contract_rollovers} contract rollover transition(s) detected; adjustment policy must be supplied")
     else:
         warnings.append("no contract expiration column; continuous-contract rollover cannot be audited")
 
@@ -582,8 +857,14 @@ def validate_market_data(
         out_of_order_rows=out_of_order,
         invalid_price_rows=invalid_price_rows,
         invalid_volume_rows=invalid_volume_rows,
+        zero_volume_rows=zero_volume_rows,
         symbol_mismatch_rows=symbol_mismatch,
         expiration_errors=expiration_errors,
+        expiration_before_bar_rows=expiration_before_bar_rows,
+        outside_permitted_session_rows=outside_session_rows,
+        incomplete_rth_sessions=incomplete_rth_sessions,
+        session_count=session_count,
+        contract_rollovers=contract_rollovers,
         warnings=tuple(warnings),
         errors=tuple(errors),
     )

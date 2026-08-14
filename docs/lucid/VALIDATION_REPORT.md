@@ -1,6 +1,6 @@
 # Validation report
 
-Generated 2026-08-14 from immutable run `9dd7658a37e8dcf6` with seed `20260814`.
+Generated 2026-08-14 from immutable run `db5b31c94d3cd7b7` with seed `20260814`. Artifact SHA-256: `46cbbd0f01ce90104f8ab725c1aa39e0f0205b91055b6de1eef2bd295bc6a7e8`.
 
 ## Evidence
 
@@ -34,9 +34,13 @@ The development/validation/test 45-session pass rates are 44.90%, 57.75% and 47.
 | Commission | $1,161.00 |
 | Modeled spread | $1,092.75 |
 | Modeled slippage | $1,092.75 |
-| Costs / positive gross P&L | 14.97% |
+| Costs / positive gross P&L | 4.74% |
 
 Costs use the officially published $0.50 per side for the micro instruments plus one adverse spread tick and one adverse slippage tick per round trip in the normal preset. The severe preset further worsens execution and is not a claim about a precise live cost distribution.
+
+The previous report's 14.97% cost ratio was mislabeled: it divided by signed gross-before-costs. Run `db5b31c94d3cd7b7` uses positive gross profit ($70,557.03) as the denominator, matching the label and producing 4.74%. The signed gross-before-costs remains separately reported at $22,348.69.
+
+Concentration diagnostics are also explicit: the largest winning trade is 1.15% of positive gross, the largest positive day is 2.22% of positive daily P&L, and the largest positive month is 14.96% of positive monthly P&L. Annual forward slices and all seven three-point signal-parameter sweeps are stored in the artifact and rendered on the page.
 
 ## Stress and Monte Carlo
 

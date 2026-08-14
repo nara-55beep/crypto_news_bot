@@ -22,7 +22,7 @@ The final test end date is never moved to avoid a weak result. Previous research
 
 ## Validation rules
 
-The import validator requires `timestamp/dt_utc`, open, high, low, close and volume; parseable UTC timestamps; ascending unique rows; positive prices; nonnegative volume; low ≤ open/close ≤ high; an expected symbol; recognized resolution; and explicit timezone. Missing minutes and session gaps are reported. Row-indexed strategy logic admits only a complete 09:30–15:59 New York sequence (390 consecutive minutes). Short/early-close and damaged sessions remain no-trade calendar days where observable and never become shortened “easy” pass windows.
+The import validator requires `timestamp/dt_utc`, open, high, low, close and volume; parseable explicitly zoned timestamps (including mixed DST offsets normalized to UTC); ascending unique rows; positive prices; nonnegative volume; low ≤ open/close ≤ high; an expected symbol; recognized resolution; and explicit timezone. It reports zero-volume rows, missing minutes, session gaps, rows outside the conservative Sunday-evening-through-Friday-close futures session, incomplete 390-minute RTH sessions, invalid or expired contracts, and contract rollover transitions. Friday-evening and Saturday rows are rejected. Row-indexed strategy logic admits only a complete 09:30–15:59 New York sequence (390 consecutive minutes). Short/early-close and damaged sessions remain no-trade calendar days where observable and never become shortened “easy” pass windows.
 
 CSV is supported directly. Parquet is accepted when pandas has a working parquet engine; otherwise the API returns an explicit dependency error.
 
