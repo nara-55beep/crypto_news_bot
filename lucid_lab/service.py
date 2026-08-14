@@ -55,7 +55,11 @@ class EvidenceStore:
             raise EvidenceError("Lucid validation artifact has an unsupported schema")
         if data.get("status") not in {"EXPERIMENTAL_PROXY", "NO_GO", "VALIDATED"}:
             raise EvidenceError("Lucid validation artifact has an invalid status")
-        required = ("run_id", "selected", "data", "horizons", "stresses", "candidates", "charts")
+        required = (
+            "run_id", "selected", "data", "horizons", "stresses", "candidates", "charts",
+            "account_comparison", "monte_carlo", "walk_forward", "split_results",
+            "sensitivity", "signal_sensitivity", "trade_statistics", "risk_controls",
+        )
         missing = [key for key in required if key not in data]
         if missing:
             raise EvidenceError("Lucid validation artifact is incomplete: " + ", ".join(missing))
@@ -143,6 +147,8 @@ class LucidLabService:
             safety_reserve=Decimal(str(payload.get("safety_reserve", "100"))),
             open_micro_equivalents=int(payload.get("open_micro_equivalents", 0)),
             execution_preset=str(payload.get("execution_preset", "normal")),
+            committed_stop_risk=Decimal(str(payload.get("committed_stop_risk", "0"))),
+            committed_stop_risk_defaulted="committed_stop_risk" not in payload,
         )
         return {"ok": True, "result": calculate_position_size(values, rules).to_dict()}
 

@@ -15,6 +15,13 @@ SERVICE = LucidLabService()
 SIMULATIONS = SimulationRegistry(SERVICE)
 NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache", "Expires": "0"}
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+PAPER_BOT = None
+
+
+def set_paper_bot(bot) -> None:
+    """Attach the paper-only runtime created by ``main.py``."""
+    global PAPER_BOT
+    PAPER_BOT = bot
 
 
 def _error(message: str, status: int) -> web.Response:
@@ -56,6 +63,37 @@ async def position_size(request: web.Request) -> web.Response:
         if isinstance(exc, web.HTTPException):
             raise
         return _error(f"invalid calculator request: {type(exc).__name__}: {exc}", 400)
+
+
+async def paper_state(request: web.Request) -> web.Response:
+    if PAPER_BOT is None:
+        return web.json_response({
+            "ok": True, "running": False, "paper_only": True,
+            "live_order_routing": False, "status": "NOT_STARTED",
+            "sleeves": [], "positions": [], "history": [], "log": [],
+        }, headers=NO_CACHE)
+    return web.json_response(PAPER_BOT.state(), headers=NO_CACHE)
+
+
+async def paper_toggle(request: web.Request) -> web.Response:
+    if PAPER_BOT is None:
+        return _error("Lucid Lab paper runtime is not started", 503)
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise ValueError("JSON body must be an object")
+        return web.json_response(PAPER_BOT.set_enabled(bool(payload.get("enabled"))), headers=NO_CACHE)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+
+
+async def paper_reset(request: web.Request) -> web.Response:
+    if PAPER_BOT is None:
+        return _error("Lucid Lab paper runtime is not started", 503)
+    try:
+        return web.json_response(PAPER_BOT.reset(), headers=NO_CACHE)
+    except RuntimeError as exc:
+        return _error(str(exc), 409)
 
 
 async def start_simulation(request: web.Request) -> web.Response:
@@ -128,6 +166,9 @@ def routes() -> list[web.AbstractRouteDef]:
         web.get("/lucid-lab", page),
         web.get("/api/lucid-lab/snapshot", snapshot),
         web.post("/api/lucid-lab/position-size", position_size),
+        web.get("/api/lucid-lab/paper/state", paper_state),
+        web.post("/api/lucid-lab/paper/toggle", paper_toggle),
+        web.post("/api/lucid-lab/paper/reset", paper_reset),
         web.post("/api/lucid-lab/simulations", start_simulation),
         web.get("/api/lucid-lab/simulations/{job_id}", simulation_state),
         web.post("/api/lucid-lab/simulations/{job_id}/cancel", cancel_simulation),

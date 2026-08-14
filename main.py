@@ -80,6 +80,8 @@ import apex_vwap_paper
 import lucid_pass_paper
 import lucid_pass_audited_paper
 import lucid_continuous_paper
+from lucid_lab.paper import LucidLabPaperBot, manage_loop as manage_lucid_lab_paper
+import lucid_lab.web as lucid_lab_web
 import nq_mr_15m_paper
 import nr7_paper
 import nr7_aggr_paper
@@ -129,6 +131,8 @@ async def main():
     # Only the pass-stop panel uses audited execution. Continuous deliberately
     # remains on the original class and its independent P&L/state population.
     lucidpassbot = lucid_pass_audited_paper.AuditedLucidPassPaperBot()
+    lucidlabpaperbot = LucidLabPaperBot()  # selected three-sleeve LucidPro 25K PAPER portfolio
+    lucid_lab_web.set_paper_bot(lucidlabpaperbot)
     lucid_alert_token = getattr(config, "TELEGRAM_ALERT_BOT_TOKEN", "")
     lucid_alert_chat_id = getattr(config, "TELEGRAM_ALERT_CHAT_ID", "")
     lucidcontbot.set_telegram_bot(lucid_alert_token, lucid_alert_chat_id)
@@ -237,6 +241,7 @@ async def main():
              asyncio.create_task(tsbot.manage_loop()),
              asyncio.create_task(apexvwapbot.manage_loop()),
              asyncio.create_task(lucid_pass_paper.manage_shared_loop([lucidcontbot, lucidpassbot])),
+             asyncio.create_task(manage_lucid_lab_paper(lucidlabpaperbot)),
              asyncio.create_task(nqmr15bot.manage_loop()),
              asyncio.create_task(nr7bot.manage_loop()),
              asyncio.create_task(nr7aggrbot.manage_loop()),
