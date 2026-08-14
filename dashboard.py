@@ -64,6 +64,7 @@ import rsi2_scalper_paper
 import all_pattern_paper
 import apex_vwap_paper
 import ict_lab
+import lucid_lab.web as lucid_lab_web
 
 BINANCE_KLINES = "https://fapi.binance.com/fapi/v1/klines"
 CHART_SYMBOL = "BTCUSDT"
@@ -3480,6 +3481,7 @@ PAPER_HTML = r"""<!doctype html>
     <a class="nav" href="/">&larr; Chart</a>
     <a class="nav" href="/ict">ICT Lab →</a>
     <a class="nav" href="/funding">Funding Bot →</a>
+    <a class="nav" href="/lucid-lab" style="color:#f4bd4a;border-color:#6b4d19">Lucid Strategy Lab →</a>
     <a class="nav" href="http://127.0.0.1:8100" target="_blank" rel="noopener">Research Bot ↗</a>
     <span class="sub">multiple paper strategies, one page · simulated fills on real Lighter data · no real money</span>
     <span class="spacer"></span>
@@ -5213,6 +5215,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.post("/api/penny/reset", _penny_reset),
         web.post("/api/penny/scan", _penny_scan),
         web.get("/paper", _paper_page),
+        *lucid_lab_web.routes(),
         web.get("/ict", _ictlab_page),
         web.get("/api/ictlab/state", _ictlab_state),
         web.post("/api/ictlab/toggle", _ictlab_toggle),
@@ -5631,6 +5634,7 @@ PAGE_HTML = r"""<!doctype html>
     <a class="nav" href="/funding">Funding Bot →</a>
     <a class="nav" href="/paper">Paper Trading →</a>
     <a class="nav" href="/ict">ICT Lab →</a>
+    <a class="nav" href="/lucid-lab" style="color:var(--amber);border-color:#6b4d19">Lucid Strategy Lab →</a>
     <button class="tradebtn" onclick="openDrawer('manual')">Manual Paper Trading</button>
     <button class="tradebtn nwbtn" onclick="openDrawer('nw')">Whale Follow Bot</button>
     <button class="tradebtn" style="border-color:var(--red);color:var(--red)" onclick="openDrawer('lighter')">Lighter · REAL</button>
