@@ -492,12 +492,20 @@ class TestEvidenceArtifact(unittest.TestCase):
 
     def test_real_source_and_sample_gate_are_visible(self):
         data = self.data
-        self.assertEqual(data["status"], "EXPERIMENTAL_PROXY")
+        self.assertEqual(data["status"], "NO_GO")
+        self.assertEqual(
+            data["verdict"]["decision"],
+            "DO_NOT_BUY_OR_TRADE_FROM_THIS_BACKTEST",
+        )
         self.assertNotIn("synthetic", data["data"]["source"].lower())
         self.assertGreaterEqual(data["trade_statistics"]["trades"], 200)
-        self.assertGreaterEqual(data["horizons"]["45"]["windows"], 100)
+        self.assertGreaterEqual(data["horizons"]["45"]["windows"], 10)
+        self.assertFalse(data["horizons"]["45"]["windows_overlap"])
+        self.assertEqual(data["horizons"]["45"]["window_stride_sessions"], 45)
         self.assertEqual(data["data"]["test_start"], "2024-01-02")
         self.assertTrue(all(row["files"] for row in data["data"]["manifest"]))
+        self.assertEqual(len(data["implementation_manifest"]), 4)
+        self.assertTrue(all(len(row["sha256"]) == 64 for row in data["implementation_manifest"]))
 
     def test_rates_partition_every_window(self):
         for horizon in self.data["horizons"].values():
@@ -508,7 +516,7 @@ class TestEvidenceArtifact(unittest.TestCase):
         rows = {row["id"]: row for row in self.data["stresses"]}
         self.assertLess(rows["severe"]["pass_rate"], rows["normal"]["pass_rate"])
         self.assertEqual(self.data["monte_carlo"]["seed"], 20260814)
-        self.assertEqual(self.data["monte_carlo"]["paths"], 5000)
+        self.assertEqual(self.data["monte_carlo"]["paths"], 1000)
         self.assertAlmostEqual(
             self.data["monte_carlo"]["pass_rate"] + self.data["monte_carlo"]["breach_rate"] + self.data["monte_carlo"]["unfinished_rate"],
             1.0,
@@ -517,7 +525,7 @@ class TestEvidenceArtifact(unittest.TestCase):
 
     def test_candidate_comparison_keeps_invalidated_strategy(self):
         rows = {row["id"]: row for row in self.data["candidates"]}
-        self.assertEqual(rows["selected_portfolio"]["validation_status"], "EXPERIMENTAL_PROXY")
+        self.assertEqual(rows["selected_portfolio"]["validation_status"], "NO_GO_PROXY")
         self.assertEqual(rows["original_five_basket"]["validation_status"], "INVALIDATED")
         self.assertIn("future information", rows["original_five_basket"]["reason"])
 
@@ -542,24 +550,30 @@ class TestEvidenceArtifact(unittest.TestCase):
         mc_hist = sum(row["count"] for row in self.data["monte_carlo"]["terminal_profit_histogram"])
         self.assertEqual(mc_hist, self.data["monte_carlo"]["paths"])
 
-    def test_signal_sensitivity_and_walk_forward_are_complete(self):
+    def test_confirmatory_period_is_not_reused_for_parameter_search(self):
         rows = self.data["signal_sensitivity"]
-        dimensions = {row["dimension"] for row in rows}
-        self.assertEqual(dimensions, {
-            "nq_drive_threshold", "nq_drive_target_rr", "nq_drive_entry_minute",
-            "es_gap_threshold", "es_gap_target_rr", "prior_breakout_threshold", "prior_breakout_target_rr",
-        })
-        for dimension in dimensions:
-            group = [row for row in rows if row["dimension"] == dimension]
-            self.assertEqual(len(group), 3)
-            self.assertEqual(sum(bool(row["selected"]) for row in group), 1)
-            for row in group:
-                self.assertAlmostEqual(row["pass_rate"] + row["breach_rate"] + row["unfinished_rate"], 1.0, places=5)
-            selected = next(row for row in group if row["selected"])
-            self.assertEqual(selected["trades"], self.data["trade_statistics"]["trades"])
-            self.assertEqual(selected["expectancy"], self.data["trade_statistics"]["expectancy"])
-            self.assertEqual(selected["pass_rate"], self.data["horizons"]["45"]["pass_rate"])
+        self.assertEqual(len(rows), 1)
+        selected = rows[0]
+        self.assertEqual(selected["dimension"], "frozen_three_sleeve_specification")
+        self.assertTrue(selected["selected"])
+        self.assertIn("not retested", selected["note"])
+        self.assertEqual(selected["trades"], self.data["trade_statistics"]["trades"])
+        self.assertEqual(selected["expectancy"], self.data["trade_statistics"]["expectancy"])
+        self.assertEqual(selected["pass_rate"], self.data["horizons"]["45"]["pass_rate"])
         self.assertEqual([row["year"] for row in self.data["walk_forward"]], [2022, 2023, 2024, 2025, 2026])
+
+    def test_decision_gates_fail_closed_on_proxy_and_small_sample(self):
+        gates = {row["id"]: row for row in self.data["verdict"]["validation_gates"]}
+        self.assertTrue(gates["minute_open_equity"]["passed"])
+        self.assertTrue(gates["non_overlapping_primary_windows"]["passed"])
+        for key in (
+            "exchange_grade_market_data", "pristine_out_of_sample",
+            "observed_execution_costs", "point_in_time_event_filter",
+            "decision_precision",
+        ):
+            self.assertFalse(gates[key]["passed"])
+        self.assertFalse(self.data["data"]["integrity"]["decision_grade"])
+        self.assertGreater(self.data["risk_controls"]["open_equity_checks"], 0)
 
     def test_candidates_are_versioned_and_concentration_is_reported(self):
         self.assertTrue(all(row["strategy_version"] for row in self.data["candidates"]))
@@ -682,9 +696,10 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("guaranteed profit", LUCID_LAB_HTML.lower())
         self.assertNotIn("proven profitable", LUCID_LAB_HTML.lower())
         self.assertNotIn("Wilson ", LUCID_LAB_HTML)
-        self.assertIn("Block-bootstrap", LUCID_LAB_HTML)
+        self.assertIn("Exact small-sample interval", LUCID_LAB_HTML)
         self.assertIn("Load stored scenario", LUCID_LAB_HTML)
-        self.assertIn("historical replay does not mark open equity", LUCID_LAB_HTML)
+        self.assertIn("every open position marked each minute", LUCID_LAB_HTML)
+        self.assertIn("DO_NOT_BUY_OR_TRADE_FROM_THIS_BACKTEST", ARTIFACT.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
