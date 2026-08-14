@@ -92,6 +92,13 @@ class TestVerifiedRuleSelection(unittest.TestCase):
         self.assertEqual(daily.drawdown_type, "intraday")
         self.assertIsNone(daily.daily_loss_limit)
 
+    def test_luciddaily_25k_uses_its_own_600_dollar_dll(self):
+        daily = get_account_rules(
+            "luciddaily", "evaluation", 25_000,
+            daily_drawdown="eod", daily_loss_enabled=True,
+        )
+        self.assertEqual(daily.daily_loss_limit, Decimal("600"))
+
     def test_unverified_combinations_fail_closed(self):
         with self.assertRaises(ValueError):
             get_account_rules("lucidblack", "evaluation", 150_000)
@@ -361,6 +368,20 @@ class TestExecutionAndSizing(unittest.TestCase):
         self.assertEqual(result.slippage_cost_per_contract, Decimal("0.50"))
         self.assertEqual(result.usable_risk_buffer, Decimal("400.00"))
 
+    def test_open_position_stop_risk_reduces_new_quantity_and_buffer(self):
+        rules = get_account_rules("lucidpro", "evaluation", 25_000)
+        clear = calculate_position_size(PositionSizeInput(
+            "MNQ", D("25000"), D("24000"), None, D("40"), D("400"), D("100"), 0, "normal"
+        ), rules)
+        committed = calculate_position_size(PositionSizeInput(
+            "MNQ", D("25000"), D("24000"), None, D("40"), D("400"), D("100"),
+            0, "normal", D("800"),
+        ), rules)
+        self.assertEqual(clear.final_quantity, 18)
+        self.assertEqual(committed.committed_stop_risk, Decimal("800.00"))
+        self.assertLess(committed.final_quantity, clear.final_quantity)
+        self.assertEqual(committed.usable_risk_buffer, Decimal("100.00"))
+
 
 class TestMarketDataValidation(unittest.TestCase):
     def test_valid_production_shaped_csv(self):
@@ -600,6 +621,8 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
             text = await response.text()
             self.assertIn("Lucid Strategy Lab", text)
             self.assertIn("Position-size calculator", text)
+            self.assertIn("Forward paper account", text)
+            self.assertIn("no live order routing", text)
 
     async def test_snapshot_and_calculator_endpoints(self):
         response = await self.client.get("/api/lucid-lab/snapshot?program=lucidpro&size=25000")
@@ -620,6 +643,20 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["result"]["final_quantity"], 18)
         self.assertEqual(result["result"]["commission_round_trip"], "1.00")
         self.assertEqual(result["result"]["spread_cost_per_contract"], "0.50")
+        self.assertIn("Committed stop risk defaulted", " ".join(result["result"]["warnings"]))
+
+    async def test_paper_endpoint_fails_safe_when_runtime_is_not_attached(self):
+        previous = lab_web.PAPER_BOT
+        lab_web.PAPER_BOT = None
+        try:
+            response = await self.client.get("/api/lucid-lab/paper/state")
+            self.assertEqual(response.status, 200)
+            data = await response.json()
+            self.assertFalse(data["running"])
+            self.assertTrue(data["paper_only"])
+            self.assertFalse(data["live_order_routing"])
+        finally:
+            lab_web.PAPER_BOT = previous
 
     async def test_bad_rule_selection_returns_visible_error(self):
         response = await self.client.get("/api/lucid-lab/snapshot?program=lucidblack&size=150000")
@@ -644,6 +681,10 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
             self.assertIn(text, LUCID_LAB_HTML)
         self.assertNotIn("guaranteed profit", LUCID_LAB_HTML.lower())
         self.assertNotIn("proven profitable", LUCID_LAB_HTML.lower())
+        self.assertNotIn("Wilson ", LUCID_LAB_HTML)
+        self.assertIn("Block-bootstrap", LUCID_LAB_HTML)
+        self.assertIn("Load stored scenario", LUCID_LAB_HTML)
+        self.assertIn("historical replay does not mark open equity", LUCID_LAB_HTML)
 
 
 if __name__ == "__main__":

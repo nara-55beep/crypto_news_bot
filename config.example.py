@@ -57,6 +57,8 @@ LUCID_REQUIRE_BACKTEST_SOURCE_MATCH = os.getenv("LUCID_REQUIRE_BACKTEST_SOURCE_M
 # bridge. Keep this on unless you are deliberately running a delayed-data
 # experiment.
 LUCID_REQUIRE_EXACT_REALTIME_ENTRY = os.getenv("LUCID_REQUIRE_EXACT_REALTIME_ENTRY", "1") == "1"
+# Forward-only paper account shown on /lucid-lab. This never enables live routing.
+LUCID_LAB_PAPER_ENABLED = os.getenv("LUCID_LAB_PAPER_ENABLED", "1") == "1"
 LUCID_LIVE_SOURCE = os.getenv(
     "LUCID_LIVE_SOURCE",
     "dukascopy" if LUCID_REQUIRE_BACKTEST_SOURCE_MATCH else "tradingview",

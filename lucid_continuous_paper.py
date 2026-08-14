@@ -104,10 +104,8 @@ class LucidContinuousPaperBot(base.LucidPassPaperBot):
             else ("floor breached" if self.failed else "continuous mode")
         )
         s["backtest_note"] = (
-            "Lucid continuous no-stop test: same ES/NQ/CL 5-strategy basket, $200 fixed "
-            "risk, pass target stop removed, daily eval stop removed. Last report: $50,000 "
-            "-> $296,777.75, +493.6%, 2,391 trades, 78.0% win, PF 3.23, max DD "
-            "-$1,698.34, losing months 0/37. That report used Dukascopy tick-derived "
-            "proxy candles; strict source matching blocks non-matching CME/Yahoo live feeds."
+            "No audited continuous backtest exists for this legacy bot. Its previous "
+            "performance headline was withdrawn because the execution model used "
+            "fractional contracts, no aggregate cap, zero slippage and same-bar exits."
         )
         return s

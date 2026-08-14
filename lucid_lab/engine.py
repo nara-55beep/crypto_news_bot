@@ -229,6 +229,8 @@ class PositionSizeInput:
     safety_reserve: Decimal
     open_micro_equivalents: int = 0
     execution_preset: str = "normal"
+    committed_stop_risk: Decimal = Decimal("0")
+    committed_stop_risk_defaulted: bool = False
 
 
 @dataclass(frozen=True)
@@ -239,6 +241,7 @@ class PositionSizeResult:
     slippage_cost_per_contract: Decimal
     usable_risk_buffer: Decimal
     safety_reserve: Decimal
+    committed_stop_risk: Decimal
     risk_per_contract: Decimal
     maximum_by_account_cap: int
     maximum_by_risk: int
@@ -254,6 +257,7 @@ class PositionSizeResult:
         for key in (
             "tick_value", "commission_round_trip", "spread_cost_per_contract",
             "slippage_cost_per_contract", "usable_risk_buffer", "safety_reserve",
+            "committed_stop_risk",
             "risk_per_contract", "expected_cost", "loss_if_stopped",
             "remaining_buffer_after_stop",
         ):
@@ -276,6 +280,7 @@ def calculate_position_size(values: PositionSizeInput, rules: AccountRules) -> P
     stop_ticks = D(values.stop_ticks)
     selected_budget = money(values.selected_risk_budget)
     reserve = max(Decimal("0"), money(values.safety_reserve))
+    committed = money(values.committed_stop_risk)
     if stop_ticks <= 0:
         raise ValueError("stop distance must be greater than zero ticks")
     if balance <= floor:
@@ -284,6 +289,8 @@ def calculate_position_size(values: PositionSizeInput, rules: AccountRules) -> P
         raise ValueError("risk budget must be greater than zero")
     if values.open_micro_equivalents < 0:
         raise ValueError("open contract usage cannot be negative")
+    if committed < 0:
+        raise ValueError("committed stop risk cannot be negative")
 
     commission_rt = instrument.commission_per_side * D("2")
     spread_cost = preset.spread_ticks_rt * instrument.tick_value
@@ -291,8 +298,12 @@ def calculate_position_size(values: PositionSizeInput, rules: AccountRules) -> P
     execution_cost = spread_cost + slippage_cost + commission_rt
     stop_cost = (stop_ticks + preset.stop_extra_ticks) * instrument.tick_value
     risk_per_contract = money(stop_cost + execution_cost)
-    buffer = max(Decimal("0"), balance - floor - reserve)
-    daily_room = buffer if values.daily_loss_remaining is None else max(Decimal("0"), money(values.daily_loss_remaining))
+    buffer = max(Decimal("0"), balance - floor - reserve - committed)
+    daily_room = (
+        buffer
+        if values.daily_loss_remaining is None
+        else max(Decimal("0"), money(values.daily_loss_remaining) - committed)
+    )
     usable_budget = min(selected_budget, buffer, daily_room)
     maximum_by_risk = int((usable_budget / risk_per_contract).to_integral_value(rounding=ROUND_FLOOR))
 
@@ -301,13 +312,15 @@ def calculate_position_size(values: PositionSizeInput, rules: AccountRules) -> P
     final_quantity = max(0, min(maximum_by_risk, maximum_by_account_cap))
     expected_cost = money(execution_cost * final_quantity)
     loss_if_stopped = money(risk_per_contract * final_quantity)
-    remaining = money(balance - floor - loss_if_stopped)
+    remaining = money(balance - floor - committed - loss_if_stopped)
     constraints = {
         "risk budget": maximum_by_risk,
         "Lucid contract cap": maximum_by_account_cap,
     }
     binding = min(constraints, key=constraints.get)
     warnings: list[str] = []
+    if values.committed_stop_risk_defaulted:
+        warnings.append("Committed stop risk defaulted to zero; enter the stop risk of every open position before using this quantity.")
     if final_quantity == 0:
         warnings.append("No whole contract fits the selected account risk.")
     if remaining < reserve:
@@ -321,6 +334,7 @@ def calculate_position_size(values: PositionSizeInput, rules: AccountRules) -> P
         slippage_cost_per_contract=money(slippage_cost),
         usable_risk_buffer=money(usable_budget),
         safety_reserve=money(reserve),
+        committed_stop_risk=committed,
         risk_per_contract=risk_per_contract,
         maximum_by_account_cap=maximum_by_account_cap,
         maximum_by_risk=maximum_by_risk,

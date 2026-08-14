@@ -252,6 +252,13 @@ _SIZES = {
     150_000: (Decimal("9000"), Decimal("4500"), Decimal("2700"), 10, 100),
 }
 
+_DAILY_DLL = {
+    25_000: Decimal("600"),
+    50_000: Decimal("1200"),
+    100_000: Decimal("1800"),
+    150_000: Decimal("2700"),
+}
+
 
 def _base_values(size: int) -> tuple[Decimal, Decimal, Decimal | None, int, int]:
     try:
@@ -314,7 +321,7 @@ def get_account_rules(
         if daily_drawdown not in {"eod", "intraday"}:
             raise ValueError("LucidDaily drawdown must be 'eod' or 'intraday'")
         label, consistency = "LucidDaily", Decimal("50")
-        dll = pro_dll if daily_loss_enabled else None
+        dll = _DAILY_DLL[size] if daily_loss_enabled else None
         drawdown = daily_drawdown
         source_keys = (
             "daily_eval", "daily_custom", "daily_consistency",
