@@ -26,9 +26,13 @@ import lucid_portfolio_policy as P
 import lucid_predictive_research as R
 
 
-RESEARCH_VERSION = "lucid_lab_proxy_research_v1"
+RESEARCH_VERSION = "lucid_lab_conservative_proxy_v2"
 SEED = 20260814
 TEST_START = date(2024, 1, 1)
+SAFETY_RESERVE = 100.0
+MAX_TRADES_PER_DAY = 3
+MAX_LOSSES_PER_DAY = 2
+DAILY_PROFIT_LOCK = 600.0
 
 
 PRESETS = {
@@ -107,7 +111,77 @@ class PathResult:
     contract_cap_limited: int
     risk_rejected: int
     dll_blocked: int
+    strategy_blocked: int
+    open_equity_checks: int
+    minimum_equity: float
+    breach_reason: str
     timeline: list[dict]
+
+
+@dataclass(frozen=True)
+class MinuteBar:
+    low: float
+    high: float
+
+
+class MinutePathStore:
+    """Immutable minute bars used to mark every open position.
+
+    Keys are UTC nanoseconds.  Keeping the market in the key matters because an
+    ES low and an NQ high in the same minute must both affect shared-account
+    equity when both positions are open.
+    """
+
+    def __init__(self, days: dict[str, list[L.Day]]):
+        self._bars: dict[tuple[str, date], dict[int, MinuteBar]] = {}
+        self._timestamps: dict[date, set[int]] = {}
+        for market, rows in days.items():
+            for row in rows:
+                key = (market, row.day)
+                if key in self._bars:
+                    raise ValueError(f"duplicate {market} session {row.day}")
+                if len(row.ts) != 390 or not np.array_equal(
+                    row.minute, np.arange(390, dtype=np.int16)
+                ):
+                    raise ValueError(f"incomplete {market} session {row.day}")
+                bars: dict[int, MinuteBar] = {}
+                previous = -1
+                for stamp, op, hi, lo, close, volume in zip(
+                    row.ts, row.op, row.hi, row.lo, row.cl, row.vol
+                ):
+                    timestamp = pd_timestamp_ns(stamp)
+                    values = (float(op), float(hi), float(lo), float(close), float(volume))
+                    if not all(math.isfinite(value) for value in values):
+                        raise ValueError(f"non-finite {market} bar at {stamp}")
+                    if float(lo) > min(float(op), float(close)) or float(hi) < max(float(op), float(close)):
+                        raise ValueError(f"invalid OHLC ordering in {market} at {stamp}")
+                    if float(volume) < 0 or timestamp <= previous or timestamp in bars:
+                        raise ValueError(f"invalid chronology in {market} at {stamp}")
+                    bars[timestamp] = MinuteBar(float(lo), float(hi))
+                    previous = timestamp
+                self._bars[key] = bars
+                self._timestamps.setdefault(row.day, set()).update(bars)
+
+    def timestamps(self, session: date, markets: set[str]) -> list[int]:
+        values: set[int] = set()
+        for market in markets:
+            values.update(self._bars.get((market, session), {}))
+        return sorted(values)
+
+    def bar(self, market: str, session: date, timestamp: int) -> MinuteBar:
+        try:
+            return self._bars[(market, session)][timestamp]
+        except KeyError as exc:
+            raise ValueError(
+                f"missing mark bar for {market} {session} at {timestamp}"
+            ) from exc
+
+
+def pd_timestamp_ns(value) -> int:
+    """Normalize pandas/numpy timestamps without relying on host timezone."""
+    if hasattr(value, "value"):
+        return int(value.value)
+    return int(np.asarray(value).astype("datetime64[ns]").astype(np.int64))
 
 
 def simulate_sequence(
@@ -116,29 +190,142 @@ def simulate_sequence(
     rules: P.AccountRules,
     preset: dict,
     *,
+    price_paths: MinutePathStore,
     capture: bool = False,
-    session_labels: list[date] | None = None,
+    session_labels: list[date],
 ) -> PathResult:
-    """Portfolio simulation matching `P.simulate_window`, with audit details."""
+    """Replay one evaluation with conservative intraminute open-equity marks.
+
+    Entries occur at the minute open while positions whose exit is somewhere in
+    that same candle still consume risk and contract capacity.  We then mark the
+    shared account at the adverse side of every open position's one-minute bar.
+    For a position that exits in that candle, its modeled executable exit is the
+    worst pre-exit mark: using the candle extreme after a guaranteed stop would
+    invent a loss that the stop already closed.  A drawdown-floor touch wins over
+    a target in the same minute, because one-minute OHLC cannot prove ordering.
+    """
+    if len(sequence) != len(session_labels):
+        raise ValueError("every replayed session needs an explicit source date")
     balance = 0.0
     eod_peak = 0.0
     equity_peak = 0.0
     floor = -rules.max_loss
     max_dd = 0.0
+    minimum_equity = 0.0
+    open_equity_checks = 0
+    breach_reason = ""
     count = 0
     gross_profit = commission = spread = slippage = 0.0
-    contract_cap_limited = risk_rejected = dll_blocked = 0
+    contract_cap_limited = risk_rejected = dll_blocked = strategy_blocked = 0
     timeline: list[dict] = []
     daily_history: list[float] = []
     outcome = "unfinished"
 
     for used, day_trades in enumerate(sequence, 1):
+        session = session_labels[used - 1]
+        if any(trade.day != session for trade in day_trades):
+            raise ValueError(f"trade/session mismatch in replay session {session}")
         day_pnl = 0.0
+        day_trade_count = 0
+        day_losses = 0
         start_balance = balance
         positions: list[P.Position] = []
-        timestamps = sorted({t.entry_ts for t in day_trades} | {t.exit_ts for t in day_trades})
-        for timestamp in timestamps:
-            exiting = [p for p in positions if p.trade.exit_ts == timestamp and p.trade.entry_ts < timestamp]
+        markets = {trade.market for trade in day_trades}
+        timestamp_values = price_paths.timestamps(session, markets)
+        event_values = {
+            pd_timestamp_ns(stamp)
+            for trade in day_trades for stamp in (trade.entry_ts, trade.exit_ts)
+        }
+        if event_values - set(timestamp_values):
+            raise ValueError(f"trade event has no source minute in session {session}")
+        if event_values:
+            first_event, last_event = min(event_values), max(event_values)
+            timestamp_values = [
+                value for value in timestamp_values
+                if first_event <= value <= last_event
+            ]
+
+        for timestamp in timestamp_values:
+            # Entries happen at the bar open.  A prior position whose stop/target
+            # occurs later in this candle still occupies the shared risk cap.
+            for trade in (
+                t for t in day_trades if pd_timestamp_ns(t.entry_ts) == timestamp
+            ):
+                if rules.daily_loss_limit is not None and day_pnl <= -rules.daily_loss_limit:
+                    dll_blocked += 1
+                    continue
+                if (
+                    day_trade_count >= MAX_TRADES_PER_DAY
+                    or day_losses >= MAX_LOSSES_PER_DAY
+                    or day_pnl >= DAILY_PROFIT_LOCK
+                    or any(
+                        p.trade.market == trade.market and p.trade.side != trade.side
+                        for p in positions
+                    )
+                ):
+                    strategy_blocked += 1
+                    continue
+                all_in_risk = trade.risk_per_micro + L.COMMISSION_RT
+                requested = int(math.floor(P._base_risk(trade, policy, balance) / all_in_risk))
+                cap_room = rules.max_micros - sum(position.qty for position in positions)
+                if requested > max(0, cap_room):
+                    contract_cap_limited += 1
+                reserved = sum(position.reserved_loss for position in positions)
+                floor_room_cash = max(
+                    0.0,
+                    balance - floor - SAFETY_RESERVE - reserved - 0.01,
+                )
+                floor_room = int(math.floor(floor_room_cash / all_in_risk))
+                qty = max(0, min(requested, cap_room, floor_room))
+                if qty > 0:
+                    positions.append(P.Position(trade, qty))
+                    day_trade_count += 1
+                else:
+                    risk_rejected += 1
+
+            if positions:
+                open_equity_checks += 1
+                marked_equity = balance
+                for position in positions:
+                    trade = position.trade
+                    bar = price_paths.bar(trade.market, session, timestamp)
+                    adverse = bar.low if trade.side > 0 else bar.high
+                    tick_value = L.MARKETS[trade.market]["tick"] * L.MARKETS[trade.market]["pv"]
+                    extra_ticks = max(
+                        0.0,
+                        float(preset["spread"]) + float(preset["slippage"]) - 2.0,
+                    )
+                    adverse_mark = (
+                        trade.side
+                        * (adverse - trade.entry)
+                        * L.MARKETS[trade.market]["pv"]
+                        - (1.0 + extra_ticks) * tick_value
+                        - L.COMMISSION_RT
+                    )
+                    if pd_timestamp_ns(trade.exit_ts) != timestamp:
+                        marked_per_micro = adverse_mark
+                    elif trade.reason == "stop":
+                        # The modeled stop closes the position before any later
+                        # candle extreme can affect account equity.
+                        marked_per_micro = trade.gross_per_micro - L.COMMISSION_RT
+                    else:
+                        # A target or EOD close does not prove the favorable exit
+                        # preceded this candle's adverse extreme.
+                        marked_per_micro = min(
+                            adverse_mark,
+                            trade.gross_per_micro - L.COMMISSION_RT,
+                        )
+                    marked_equity += marked_per_micro * position.qty
+                minimum_equity = min(minimum_equity, marked_equity)
+                max_dd = min(max_dd, marked_equity - equity_peak)
+                if marked_equity <= floor:
+                    outcome = "breach"
+                    breach_reason = "intraday_open_equity_touched_eod_floor"
+                    break
+
+            exiting = [
+                p for p in positions if pd_timestamp_ns(p.trade.exit_ts) == timestamp
+            ]
             for match in exiting:
                 positions.remove(match)
                 trade = match.trade
@@ -153,53 +340,15 @@ def simulate_sequence(
                 gross_profit += net + L.COMMISSION_RT * qty + full_spread + full_slip
                 balance += net
                 day_pnl += net
+                if net < 0:
+                    day_losses += 1
                 count += 1
                 equity_peak = max(equity_peak, balance)
                 max_dd = min(max_dd, balance - equity_peak)
+                minimum_equity = min(minimum_equity, balance)
                 if balance <= floor:
                     outcome = "breach"
-                    break
-                if balance >= rules.target_profit:
-                    outcome = "pass"
-                    break
-            if outcome != "unfinished":
-                break
-
-            for trade in (t for t in day_trades if t.entry_ts == timestamp):
-                if rules.daily_loss_limit is not None and day_pnl <= -rules.daily_loss_limit:
-                    dll_blocked += 1
-                    continue
-                all_in_risk = trade.risk_per_micro + L.COMMISSION_RT
-                requested = int(math.floor(P._base_risk(trade, policy, balance) / all_in_risk))
-                cap_room = rules.max_micros - sum(position.qty for position in positions)
-                if requested > max(0, cap_room):
-                    contract_cap_limited += 1
-                qty = P._entry_qty(trade, policy, balance, floor, positions, rules)
-                if qty > 0:
-                    positions.append(P.Position(trade, qty))
-                else:
-                    risk_rejected += 1
-
-            immediate = [p for p in positions if p.trade.exit_ts == timestamp and p.trade.entry_ts == timestamp]
-            for match in immediate:
-                positions.remove(match)
-                trade = match.trade
-                qty = match.qty
-                net = (trade.gross_per_micro - L.COMMISSION_RT) * qty
-                tick_value = L.MARKETS[trade.market]["tick"] * L.MARKETS[trade.market]["pv"]
-                full_spread = float(preset["spread"]) * tick_value * qty
-                full_slip = float(preset["slippage"] + (preset["stop_extra"] if trade.reason == "stop" else 0.0)) * tick_value * qty
-                commission += L.COMMISSION_RT * qty
-                spread += full_spread
-                slippage += full_slip
-                gross_profit += net + L.COMMISSION_RT * qty + full_spread + full_slip
-                balance += net
-                day_pnl += net
-                count += 1
-                equity_peak = max(equity_peak, balance)
-                max_dd = min(max_dd, balance - equity_peak)
-                if balance <= floor:
-                    outcome = "breach"
+                    breach_reason = "realized_balance_touched_eod_floor"
                     break
                 if balance >= rules.target_profit:
                     outcome = "pass"
@@ -215,14 +364,9 @@ def simulate_sequence(
         if balance <= floor and outcome == "unfinished":
             outcome = "breach"
         if capture:
-            session = (
-                str(session_labels[used - 1])
-                if session_labels is not None and used <= len(session_labels)
-                else (str(day_trades[0].day) if day_trades else f"session-{used}")
-            )
             timeline.append({
                 "day": used,
-                "session": session,
+                "session": str(session),
                 "starting_balance": round(rules.target_profit * 0 + start_balance + (25_000 if rules.name == "25K" else 50_000 if rules.name == "50K" else 100_000 if rules.name == "100K" else 150_000), 2),
                 "ending_balance": round(balance + (25_000 if rules.name == "25K" else 50_000 if rules.name == "50K" else 100_000 if rules.name == "100K" else 150_000), 2),
                 "daily_net_pnl": round(day_pnl, 2),
@@ -242,33 +386,73 @@ def simulate_sequence(
             return PathResult(
                 outcome, used, balance, max_dd, count, gross_profit, commission,
                 spread, slippage, contract_cap_limited, risk_rejected, dll_blocked,
+                strategy_blocked, open_equity_checks, minimum_equity, breach_reason,
                 timeline,
             )
     return PathResult(
         outcome, len(sequence), balance, max_dd, count, gross_profit, commission,
         spread, slippage, contract_cap_limited, risk_rejected, dll_blocked,
+        strategy_blocked, open_equity_checks, minimum_equity, breach_reason,
         timeline,
     )
 
 
-def _wilson(success: int, total: int, z: float = 1.959963984540054) -> list[float]:
+def _binomial_cdf(k: int, n: int, probability: float) -> float:
+    if k < 0:
+        return 0.0
+    if k >= n:
+        return 1.0
+    return sum(
+        math.comb(n, value)
+        * probability**value
+        * (1.0 - probability) ** (n - value)
+        for value in range(k + 1)
+    )
+
+
+def _clopper_pearson(success: int, total: int, alpha: float = 0.05) -> list[float]:
+    """Exact binomial interval for non-overlapping evaluation blocks."""
     if total <= 0:
-        return [0.0, 0.0]
-    p = success / total
-    denom = 1 + z * z / total
-    center = (p + z * z / (2 * total)) / denom
-    half = z * math.sqrt(p * (1 - p) / total + z * z / (4 * total * total)) / denom
-    return [round(max(0.0, center - half), 6), round(min(1.0, center + half), 6)]
+        return [0.0, 1.0]
+
+    def solve(k: int, target: float) -> float:
+        lo, hi = 0.0, 1.0
+        for _ in range(90):
+            mid = (lo + hi) / 2.0
+            if _binomial_cdf(k, total, mid) > target:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2.0
+
+    lower = 0.0 if success == 0 else solve(success - 1, 1.0 - alpha / 2.0)
+    upper = 1.0 if success == total else solve(success, alpha / 2.0)
+    return [round(lower, 6), round(upper, 6)]
 
 
 def evaluate_sequences(
     daily: list[list[L.Trade]],
+    session_labels: list[date],
     horizon: int,
     policy: P.Policy,
     rules: P.AccountRules,
     preset: dict,
+    price_paths: MinutePathStore,
+    *,
+    stride: int | None = None,
 ) -> tuple[dict, list[PathResult]]:
-    paths = [simulate_sequence(daily[i:i + horizon], policy, rules, preset) for i in range(max(0, len(daily) - horizon + 1))]
+    if len(daily) != len(session_labels):
+        raise ValueError("daily trade baskets and session labels must align")
+    step = horizon if stride is None else stride
+    starts = range(0, max(0, len(daily) - horizon + 1), step)
+    paths = [
+        simulate_sequence(
+            daily[i:i + horizon], policy, rules, preset,
+            price_paths=price_paths,
+            session_labels=session_labels[i:i + horizon],
+        )
+        for i in starts
+    ]
     counts = Counter(path.outcome for path in paths)
     passes = [path.used_days for path in paths if path.outcome == "pass"]
     n = len(paths)
@@ -292,7 +476,9 @@ def evaluate_sequences(
         "pass_rate": round(pct("pass"), 6),
         "breach_rate": round(pct("breach"), 6),
         "unfinished_rate": round(pct("unfinished"), 6),
-        "pass_wilson_95": _wilson(counts["pass"], n),
+        "pass_exact_binomial_95": _clopper_pearson(counts["pass"], n),
+        "window_stride_sessions": step,
+        "windows_overlap": step < horizon,
         "duration": durations,
         "median_max_drawdown": round(float(np.median([p.max_drawdown for p in paths])), 2) if paths else None,
         "worst_max_drawdown": round(min((p.max_drawdown for p in paths), default=0.0), 2),
@@ -300,46 +486,41 @@ def evaluate_sequences(
     }, paths)
 
 
-def _block_bootstrap_interval(values: list[int], *, block: int = 20, reps: int = 2000) -> list[float]:
-    if not values:
-        return [0.0, 0.0]
-    rng = random.Random(SEED)
-    n = len(values)
-    means = []
-    for _ in range(reps):
-        sample: list[int] = []
-        while len(sample) < n:
-            start = rng.randrange(n)
-            sample.extend(values[(start + j) % n] for j in range(block))
-        means.append(sum(sample[:n]) / n)
-    return [round(float(np.percentile(means, 2.5)), 6), round(float(np.percentile(means, 97.5)), 6)]
-
-
 def monte_carlo(
     daily: list[list[L.Trade]],
+    session_labels: list[date],
     policy: P.Policy,
     rules: P.AccountRules,
     preset: dict,
+    price_paths: MinutePathStore,
     *,
     horizon: int = 45,
-    paths: int = 5000,
-    block: int = 5,
+    paths: int = 1000,
+    block: int = 20,
 ) -> dict:
     """Circular block-resample historical sessions and replay account state."""
     rng = random.Random(SEED)
     outcomes: list[PathResult] = []
     for _ in range(paths):
         sequence: list[list[L.Trade]] = []
+        labels: list[date] = []
         while len(sequence) < horizon:
             start = rng.randrange(len(daily))
-            sequence.extend(daily[(start + offset) % len(daily)] for offset in range(block))
-        outcomes.append(simulate_sequence(sequence[:horizon], policy, rules, preset))
+            for offset in range(block):
+                index = (start + offset) % len(daily)
+                sequence.append(daily[index])
+                labels.append(session_labels[index])
+        outcomes.append(simulate_sequence(
+            sequence[:horizon], policy, rules, preset,
+            price_paths=price_paths,
+            session_labels=labels[:horizon],
+        ))
     counts = Counter(row.outcome for row in outcomes)
     terminal = np.array([row.terminal_profit for row in outcomes], dtype=float)
     pass_days = [row.used_days for row in outcomes if row.outcome == "pass"]
     counts_hist, edges_hist = np.histogram(terminal, bins=16)
     return {
-        "method": "5-session circular block resampling with full path-dependent account replay",
+        "method": "20-session circular block resampling with minute-marked shared-account replay",
         "seed": SEED,
         "paths": paths,
         "horizon_sessions": horizon,
@@ -454,6 +635,7 @@ def _data_manifest(cache: Path, days: dict[str, list[L.Day]]) -> list[dict]:
 def build_report(cache: Path) -> dict:
     L.CACHE = str(cache)
     days = {market: L.load_days(market) for market in ("nq", "es")}
+    price_paths = MinutePathStore(days)
     all_trades = P.selected_signals(days)
     all_days = sorted({row.day for rows in days.values() for row in rows})
     test_days = [day for day in all_days if day >= TEST_START]
@@ -465,7 +647,10 @@ def build_report(cache: Path) -> dict:
         rules, policy = RULES[name], POLICIES[name]
         row = {"account_size": name, "target_to_drawdown": rules.target_profit / rules.max_loss}
         for horizon in (20, 30, 45):
-            result, _ = evaluate_sequences(normal_daily, horizon, policy, rules, PRESETS["normal"])
+            result, _ = evaluate_sequences(
+                normal_daily, test_days, horizon, policy, rules,
+                PRESETS["normal"], price_paths,
+            )
             row[f"h{horizon}"] = result
         account_comparison.append(row)
 
@@ -474,11 +659,18 @@ def build_report(cache: Path) -> dict:
     horizons = {}
     normal_paths: list[PathResult] = []
     for horizon in (20, 30, 45):
-        result, paths = evaluate_sequences(normal_daily, horizon, selected_policy, selected_rules, PRESETS["normal"])
+        result, paths = evaluate_sequences(
+            normal_daily, test_days, horizon, selected_policy, selected_rules,
+            PRESETS["normal"], price_paths,
+        )
         horizons[str(horizon)] = result
         if horizon == 45:
             normal_paths = paths
-            result["pass_block_bootstrap_95"] = _block_bootstrap_interval([1 if p.outcome == "pass" else 0 for p in paths])
+    rolling_result, rolling_paths = evaluate_sequences(
+        normal_daily, test_days, 45, selected_policy, selected_rules,
+        PRESETS["normal"], price_paths, stride=1,
+    )
+    horizons["45"]["overlapping_diagnostic"] = rolling_result
 
     split_results = {}
     for split_name, lo, hi in (
@@ -490,13 +682,17 @@ def build_report(cache: Path) -> dict:
         split_trades = [trade for trade in all_trades if (lo is None or trade.day >= lo) and (hi is None or trade.day <= hi)]
         split_daily = _stressed_days(split_days, split_trades, PRESETS["normal"])
         split_results[split_name], _ = evaluate_sequences(
-            split_daily, 45, selected_policy, selected_rules, PRESETS["normal"]
+            split_daily, split_days, 45, selected_policy, selected_rules,
+            PRESETS["normal"], price_paths,
         )
 
     stresses = []
     for key, preset in PRESETS.items():
         stressed_daily = _stressed_days(test_days, test_trades, preset)
-        result, paths = evaluate_sequences(stressed_daily, 45, selected_policy, selected_rules, preset)
+        result, paths = evaluate_sequences(
+            stressed_daily, test_days, 45, selected_policy, selected_rules,
+            preset, price_paths,
+        )
         if key == "poor_starts" and paths:
             ranked = sorted(paths, key=lambda p: p.terminal_profit)
             poor = ranked[: max(1, len(ranked) // 4)]
@@ -533,9 +729,15 @@ def build_report(cache: Path) -> dict:
     }
     for key, trades in subsets.items():
         daily = _stressed_days(test_days, trades, PRESETS["normal"])
-        normal, _ = evaluate_sequences(daily, 45, selected_policy, selected_rules, PRESETS["normal"])
+        normal, _ = evaluate_sequences(
+            daily, test_days, 45, selected_policy, selected_rules,
+            PRESETS["normal"], price_paths,
+        )
         severe_daily = _stressed_days(test_days, trades, PRESETS["severe"])
-        severe, _ = evaluate_sequences(severe_daily, 45, selected_policy, selected_rules, PRESETS["severe"])
+        severe, _ = evaluate_sequences(
+            severe_daily, test_days, 45, selected_policy, selected_rules,
+            PRESETS["severe"], price_paths,
+        )
         stats = _trade_stats(trades, selected_policy, PRESETS["normal"])
         candidates.append({
             "id": key,
@@ -559,7 +761,7 @@ def build_report(cache: Path) -> dict:
             "max_drawdown": normal["worst_max_drawdown"],
             "parameter_stability": "moderate" if key == "selected_portfolio" else "limited",
             "cost_sensitivity": round(normal["pass_rate"] - severe["pass_rate"], 6),
-            "validation_status": "EXPERIMENTAL_PROXY" if key == "selected_portfolio" else "REJECTED_STANDALONE",
+            "validation_status": "NO_GO_PROXY" if key == "selected_portfolio" else "REJECTED_STANDALONE",
             "reason": reasons[key],
         })
     candidates.append({
@@ -584,98 +786,58 @@ def build_report(cache: Path) -> dict:
         "source": "research/ta_strat/LUCID_CAUSAL_REBUILD_REPORT.md",
     })
 
-    sensitivity = []
-    for morning in (300.0, 350.0, 400.0, 450.0, 500.0):
-        for prior_risk in (75.0, 100.0, 125.0):
-            policy = P.Policy(morning, prior_risk)
-            result, _ = evaluate_sequences(normal_daily, 45, policy, selected_rules, PRESETS["normal"])
-            sensitivity.append({
-                "morning_risk": morning,
-                "prior_risk": prior_risk,
-                "pass_rate": result["pass_rate"],
-                "breach_rate": result["breach_rate"],
-                "unfinished_rate": result["unfinished_rate"],
-            })
-
-    def test_only(rows: list[L.Trade]) -> list[L.Trade]:
-        return [row for row in rows if row.day >= TEST_START]
-
-    signal_sensitivity = []
-    variant_specs: list[tuple[str, float, list[L.Trade]]] = []
-    for value in (0.20, 0.25, 0.30):
-        variant_specs.append(("nq_drive_threshold", value, test_only(R.morning_regime(
-            days["nq"], R.PConfig("morning_regime", "nq", entry_minute=15, threshold=value, target_rr=2.0, stop_mode="open", mode="drive", location=0.80)
-        )) + gap + prior))
-    for value in (1.50, 2.00, 2.50):
-        variant_specs.append(("nq_drive_target_rr", value, test_only(R.morning_regime(
-            days["nq"], R.PConfig("morning_regime", "nq", entry_minute=15, threshold=0.25, target_rr=value, stop_mode="open", mode="drive", location=0.80)
-        )) + gap + prior))
-    for value in (10.0, 15.0, 20.0):
-        variant_specs.append(("nq_drive_entry_minute", value, test_only(R.morning_regime(
-            days["nq"], R.PConfig("morning_regime", "nq", entry_minute=int(value), threshold=0.25, target_rr=2.0, stop_mode="open", mode="drive", location=0.80)
-        )) + gap + prior))
-    for value in (0.05, 0.10, 0.15):
-        variant_specs.append(("es_gap_threshold", value, drive + test_only(R.morning_regime(
-            days["es"], R.PConfig("morning_regime", "es", entry_minute=15, threshold=value, target_rr=1.5, stop_mode="range", mode="gap_fill", location=0.80)
-        )) + prior))
-    for value in (1.25, 1.50, 1.75):
-        variant_specs.append(("es_gap_target_rr", value, drive + test_only(R.morning_regime(
-            days["es"], R.PConfig("morning_regime", "es", entry_minute=15, threshold=0.10, target_rr=value, stop_mode="range", mode="gap_fill", location=0.80)
-        )) + prior))
-    for value in (0.20, 0.25, 0.30):
-        variant_specs.append(("prior_breakout_threshold", value, drive + gap + test_only(L.generate(
-            days["nq"], L.Config("prior_breakout", tf=15, k=value, stop_mode="bar", rr=2.0)
-        ))))
-    for value in (1.50, 2.00, 2.50):
-        variant_specs.append(("prior_breakout_target_rr", value, drive + gap + test_only(L.generate(
-            days["nq"], L.Config("prior_breakout", tf=15, k=0.25, stop_mode="bar", rr=value)
-        ))))
-    selected_values = {
-        "nq_drive_threshold": 0.25, "nq_drive_target_rr": 2.0,
-        "nq_drive_entry_minute": 15.0, "es_gap_threshold": 0.10,
-        "es_gap_target_rr": 1.50, "prior_breakout_threshold": 0.25,
-        "prior_breakout_target_rr": 2.0,
-    }
-    for dimension, value, rows in variant_specs:
-        rows = sorted(rows, key=lambda t: (t.entry_ts, P.signal_priority(t), t.exit_ts))
-        variant_daily = _stressed_days(test_days, rows, PRESETS["normal"])
-        result, _ = evaluate_sequences(variant_daily, 45, selected_policy, selected_rules, PRESETS["normal"])
-        variant_stats = _trade_stats(rows, selected_policy, PRESETS["normal"])
-        signal_sensitivity.append({
-            "dimension": dimension,
-            "value": value,
-            "selected": value == selected_values[dimension],
-            "trades": variant_stats["trades"],
-            "expectancy": variant_stats["expectancy"],
-            "pass_rate": result["pass_rate"],
-            "breach_rate": result["breach_rate"],
-            "unfinished_rate": result["unfinished_rate"],
-        })
+    # Do not search nearby parameters on the already-inspected test era.  The old
+    # report displayed 21 alternatives, which turned a confirmatory slice into
+    # another implicit optimization set.  Preserve only the frozen specification.
+    sensitivity = [{
+        "morning_risk": 400.0,
+        "prior_risk": 100.0,
+        "pass_rate": horizons["45"]["pass_rate"],
+        "breach_rate": horizons["45"]["breach_rate"],
+        "unfinished_rate": horizons["45"]["unfinished_rate"],
+        "selected": True,
+        "note": "No alternatives rerun on the confirmatory test era.",
+    }]
+    frozen_stats = _trade_stats(test_trades, selected_policy, PRESETS["normal"])
+    signal_sensitivity = [{
+        "dimension": "frozen_three_sleeve_specification",
+        "value": "v1",
+        "selected": True,
+        "trades": frozen_stats["trades"],
+        "expectancy": frozen_stats["expectancy"],
+        "pass_rate": horizons["45"]["pass_rate"],
+        "breach_rate": horizons["45"]["breach_rate"],
+        "unfinished_rate": horizons["45"]["unfinished_rate"],
+        "note": "Neighboring parameters deliberately not retested after the measurement repair.",
+    }]
 
     walk_forward = []
     for year in range(2022, 2027):
         year_days = [day for day in all_days if day.year == year]
         year_trades = [trade for trade in all_trades if trade.day.year == year]
         year_daily = _stressed_days(year_days, year_trades, PRESETS["normal"])
-        result, _ = evaluate_sequences(year_daily, 45, selected_policy, selected_rules, PRESETS["normal"])
+        result, _ = evaluate_sequences(
+            year_daily, year_days, 45, selected_policy, selected_rules,
+            PRESETS["normal"], price_paths,
+        )
         walk_forward.append({"year": year, **result})
 
     pass_paths = [p for p in normal_paths if p.outcome == "pass"]
     representative = min(pass_paths, key=lambda p: abs(p.used_days - (median([x.used_days for x in pass_paths]) if pass_paths else 0))) if pass_paths else None
     representative_timeline = []
     if representative is not None:
-        index = normal_paths.index(representative)
+        index = normal_paths.index(representative) * 45
         representative = simulate_sequence(
             normal_daily[index:index + 45], selected_policy, selected_rules,
-            PRESETS["normal"], capture=True,
+            PRESETS["normal"], price_paths=price_paths, capture=True,
             session_labels=test_days[index:index + 45],
         )
         representative_timeline = representative.timeline
 
     rolling = []
     width = 63
-    for start in range(0, len(normal_paths), width):
-        batch = normal_paths[start:start + width]
+    for start in range(0, len(rolling_paths), width):
+        batch = rolling_paths[start:start + width]
         if not batch:
             continue
         rolling.append({
@@ -693,7 +855,10 @@ def build_report(cache: Path) -> dict:
         terminal_bins = [{"lo": round(float(edges[i]), 2), "hi": round(float(edges[i + 1]), 2), "count": int(counts[i])} for i in range(len(counts))]
 
     stats = _trade_stats(test_trades, selected_policy, PRESETS["normal"])
-    mc = monte_carlo(normal_daily, selected_policy, selected_rules, PRESETS["normal"])
+    mc = monte_carlo(
+        normal_daily, test_days, selected_policy, selected_rules,
+        PRESETS["normal"], price_paths,
+    )
     actual_gap_stops = 0
     for trade in test_trades:
         tick = L.MARKETS[trade.market]["tick"]
@@ -704,19 +869,88 @@ def build_report(cache: Path) -> dict:
         ):
             actual_gap_stops += 1
     risk_controls = {
-        "basis": "counts across overlapping 45-session rolling test paths",
+        "basis": "counts across non-overlapping 45-session primary test paths",
         "contract_cap_limits": sum(path.contract_cap_limited for path in normal_paths),
         "risk_rejections": sum(path.risk_rejected for path in normal_paths),
         "daily_loss_blocks": sum(path.dll_blocked for path in normal_paths),
+        "strategy_rule_blocks": sum(path.strategy_blocked for path in normal_paths),
+        "open_equity_checks": sum(path.open_equity_checks for path in normal_paths),
+        "intraday_open_equity_breaches": sum(
+            path.breach_reason == "intraday_open_equity_touched_eod_floor"
+            for path in normal_paths
+        ),
         "historical_gap_through_stops_in_raw_test_signals": actual_gap_stops,
     }
+    validation_gates = [
+        {
+            "id": "minute_open_equity",
+            "passed": True,
+            "detail": "Every open position is marked each source minute; an equity touch of the prior-EOD floor is a breach.",
+        },
+        {
+            "id": "non_overlapping_primary_windows",
+            "passed": True,
+            "detail": "Primary probabilities use disjoint 45-session blocks; overlapping starts are diagnostic only.",
+        },
+        {
+            "id": "exchange_grade_market_data",
+            "passed": False,
+            "detail": "Dukascopy index/CFD proxy OHLC is not CME MES/MNQ bid/ask, trades, contract rolls, or queue data.",
+        },
+        {
+            "id": "pristine_out_of_sample",
+            "passed": False,
+            "detail": "The 2024+ period and nearby parameter variants were already inspected before this rebuild.",
+        },
+        {
+            "id": "observed_execution_costs",
+            "passed": False,
+            "detail": "Commission is sourced, but historical spread and slippage are modeled rather than observed fills.",
+        },
+        {
+            "id": "point_in_time_event_filter",
+            "passed": False,
+            "detail": "No point-in-time economic-calendar archive is applied to historical signals.",
+        },
+        {
+            "id": "decision_precision",
+            "passed": (
+                horizons["45"]["pass_exact_binomial_95"][1]
+                - horizons["45"]["pass_exact_binomial_95"][0]
+            ) <= 0.20,
+            "detail": (
+                f"Only {horizons['45']['windows']} non-overlapping blocks are available; "
+                f"the exact pass interval is {horizons['45']['pass_exact_binomial_95'][0]:.1%}–"
+                f"{horizons['45']['pass_exact_binomial_95'][1]:.1%}, wider than the 20-point decision-precision limit."
+            ),
+        },
+    ]
     report = {
         "schema_version": 1,
         "research_version": RESEARCH_VERSION,
-        "generated_at": "2026-08-14",
+        "generated_at": "2026-08-15",
         "seed": SEED,
-        "status": "EXPERIMENTAL_PROXY",
-        "status_label": "Experimental — proxy evidence, not validated",
+        "implementation_manifest": [
+            {
+                "name": path.name,
+                "sha256": _hash_file(path),
+            }
+            for path in (
+                Path(__file__).resolve(),
+                Path(L.__file__).resolve(),
+                Path(P.__file__).resolve(),
+                Path(R.__file__).resolve(),
+            )
+        ],
+        "status": "NO_GO",
+        "status_label": "No-go — conservative proxy evidence is not decision-grade",
+        "verdict": {
+            "decision": "DO_NOT_BUY_OR_TRADE_FROM_THIS_BACKTEST",
+            "reason": "The replay is now conservative about account-rule breaches, but the source and sample cannot validate a real Lucid pass edge.",
+            "strategy_parameters_frozen_before_rebuild": True,
+            "validation_gates": validation_gates,
+            "failed_gate_count": sum(not row["passed"] for row in validation_gates),
+        },
         "selected": {
             "strategy_id": "three_sleeve_causal_portfolio",
             "strategy_version": "lucid_lab_portfolio_v1",
@@ -732,13 +966,14 @@ def build_report(cache: Path) -> dict:
             "maximum_losing_trades_per_day": 2,
             "daily_profit_lock_usd": 600,
             "forced_close_ny": "16:00",
-            "event_filter": "No new entry from 2 minutes before through 2 minutes after scheduled US high-impact releases.",
-            "why_selected": "25K has the best verified target-to-drawdown ratio; the three sleeves were selected on development/validation and improve frequency without martingale sizing.",
+            "event_filter": "Not applied historically: no point-in-time high-impact calendar archive is available.",
+            "why_selected": "Frozen pre-rebuild portfolio. It was not retuned after adding intraday open-equity accounting.",
             "limitations": [
                 "Dukascopy CFD/index proxy bars, not CME futures bid/ask or queue data.",
                 "The 2024+ period has been inspected in prior research and is confirmatory rather than pristine.",
                 "Historical execution costs are conservative assumptions, not observed fills.",
-                "Most 45-session starts remain unfinished even in normal conditions.",
+                "Only disjoint 45-session blocks are used for the primary rate, leaving a small independent sample.",
+                "The historical replay has no point-in-time economic-event filter.",
             ],
         },
         "strategy_rules": [
@@ -755,6 +990,13 @@ def build_report(cache: Path) -> dict:
             "test_trades_raw": len(test_trades),
             "resolution": "1 minute",
             "manifest": _data_manifest(cache, days),
+            "integrity": {
+                "complete_rth_minutes_required": 390,
+                "ohlc_and_chronology_validated": True,
+                "duplicate_session_rejected": True,
+                "decision_grade": False,
+                "reason": "Structurally valid proxy bars are still not exchange-grade futures execution data.",
+            },
         },
         "account_comparison": account_comparison,
         "split_results": split_results,
@@ -787,12 +1029,13 @@ def build_report(cache: Path) -> dict:
             "development": "first accepted session through 2021-12-31",
             "validation": "2022-01-01 through 2023-12-31",
             "test": f"2024-01-01 through {test_days[-1]}",
-            "rolling_starts": True,
+            "primary_windows": "non-overlapping 45-session blocks beginning at the first test session",
+            "rolling_starts": "diagnostic only; never used as the headline probability",
             "no_trade_sessions_in_denominator": True,
-            "fill": "completed signal bar; next-minute open; one adverse tick entry and exit; stop-first ambiguity; gap-worse stop",
+            "fill": "completed signal bar; next-minute open; one adverse tick entry and exit; stop-first ambiguity; gap-worse stop; every open position marked at the adverse one-minute extreme; floor touch fails",
             "commission": "$0.50 per side per micro ($1.00 round turn)",
-            "uncertainty": "Wilson interval plus circular block bootstrap over chronological rolling outcomes",
-            "selection_warning": "Account-size comparison was added after prior inspection of the test era; do not call the period pristine OOS.",
+            "uncertainty": "Exact binomial interval on disjoint blocks plus 20-session circular block resampling; neither repairs proxy-data model risk.",
+            "selection_warning": "The strategy and account-size choice predate this corrected replay, but the test era has already been inspected; this is confirmatory, not pristine OOS.",
         },
     }
     raw = json.dumps(report, sort_keys=True, separators=(",", ":"))
