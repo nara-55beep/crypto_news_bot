@@ -386,9 +386,11 @@ class TestPollingLoop(unittest.TestCase):
             bot = _bot(tmp)
             bot._tick(_snapshot([]))
             self.assertIsNotNone(bot.quote)
-            bot._tick(_snapshot([], stamp=time.time() + 5))   # future-dated feed
+            bot._tick(_snapshot(
+                [], stamp=time.time() + maker.MAX_FUTURE_CLOCK_SKEW_SEC + 1
+            ))
             self.assertIsNone(bot.quote)
-            self.assertIn("stale", bot.data_error)
+            self.assertIn("ahead of the host clock", bot.data_error)
 
 
 # --------------------------------------------------------------------------

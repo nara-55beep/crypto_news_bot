@@ -46,6 +46,10 @@ BINANCE_BOOK_URL = "https://fapi.binance.com/fapi/v1/ticker/bookTicker"
 POLL_SEC = 2.0
 REQUEST_TIMEOUT_SEC = 8
 MAX_DATA_AGE_SEC = 12
+# Cryptal's public book clock can run a few seconds ahead of the Windows host.
+# A small negative age is clock skew, not stale data. Keep a hard upper bound so
+# a wildly future-dated timestamp still fails closed.
+MAX_FUTURE_CLOCK_SKEW_SEC = 5.0
 MAX_HEDGED_HOLD_SEC = 24 * 60 * 60
 PRICE_TICK = 0.01
 
@@ -643,7 +647,12 @@ class CryptalMakerPaperBot:
             if stamp <= 0:
                 return f"{label} has no exchange timestamp"
             age = now - stamp
-            if age < -2 or age > MAX_DATA_AGE_SEC:
+            if age < -MAX_FUTURE_CLOCK_SKEW_SEC:
+                return (
+                    f"{label} timestamp is {-age:.1f}s ahead of the host clock "
+                    f"(limit {MAX_FUTURE_CLOCK_SKEW_SEC:.1f}s)"
+                )
+            if age > MAX_DATA_AGE_SEC:
                 return f"{label} is stale ({age:.1f}s)"
         return ""
 
@@ -1163,6 +1172,7 @@ class CryptalMakerPaperBot:
             "hedge_symbol": self.hedge_symbol,
             "hedge": f"Binance {self.hedge_symbol} perpetual",
             "poll_sec": POLL_SEC,
+            "maximum_future_clock_skew_sec": MAX_FUTURE_CLOCK_SKEW_SEC,
             "max_hedged_hold_sec": MAX_HEDGED_HOLD_SEC,
             "last_good_at": self.last_good_at,
             "poll_count": self.poll_count,
