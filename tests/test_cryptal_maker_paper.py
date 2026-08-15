@@ -256,6 +256,34 @@ class TestCryptalMakerPaper(unittest.TestCase):
             self.assertIsNone(bot.quote)
             self.assertIn("Binance hedge book is stale", bot.data_error)
 
+    def test_small_future_cryptal_clock_skew_does_not_cancel_the_quote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = self._bot(tmp)
+            snapshot = _snapshot([])
+            snapshot["stable_at"] = snapshot["received_at"] + 2.3
+
+            bot._tick(snapshot)
+
+            self.assertEqual(bot.data_error, "")
+            self.assertIsNotNone(bot.quote)
+            self.assertEqual(
+                bot.state()["maximum_future_clock_skew_sec"],
+                maker.MAX_FUTURE_CLOCK_SKEW_SEC,
+            )
+
+    def test_large_future_clock_skew_still_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bot = self._bot(tmp)
+            snapshot = _snapshot([])
+            snapshot["stable_at"] = (
+                snapshot["received_at"] + maker.MAX_FUTURE_CLOCK_SKEW_SEC + 0.1
+            )
+
+            bot._tick(snapshot)
+
+            self.assertIsNone(bot.quote)
+            self.assertIn("ahead of the host clock", bot.data_error)
+
     def test_results_never_authorize_live_trading(self):
         with tempfile.TemporaryDirectory() as tmp:
             bot = self._bot(tmp)
