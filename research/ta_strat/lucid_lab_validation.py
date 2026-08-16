@@ -612,6 +612,52 @@ def _hash_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _hash_source(path: Path) -> str:
+    """Fingerprint a tracked source file independently of checkout line endings.
+
+    ``core.autocrlf`` rewrites tracked text on checkout, so a raw byte hash of a
+    committed ``.py`` differs between a Windows worktree and the stored blob and
+    the recorded fingerprint stops reproducing.  Normalizing to LF makes the
+    manifest verifiable on any platform.  Cached market data is untracked and
+    therefore still hashed byte-for-byte by ``_hash_file``.
+    """
+    raw = path.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _candidate_search_summary() -> dict | None:
+    """Summarize the pre-registered candidate search if it has been run.
+
+    The search is a separate, independently fingerprinted study.  Embedding only
+    its headline keeps this artifact the single source the page renders from,
+    without letting one script silently restate the other's numbers.
+    """
+    path = Path(__file__).resolve().parent / "results" / "lucid_candidate_search.json"
+    if not path.exists():
+        return None
+    try:
+        with path.open(encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    holdout = data.get("holdout") or {}
+    baseline = (data.get("baseline") or {}).get("holdout") or {}
+    return {
+        "run_id": data.get("run_id"),
+        "preregistration_sha": data.get("preregistration_sha"),
+        "variants_tested": data.get("variants_tested"),
+        "holdout_blocks": holdout.get("windows"),
+        "best_candidate_holdout_pass_rate": holdout.get("pass_rate"),
+        "best_candidate_multiplicity_95": holdout.get("pass_multiplicity_95"),
+        "frozen_baseline_holdout_pass_rate": baseline.get("pass_rate"),
+        "beat_frozen_baseline": bool(
+            float(holdout.get("pass_rate") or 0.0)
+            > float(baseline.get("pass_rate") or 0.0)
+        ),
+        "decision": (data.get("verdict") or {}).get("decision"),
+    }
+
+
 def _data_manifest(cache: Path, days: dict[str, list[L.Day]]) -> list[dict]:
     result = []
     for market in ("es", "nq"):
@@ -933,7 +979,7 @@ def build_report(cache: Path) -> dict:
         "implementation_manifest": [
             {
                 "name": path.name,
-                "sha256": _hash_file(path),
+                "sha256": _hash_source(path),
             }
             for path in (
                 Path(__file__).resolve(),
@@ -944,6 +990,7 @@ def build_report(cache: Path) -> dict:
         ],
         "status": "NO_GO",
         "status_label": "No-go — conservative proxy evidence is not decision-grade",
+        "candidate_search": _candidate_search_summary(),
         "verdict": {
             "decision": "DO_NOT_BUY_OR_TRADE_FROM_THIS_BACKTEST",
             "reason": "The replay is now conservative about account-rule breaches, but the source and sample cannot validate a real Lucid pass edge.",

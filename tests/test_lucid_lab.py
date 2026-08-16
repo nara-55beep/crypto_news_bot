@@ -242,7 +242,12 @@ class TestAccountStateMachine(unittest.TestCase):
         account.reserve_exposure("MNQ", 9)
         self.assertEqual(account.open_micro_equivalents, 19)
         self.assertEqual(account.remaining_micros, 1)
-        self.assertEqual(account.state()["open_exposure_by_instrument"], {"MNQ": 9, "NQ": 1})
+        self.assertEqual(
+            account.state()["open_exposure_by_instrument"],
+            {"MNQ": {"long": 9}, "NQ": {"long": 1}},
+        )
+        self.assertEqual(account.open_quantity("MNQ"), 9)
+        self.assertEqual(account.open_quantity("MNQ", "short"), 0)
         with self.assertRaises(ValueError):
             account.reserve_exposure("MNQ", 2)
         with self.assertRaises(ValueError):
@@ -700,6 +705,192 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Load stored scenario", LUCID_LAB_HTML)
         self.assertIn("every open position marked each minute", LUCID_LAB_HTML)
         self.assertIn("DO_NOT_BUY_OR_TRADE_FROM_THIS_BACKTEST", ARTIFACT.read_text(encoding="utf-8"))
+
+
+class ProhibitedHedgeTests(unittest.TestCase):
+    """Lucid forbids the same contract long and short; the account must refuse it."""
+
+    def _account(self):
+        account = LucidAccount(get_account_rules("lucidpro", "evaluation", 50_000))
+        account.start_day("2026-08-17")
+        return account
+
+    def test_opposite_side_on_the_same_contract_is_rejected(self):
+        account = self._account()
+        account.reserve_exposure("MNQ", 5, "long")
+        with self.assertRaises(ValueError) as caught:
+            account.reserve_exposure("MNQ", 5, "short")
+        self.assertIn("prohibited hedge", str(caught.exception))
+
+    def test_same_side_accumulates_and_reports_per_side(self):
+        account = self._account()
+        account.reserve_exposure("MNQ", 5, "long")
+        account.reserve_exposure("MNQ", 3, "long")
+        self.assertEqual(account.open_quantity("MNQ"), 8)
+        self.assertEqual(account.open_quantity("MNQ", "long"), 8)
+        self.assertEqual(account.open_quantity("MNQ", "short"), 0)
+
+    def test_opposite_sides_on_different_contracts_are_allowed(self):
+        account = self._account()
+        account.reserve_exposure("MNQ", 5, "long")
+        account.reserve_exposure("MES", 2, "short")
+        self.assertEqual(account.open_quantity("MES", "short"), 2)
+
+    def test_release_is_side_aware_and_clears_the_symbol(self):
+        account = self._account()
+        account.reserve_exposure("MNQ", 4, "short")
+        with self.assertRaises(ValueError):
+            account.release_exposure("MNQ", 4, "long")
+        account.release_exposure("MNQ", 4, "short")
+        self.assertNotIn("MNQ", account.open_exposure_by_instrument)
+        self.assertEqual(account.open_micro_equivalents, 0)
+
+    def test_an_invalid_side_is_refused(self):
+        with self.assertRaises(ValueError):
+            self._account().reserve_exposure("MNQ", 1, "flat")
+
+
+class AggregateContractCapTests(unittest.TestCase):
+    """The cap is account-wide, so a fill must count exposure already open."""
+
+    def test_fill_is_measured_against_open_exposure(self):
+        account = LucidAccount(get_account_rules("lucidpro", "evaluation", 50_000))
+        account.start_day("2026-08-17")
+        account.reserve_exposure("MNQ", 30, "long")
+        with self.assertRaises(ValueError) as caught:
+            account.process_fill(TradeFill(
+                "2026-08-17", "MES", 20, Decimal("10"), Decimal("1"),
+                Decimal("0"), Decimal("0"),
+            ))
+        self.assertIn("aggregate contract cap", str(caught.exception))
+
+    def test_a_fill_that_fits_the_remaining_cap_is_accepted(self):
+        account = LucidAccount(get_account_rules("lucidpro", "evaluation", 50_000))
+        account.start_day("2026-08-17")
+        account.reserve_exposure("MNQ", 30, "long")
+        account.process_fill(TradeFill(
+            "2026-08-17", "MES", 10, Decimal("10"), Decimal("1"),
+            Decimal("0"), Decimal("0"),
+        ))
+        self.assertEqual(account.balance, Decimal("50009.00"))
+
+
+class TerminalAccountFlattenTests(unittest.TestCase):
+    """Passing with another sleeve open must not deadlock the session."""
+
+    def _passed_account_with_open_sleeve(self):
+        account = LucidAccount(get_account_rules("lucidpro", "evaluation", 50_000))
+        account.start_day("2026-08-17")
+        account.reserve_exposure("MNQ", 5, "long")
+        account.process_fill(TradeFill(
+            "2026-08-17", "MES", 10, Decimal("3100"), Decimal("20"),
+            Decimal("0"), Decimal("0"),
+        ))
+        self.assertTrue(account.passed)
+        return account
+
+    def test_closing_fill_is_bookable_and_session_can_end(self):
+        account = self._passed_account_with_open_sleeve()
+        before = account.balance
+        account.process_fill(TradeFill(
+            "2026-08-17", "MNQ", 5, Decimal("-300"), Decimal("10"),
+            Decimal("0"), Decimal("0"), closes_open_exposure=True,
+        ))
+        account.release_exposure("MNQ", 5, "long")
+        self.assertLess(account.balance, before)
+        snapshot = account.end_day()
+        self.assertEqual(snapshot.status, "PASSED")
+
+    def test_a_new_position_is_still_refused_after_a_terminal_state(self):
+        account = self._passed_account_with_open_sleeve()
+        with self.assertRaises(RuntimeError):
+            account.process_fill(TradeFill(
+                "2026-08-17", "MES", 1, Decimal("10"), Decimal("1"),
+                Decimal("0"), Decimal("0"),
+            ))
+        with self.assertRaises(RuntimeError):
+            account.reserve_exposure("MES", 1, "long")
+
+    def test_a_closing_fill_cannot_reverse_a_terminal_verdict(self):
+        account = self._passed_account_with_open_sleeve()
+        account.process_fill(TradeFill(
+            "2026-08-17", "MNQ", 5, Decimal("-5000"), Decimal("10"),
+            Decimal("0"), Decimal("0"), closes_open_exposure=True,
+        ))
+        self.assertTrue(account.passed)
+        self.assertFalse(account.breached)
+
+
+class PageAccessibilityTests(unittest.TestCase):
+    """Chart values, verdict prominence and severity must not depend on hover or colour."""
+
+    def test_bar_values_are_published_as_text_not_only_on_hover(self):
+        self.assertIn("bar-values", LUCID_LAB_HTML)
+        self.assertIn("insertAdjacentElement('afterend',list)", LUCID_LAB_HTML)
+        self.assertIn("box.setAttribute('aria-label',label+'. '", LUCID_LAB_HTML)
+
+    def test_progress_exposes_progressbar_semantics(self):
+        self.assertIn('role="progressbar"', LUCID_LAB_HTML)
+        self.assertIn('aria-valuemin="0"', LUCID_LAB_HTML)
+        self.assertIn('aria-valuemax="100"', LUCID_LAB_HTML)
+        self.assertIn("setAttribute('aria-valuenow'", LUCID_LAB_HTML)
+
+    def test_severity_is_encoded_in_text_as_well_as_colour(self):
+        for word in ("FAVOURABLE", "CAUTION", "ADVERSE"):
+            self.assertIn(word, LUCID_LAB_HTML)
+
+    def test_verdict_banner_renders_decision_and_gates(self):
+        self.assertIn('id="verdict"', LUCID_LAB_HTML)
+        self.assertIn("function renderVerdict()", LUCID_LAB_HTML)
+        self.assertIn("gatelist", LUCID_LAB_HTML)
+        self.assertIn("evidence gates are not met", LUCID_LAB_HTML)
+
+    def test_breach_metric_carries_the_structural_caveat(self):
+        self.assertIn("property of the sizing rule rather than proof of safety", LUCID_LAB_HTML)
+
+    def test_verdict_banner_reports_the_candidate_search(self):
+        self.assertIn("pre-registered search", LUCID_LAB_HTML)
+        self.assertIn("did not beat", LUCID_LAB_HTML)
+
+
+class PageScriptSyntaxTests(unittest.TestCase):
+    """The page ships one inline script; a parse error silently kills the whole page.
+
+    String assertions cannot catch this — an illegal mix of ``??`` and ``||``
+    parses as valid text but aborts the entire script at load.
+    """
+
+    def _script(self) -> str:
+        import re
+
+        match = re.search(r"<script>(.*?)</script>", LUCID_LAB_HTML, re.S)
+        self.assertIsNotNone(match, "page must contain exactly one inline script")
+        return match.group(1)
+
+    def test_script_has_balanced_delimiters(self):
+        script = self._script()
+        for opener, closer in (("(", ")"), ("{", "}"), ("[", "]")):
+            self.assertEqual(
+                script.count(opener), script.count(closer),
+                f"unbalanced {opener}{closer} in page script",
+            )
+
+    def test_script_parses_under_a_real_javascript_engine(self):
+        import shutil
+        import subprocess
+        import tempfile
+
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is not available to parse the page script")
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "page.js"
+            path.write_text(self._script(), encoding="utf-8")
+            done = subprocess.run(
+                [node, "--check", str(path)],
+                capture_output=True, text=True, timeout=60,
+            )
+        self.assertEqual(done.returncode, 0, done.stderr[:800])
 
 
 if __name__ == "__main__":
