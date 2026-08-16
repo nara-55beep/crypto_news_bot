@@ -358,6 +358,10 @@ class TradeFill:
     slippage_cost: Decimal
     exit_reason: str = "strategy"
     forced_liquidation: bool = False
+    # Set for a fill that flattens exposure opened before the account reached a
+    # terminal state.  Such a fill must still be bookable so the session can be
+    # closed out honestly.
+    closes_open_exposure: bool = False
     intraday_peak_equity: Decimal | None = None
     intraday_low_equity: Decimal | None = None
 
@@ -444,7 +448,12 @@ class LucidAccount:
     def scaling_tier(self) -> str:
         return "evaluation-fixed"
 
-    def reserve_exposure(self, instrument: str, quantity: int) -> None:
+    def reserve_exposure(
+        self,
+        instrument: str,
+        quantity: int,
+        side: Literal["long", "short"] = "long",
+    ) -> None:
         if self.passed or self.breached:
             raise RuntimeError("terminal account cannot open exposure")
         if self.restricted:
@@ -456,27 +465,55 @@ class LucidAccount:
             raise ValueError(f"unsupported instrument: {instrument}") from exc
         if quantity <= 0:
             raise ValueError("quantity must be positive")
+        if side not in {"long", "short"}:
+            raise ValueError("side must be 'long' or 'short'")
+        opposite = "short" if side == "long" else "long"
+        # Lucid prohibits holding a contract long and short at the same time,
+        # in one account or across accounts.  Minis against micros on the same
+        # underlying are the one permitted case, so the guard keys on the exact
+        # contract symbol rather than the underlying.
+        if self.open_exposure_by_instrument.get(symbol, {}).get(opposite):
+            raise ValueError(
+                f"prohibited hedge: {symbol} is already open {opposite}; Lucid "
+                "does not allow the same contract long and short"
+            )
         requested = quantity * item.cap_units
         if requested > self.remaining_micros:
             raise ValueError("aggregate exposure exceeds the Lucid contract cap")
         self.open_micro_equivalents += requested
-        self.open_exposure_by_instrument[symbol] = self.open_exposure_by_instrument.get(symbol, 0) + quantity
+        book = self.open_exposure_by_instrument.setdefault(symbol, {})
+        book[side] = book.get(side, 0) + quantity
 
-    def release_exposure(self, instrument: str, quantity: int) -> None:
+    def open_quantity(self, instrument: str, side: str | None = None) -> int:
+        """Open contracts for one symbol, optionally restricted to one side."""
+        book = self.open_exposure_by_instrument.get(instrument.upper(), {})
+        if side is None:
+            return sum(book.values())
+        return int(book.get(side, 0))
+
+    def release_exposure(
+        self,
+        instrument: str,
+        quantity: int,
+        side: Literal["long", "short"] = "long",
+    ) -> None:
         symbol = instrument.upper()
         try:
             item = INSTRUMENTS[symbol]
         except KeyError as exc:
             raise ValueError(f"unsupported instrument: {instrument}") from exc
-        held = self.open_exposure_by_instrument.get(symbol, 0)
+        book = self.open_exposure_by_instrument.get(symbol, {})
+        held = int(book.get(side, 0))
         released = quantity * item.cap_units
         if quantity <= 0 or quantity > held:
             raise ValueError("cannot release exposure that is not open")
         self.open_micro_equivalents -= released
         if quantity == held:
-            self.open_exposure_by_instrument.pop(symbol, None)
+            book.pop(side, None)
         else:
-            self.open_exposure_by_instrument[symbol] = held - quantity
+            book[side] = held - quantity
+        if not book:
+            self.open_exposure_by_instrument.pop(symbol, None)
         if self.open_micro_equivalents == 0:
             self.unrealized_pnl = Decimal("0")
 
@@ -536,7 +573,12 @@ class LucidAccount:
             self.floor = max(self.floor, money(self.intraday_peak - self.rules.max_loss))
 
     def process_fill(self, fill: TradeFill) -> None:
-        if self.passed or self.breached:
+        # A terminal account may still book a closing fill for exposure that was
+        # already open when it passed or breached.  Refusing every fill left the
+        # account unable to flatten and unable to end the session, because
+        # end_day() also refuses to close over open exposure.
+        closing = fill.closes_open_exposure
+        if (self.passed or self.breached) and not closing:
             raise RuntimeError("terminal account cannot accept another fill")
         self.start_day(fill.session)
         if fill.session != self.current_session:
@@ -547,10 +589,16 @@ class LucidAccount:
             instrument = INSTRUMENTS[fill.instrument.upper()]
         except KeyError as exc:
             raise ValueError(f"unsupported instrument: {fill.instrument}") from exc
-        if fill.quantity * instrument.cap_units > self.rules.max_micros:
+        requested = fill.quantity * instrument.cap_units
+        # The cap is an account-wide aggregate, so a fill has to be measured
+        # against exposure already open in other instruments, not on its own.
+        already_open = 0 if closing else self.open_micro_equivalents
+        if requested + already_open > self.rules.max_micros:
             raise ValueError("quantity exceeds the Lucid aggregate contract cap")
-        if self.restricted:
+        if self.restricted and not closing:
             raise RuntimeError("daily loss restriction blocks new trades until next session")
+
+        was_terminal = self.passed or self.breached
 
         self.gross_pnl = money(self.gross_pnl + fill.gross_pnl)
         self.commissions = money(self.commissions + fill.commission)
@@ -558,6 +606,13 @@ class LucidAccount:
         self.slippage_cost = money(self.slippage_cost + fill.slippage_cost)
         self.balance = money(self.balance + fill.net_pnl)
         self.daily_pnl = money(self.daily_pnl + fill.net_pnl)
+
+        if was_terminal:
+            # The account is already decided; a flattening fill is recorded in
+            # the ledger but cannot re-open, re-pass or re-breach it.
+            if fill.forced_liquidation:
+                self.warnings.append("Position was force-closed at the modeled cutoff.")
+            return
 
         peak = fill.intraday_peak_equity if fill.intraday_peak_equity is not None else max(self.balance, self.intraday_peak)
         self._advance_intraday_floor(money(peak))

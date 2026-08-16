@@ -365,6 +365,20 @@
       "target_to_drawdown": 2.0
     }
   ],
+  "candidate_search": {
+    "beat_frozen_baseline": false,
+    "best_candidate_holdout_pass_rate": 0.230769,
+    "best_candidate_multiplicity_95": [
+      0.006945,
+      0.758786
+    ],
+    "decision": "NO_GO",
+    "frozen_baseline_holdout_pass_rate": 0.538462,
+    "holdout_blocks": 13,
+    "preregistration_sha": "3221bffffb54887e",
+    "run_id": "8a0a53283efdcbda",
+    "variants_tested": 282
+  },
   "candidates": [
     {
       "account": "LucidPro 25K evaluation",
@@ -983,7 +997,7 @@
   "implementation_manifest": [
     {
       "name": "lucid_lab_validation.py",
-      "sha256": "4ab37f2ae7eb0a89107e38677e913e87e7ab878e7543243a0a2603541be88e9f"
+      "sha256": "3dc903df49c3c5f6a789cdb64ecc91e7026619b2d1bda7b42b9fe0064b10df5f"
     },
     {
       "name": "lucid_causal_rebuild.py",
@@ -1119,7 +1133,7 @@
     "risk_rejections": 442,
     "strategy_rule_blocks": 0
   },
-  "run_id": "6460a82a1591e298",
+  "run_id": "9afeca427770e076",
   "schema_version": 1,
   "seed": 20260814,
   "selected": {
