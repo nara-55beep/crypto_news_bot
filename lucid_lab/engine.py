@@ -967,3 +967,296 @@ def generated_daily_plan(rules: AccountRules, strategy: dict[str, Any]) -> list[
             "Export the timeline and investigate every rejected/missed order before the next session.",
         ]},
     ]
+
+
+# ---------------------------------------------------------------------------
+# Evaluation survival planner
+#
+# Mid-evaluation the useful question is not "what was the historical pass rate"
+# but "given where I am now, what must I average, and how much may I risk before
+# the drawdown floor ends the account first".  Everything here is arithmetic on
+# the selected program's official numbers, so it stays valid even though the
+# historical edge is unproven.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SurvivalPlan:
+    sessions_remaining: int
+    profit_still_required: Decimal
+    required_average_session: Decimal
+    drawdown_room: Decimal
+    daily_loss_room: Decimal | None
+    max_risk_per_trade: Decimal
+    losses_until_breach: int
+    planned_trades_remaining: int
+    best_case_remaining: Decimal
+    target_reachable: bool
+    binding_limit: str
+    warnings: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        for key, value in list(data.items()):
+            if isinstance(value, Decimal):
+                data[key] = str(value)
+        data["warnings"] = list(self.warnings)
+        return data
+
+
+def plan_evaluation(
+    rules: AccountRules,
+    *,
+    current_balance: Any,
+    drawdown_floor: Any,
+    sessions_remaining: int,
+    trades_per_session: int = 3,
+    loss_streak_tolerance: int = 3,
+    reward_to_risk: Any = 2,
+    safety_reserve: Any = 100,
+    daily_loss_used: Any = 0,
+) -> SurvivalPlan:
+    """Work out what is still required, and what may still be risked.
+
+    ``loss_streak_tolerance`` is the number of consecutive full-risk losses the
+    account must survive.  Sizing so a realistic losing streak cannot reach the
+    floor is the control that most changes whether an evaluation ends in a
+    breach rather than merely running out of days.
+    """
+    balance = money(current_balance)
+    floor = money(drawdown_floor)
+    reserve = max(Decimal("0"), money(safety_reserve))
+    rr = D(reward_to_risk)
+    if sessions_remaining < 0:
+        raise ValueError("sessions remaining cannot be negative")
+    if trades_per_session <= 0:
+        raise ValueError("trades per session must be positive")
+    if loss_streak_tolerance <= 0:
+        raise ValueError("loss streak tolerance must be positive")
+    if rr <= 0:
+        raise ValueError("reward to risk must be positive")
+    if balance <= floor:
+        raise ValueError("current balance must be above the drawdown floor")
+
+    target_balance = (
+        rules.starting_balance + rules.profit_target
+        if rules.profit_target is not None
+        else rules.starting_balance
+    )
+    profit_still_required = max(Decimal("0"), money(target_balance - balance))
+    required_average = (
+        money(profit_still_required / sessions_remaining)
+        if sessions_remaining > 0
+        else profit_still_required
+    )
+
+    drawdown_room = max(Decimal("0"), money(balance - floor - reserve))
+    if rules.daily_loss_limit is None:
+        daily_room: Decimal | None = None
+    else:
+        daily_room = max(Decimal("0"), money(rules.daily_loss_limit - D(daily_loss_used)))
+
+    per_trade_ceiling = drawdown_room / D(loss_streak_tolerance)
+    binding = "drawdown floor"
+    if daily_room is not None:
+        per_session_ceiling = daily_room / D(min(loss_streak_tolerance, trades_per_session))
+        if per_session_ceiling < per_trade_ceiling:
+            per_trade_ceiling = per_session_ceiling
+            binding = "daily loss limit"
+    max_risk = money(per_trade_ceiling)
+
+    losses_until_breach = (
+        int((drawdown_room / max_risk).to_integral_value(rounding=ROUND_FLOOR))
+        if max_risk > 0 else 0
+    )
+    planned_trades = sessions_remaining * trades_per_session
+    best_case = money(max_risk * rr * D(planned_trades))
+    reachable = bool(sessions_remaining > 0 and best_case >= profit_still_required)
+
+    warnings: list[str] = []
+    if profit_still_required == 0:
+        warnings.append("The profit target is already met; confirm any remaining program objective.")
+    if not reachable and profit_still_required > 0:
+        warnings.append(
+            "Even winning every remaining planned trade at the modeled reward-to-risk does "
+            "not reach the target; the horizon or the risk plan has to change."
+        )
+    if losses_until_breach <= 2 and profit_still_required > 0:
+        warnings.append(
+            f"Only {losses_until_breach} full-risk losses separate this account from the floor."
+        )
+    if rules.consistency_limit_pct is not None:
+        warnings.append(
+            f"{rules.program_label} evaluation also requires the largest single day to stay at "
+            f"or under {rules.consistency_limit_pct}% of total profit."
+        )
+    return SurvivalPlan(
+        sessions_remaining=sessions_remaining,
+        profit_still_required=profit_still_required,
+        required_average_session=required_average,
+        drawdown_room=drawdown_room,
+        daily_loss_room=daily_room,
+        max_risk_per_trade=max_risk,
+        losses_until_breach=losses_until_breach,
+        planned_trades_remaining=planned_trades,
+        best_case_remaining=best_case,
+        target_reachable=reachable,
+        binding_limit=binding,
+        warnings=tuple(warnings),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prohibited-activity monitors
+#
+# Breaching a prohibited-activity rule forfeits profits and can close accounts,
+# ending an evaluation just as surely as the drawdown floor.  The published
+# microscalping test is exact; Lucid publishes no numeric order rate for
+# high-frequency trading, so that threshold is marked estimated, not official.
+# ---------------------------------------------------------------------------
+
+MICROSCALP_MAX_SECONDS = 5
+MICROSCALP_PROFIT_SHARE_LIMIT = Decimal("50")
+ESTIMATED_HFT_ORDERS_PER_MINUTE = 60
+
+
+@dataclass(frozen=True)
+class ComplianceTrade:
+    entry: datetime
+    exit: datetime
+    net_pnl: Decimal
+    instrument: str = ""
+    side: Literal["long", "short"] = "long"
+
+    @property
+    def holding_seconds(self) -> Decimal:
+        seconds = (self.exit - self.entry).total_seconds()
+        if seconds < 0:
+            raise ValueError("a trade cannot exit before it is entered")
+        return D(seconds)
+
+
+@dataclass
+class ComplianceMonitor:
+    """Score realized activity against the published prohibited-activity rules."""
+
+    microscalp_seconds: int = MICROSCALP_MAX_SECONDS
+    microscalp_share_limit: Decimal = MICROSCALP_PROFIT_SHARE_LIMIT
+    hft_orders_per_minute: int = ESTIMATED_HFT_ORDERS_PER_MINUTE
+    trades: list[ComplianceTrade] = field(default_factory=list)
+    order_times: list[datetime] = field(default_factory=list)
+
+    def record_trade(self, trade: ComplianceTrade) -> None:
+        trade.holding_seconds  # validates ordering
+        self.trades.append(trade)
+
+    def record_order(self, timestamp: datetime) -> None:
+        if timestamp.tzinfo is None:
+            raise ValueError("order timestamp must include a timezone")
+        self.order_times.append(timestamp)
+
+    def _microscalp(self) -> dict[str, Any]:
+        winners = [t for t in self.trades if t.net_pnl > 0]
+        total = sum((t.net_pnl for t in winners), Decimal("0"))
+        fast = [t for t in winners if t.holding_seconds <= D(self.microscalp_seconds)]
+        fast_total = sum((t.net_pnl for t in fast), Decimal("0"))
+        share = (
+            (fast_total / total * D("100")).quantize(CENT, rounding=ROUND_HALF_UP)
+            if total > 0 else Decimal("0.00")
+        )
+        return {
+            "rule": "Prohibited: Microscalping",
+            "confidence": "verified",
+            "measure": f"share of winning P&L from trades held {self.microscalp_seconds}s or less",
+            "value_pct": str(share),
+            "limit_pct": str(self.microscalp_share_limit),
+            "fast_trades": len(fast),
+            "winning_trades": len(winners),
+            "breached": bool(share > self.microscalp_share_limit),
+            "source": "https://support.lucidtrading.com/en/articles/11404742-prohibited-microscalping",
+        }
+
+    def _hft(self) -> dict[str, Any]:
+        peak = 0
+        if self.order_times:
+            window: list[datetime] = []
+            for stamp in sorted(self.order_times):
+                window.append(stamp)
+                while window and (stamp - window[0]).total_seconds() > 60:
+                    window.pop(0)
+                peak = max(peak, len(window))
+        return {
+            "rule": "Prohibited: High-frequency trading",
+            "confidence": "estimated",
+            "measure": "peak orders submitted in any rolling 60 seconds",
+            "value": peak,
+            "limit": self.hft_orders_per_minute,
+            "breached": bool(peak > self.hft_orders_per_minute),
+            "note": (
+                "Lucid describes HFT as hundreds of orders within minutes but publishes no "
+                "numeric rate, so this threshold is a conservative local estimate."
+            ),
+            "source": "https://support.lucidtrading.com/en/articles/11404736-prohibited-high-frequency-trading",
+        }
+
+    def _hedging(self) -> dict[str, Any]:
+        open_sides: dict[str, set[str]] = {}
+        conflicts: list[str] = []
+        events: list[tuple[datetime, int, str, str]] = []
+        for trade in self.trades:
+            if not trade.instrument:
+                continue
+            events.append((trade.entry, 1, trade.instrument.upper(), trade.side))
+            events.append((trade.exit, 0, trade.instrument.upper(), trade.side))
+        for _, opening, symbol, side in sorted(events, key=lambda row: (row[0], row[1])):
+            held = open_sides.setdefault(symbol, set())
+            if opening:
+                opposite = "short" if side == "long" else "long"
+                if opposite in held:
+                    conflicts.append(symbol)
+                held.add(side)
+            else:
+                held.discard(side)
+        unique = sorted(set(conflicts))
+        return {
+            "rule": "Prohibited: Hedging",
+            "confidence": "verified",
+            "measure": "same contract held long and short at the same time",
+            "value": len(unique),
+            "limit": 0,
+            "instruments": unique,
+            "breached": bool(unique),
+            "source": "https://support.lucidtrading.com/en/articles/11404734-prohibited-hedging",
+        }
+
+    def report(self, rules: AccountRules | None = None) -> dict[str, Any]:
+        checks = [self._microscalp(), self._hft(), self._hedging()]
+        if rules is not None and rules.consistency_limit_pct is not None:
+            profit = sum((t.net_pnl for t in self.trades), Decimal("0"))
+            by_day: dict[Any, Decimal] = {}
+            for trade in self.trades:
+                key = trade.exit.date()
+                by_day[key] = by_day.get(key, Decimal("0")) + trade.net_pnl
+            largest = max([value for value in by_day.values() if value > 0], default=Decimal("0"))
+            share = (
+                (largest / profit * D("100")).quantize(CENT, rounding=ROUND_HALF_UP)
+                if profit > 0 and largest > 0 else Decimal("0.00")
+            )
+            checks.append({
+                "rule": f"{rules.program_label} evaluation consistency",
+                "confidence": "verified",
+                "measure": "largest single profitable day as a share of total profit",
+                "value_pct": str(share),
+                "limit_pct": str(rules.consistency_limit_pct),
+                "breached": bool(share > rules.consistency_limit_pct),
+                "note": (
+                    "Exceeding this does not fail the account; it blocks the upgrade until "
+                    "later sessions dilute the largest day."
+                ),
+            })
+        return {
+            "trades_scored": len(self.trades),
+            "orders_scored": len(self.order_times),
+            "checks": checks,
+            "any_breached": any(check["breached"] for check in checks),
+        }

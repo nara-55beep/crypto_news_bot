@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 import hashlib
 import json
@@ -12,9 +13,12 @@ from typing import Any
 
 from .engine import (
     EXECUTION_PRESETS,
+    ComplianceMonitor,
+    ComplianceTrade,
     PositionSizeInput,
     calculate_position_size,
     generated_daily_plan,
+    plan_evaluation,
 )
 from .rules import (
     INSTRUMENTS,
@@ -66,6 +70,20 @@ class EvidenceStore:
         self._data = data
         self._mtime_ns = stat.st_mtime_ns
         return data
+
+
+def _moment(value: Any) -> datetime:
+    """Parse an ISO timestamp, insisting on an explicit timezone."""
+    if isinstance(value, datetime):
+        moment = value
+    else:
+        try:
+            moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"invalid timestamp: {value!r}") from exc
+    if moment.tzinfo is None:
+        raise ValueError(f"timestamp {value!r} needs an explicit timezone")
+    return moment
 
 
 def _bool(value: Any, default: bool = True) -> bool:
@@ -151,6 +169,54 @@ class LucidLabService:
             committed_stop_risk_defaulted="committed_stop_risk" not in payload,
         )
         return {"ok": True, "result": calculate_position_size(values, rules).to_dict()}
+
+    def _rules_from(self, payload: dict[str, Any]):
+        return get_account_rules(
+            payload.get("program", "lucidpro"),
+            payload.get("stage", "evaluation"),
+            int(payload.get("account_size", 25_000)),
+            daily_drawdown=payload.get("daily_drawdown", "eod"),
+            daily_loss_enabled=_bool(payload.get("daily_loss_enabled"), True),
+        )
+
+    def plan(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Answer what is still required and what may still be risked."""
+        rules = self._rules_from(payload)
+        result = plan_evaluation(
+            rules,
+            current_balance=payload.get("current_balance", rules.starting_balance),
+            drawdown_floor=payload.get(
+                "drawdown_floor", rules.starting_balance - rules.max_loss
+            ),
+            sessions_remaining=int(payload.get("sessions_remaining", 20)),
+            trades_per_session=int(payload.get("trades_per_session", 3)),
+            loss_streak_tolerance=int(payload.get("loss_streak_tolerance", 3)),
+            reward_to_risk=payload.get("reward_to_risk", 2),
+            safety_reserve=payload.get("safety_reserve", 100),
+            daily_loss_used=payload.get("daily_loss_used", 0),
+        )
+        return {"ok": True, "result": result.to_dict()}
+
+    def compliance(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Score supplied trades and order times against prohibited activity."""
+        rules = self._rules_from(payload)
+        monitor = ComplianceMonitor()
+        for row in payload.get("trades") or []:
+            if not isinstance(row, dict):
+                raise ValueError("each trade must be an object")
+            try:
+                monitor.record_trade(ComplianceTrade(
+                    entry=_moment(row["entry"]),
+                    exit=_moment(row["exit"]),
+                    net_pnl=Decimal(str(row.get("net_pnl", 0))),
+                    instrument=str(row.get("instrument", "")),
+                    side="short" if str(row.get("side", "long")).lower() == "short" else "long",
+                ))
+            except KeyError as exc:
+                raise ValueError(f"trade is missing {exc.args[0]}") from exc
+        for stamp in payload.get("order_times") or []:
+            monitor.record_order(_moment(stamp))
+        return {"ok": True, "result": monitor.report(rules)}
 
 
 @dataclass

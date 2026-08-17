@@ -12,6 +12,8 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 from lucid_lab.engine import (
+    ComplianceMonitor,
+    ComplianceTrade,
     D,
     LucidAccount,
     PositionSizeInput,
@@ -20,6 +22,7 @@ from lucid_lab.engine import (
     calculate_position_size,
     marketable_fill_price,
     new_york_time,
+    plan_evaluation,
     resolve_bar_exit,
     validate_market_data,
 )
@@ -639,7 +642,8 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
             self.assertIn("no-cache", response.headers.get("Cache-Control", ""))
             text = await response.text()
             self.assertIn("Lucid Strategy Lab", text)
-            self.assertIn("Position-size calculator", text)
+            self.assertIn("How many contracts can I take?", text)
+            self.assertIn('id="calc-btn"', text)
             self.assertIn("Forward paper account", text)
             self.assertIn("no live order routing", text)
 
@@ -692,7 +696,8 @@ class TestPageAndRoutes(unittest.IsolatedAsyncioTestCase):
             "Loading verified rules", "No file selected", "notice error",
             "equity-chart", "drawdown-chart", "rolling-chart", "duration-bars",
             "outcome-bars", "terminal-bars", "cost-bars", "@media(max-width:820px)",
-            "prefers-reduced-motion", "Rule-compliance timeline", "Strategy comparison",
+            "prefers-reduced-motion", "A single evaluation, session by session",
+            "How other strategies compared",
             "signal-sensitivity", "selector-current", "selector-remaining",
             "Costs / positive gross", "largest_profitable_day", "permitted_contracts",
             "rule_metadata", "terminal_profit_histogram",
@@ -845,12 +850,235 @@ class PageAccessibilityTests(unittest.TestCase):
         self.assertIn("gatelist", LUCID_LAB_HTML)
         self.assertIn("evidence gates are not met", LUCID_LAB_HTML)
 
+    def test_page_reads_as_plain_questions_in_a_sensible_order(self):
+        import re
+
+        body = LUCID_LAB_HTML.split("<main>")[1].split("</main>")[0]
+        order = [
+            re.sub("<[^>]+>", "", m.group(1))
+            for m in re.finditer(r'<span class="num">\d+</span><div><h2>(.*?)</h2>', body, re.S)
+        ]
+        self.assertEqual(order[:4], [
+            "Pick the account you are trading",
+            "The rules you must not break",
+            "What the strategy actually does",
+            "Did it actually work?",
+        ])
+        # The evidence must be read before the tools that assume it.
+        self.assertLess(order.index("Did it actually work?"), order.index("How many contracts can I take?"))
+
+    def test_every_step_has_a_plain_language_explanation(self):
+        import re
+
+        body = LUCID_LAB_HTML.split("<main>")[1].split("</main>")[0]
+        steps = re.findall(
+            r'<span class="num">\d+</span><div><h2>.*?</h2>(.*?)</div></div>', body, re.S
+        )
+        self.assertGreaterEqual(len(steps), 9)
+        for block in steps:
+            self.assertIn('class="plain"', block)
+
+    def test_deep_research_is_collapsed_behind_disclosure(self):
+        self.assertGreaterEqual(LUCID_LAB_HTML.count('<details class="more">'), 6)
+        self.assertEqual(
+            LUCID_LAB_HTML.count("<details"), LUCID_LAB_HTML.count("</details>")
+        )
+        self.assertIn("summary:focus-visible", LUCID_LAB_HTML)
+
+    def test_headline_asks_the_question_instead_of_asserting_an_answer(self):
+        self.assertIn("Could this strategy pass a Lucid evaluation?", LUCID_LAB_HTML)
+        for banned in ("will pass", "guaranteed", "risk-free", "proven edge"):
+            self.assertNotIn(banned, LUCID_LAB_HTML.lower())
+
+    def test_planner_and_compliance_controls_are_present(self):
+        for element in (
+            'id="plan-balance"', 'id="plan-floor"', 'id="plan-sessions"',
+            'id="plan-streak"', 'id="plan-btn"', 'id="plan-result"',
+            'id="compliance-btn"', 'id="compliance-paper-btn"', 'id="compliance-result"',
+        ):
+            self.assertIn(element, LUCID_LAB_HTML)
+        self.assertIn("/api/lucid-lab/plan", LUCID_LAB_HTML)
+        self.assertIn("/api/lucid-lab/compliance", LUCID_LAB_HTML)
+
     def test_breach_metric_carries_the_structural_caveat(self):
         self.assertIn("property of the sizing rule rather than proof of safety", LUCID_LAB_HTML)
 
     def test_verdict_banner_reports_the_candidate_search(self):
         self.assertIn("pre-registered search", LUCID_LAB_HTML)
         self.assertIn("did not beat", LUCID_LAB_HTML)
+
+
+class SurvivalPlannerTests(unittest.TestCase):
+    """Arithmetic on official numbers: what is still needed, what may be risked."""
+
+    def _rules(self, size=25_000):
+        return get_account_rules("lucidpro", "evaluation", size)
+
+    def test_required_average_and_remaining_profit(self):
+        plan = plan_evaluation(
+            self._rules(), current_balance=25_400, drawdown_floor=24_400,
+            sessions_remaining=20, safety_reserve=100,
+        )
+        self.assertEqual(plan.profit_still_required, Decimal("850.00"))
+        self.assertEqual(plan.required_average_session, Decimal("42.50"))
+
+    def test_risk_is_sized_to_survive_the_requested_losing_streak(self):
+        plan = plan_evaluation(
+            self._rules(), current_balance=25_400, drawdown_floor=24_400,
+            sessions_remaining=20, loss_streak_tolerance=3, safety_reserve=100,
+        )
+        self.assertEqual(plan.drawdown_room, Decimal("900.00"))
+        self.assertEqual(plan.max_risk_per_trade, Decimal("300.00"))
+        self.assertGreaterEqual(plan.losses_until_breach, 3)
+        self.assertEqual(plan.binding_limit, "drawdown floor")
+
+    def test_daily_loss_limit_binds_when_it_is_tighter(self):
+        plan = plan_evaluation(
+            self._rules(50_000), current_balance=51_800, drawdown_floor=49_800,
+            sessions_remaining=10, loss_streak_tolerance=2, trades_per_session=3,
+            safety_reserve=100,
+        )
+        self.assertEqual(plan.binding_limit, "daily loss limit")
+        self.assertEqual(plan.daily_loss_room, Decimal("1200.00"))
+
+    def test_an_unreachable_target_is_reported_not_rounded_away(self):
+        plan = plan_evaluation(
+            self._rules(), current_balance=24_600, drawdown_floor=24_500,
+            sessions_remaining=1, trades_per_session=1, loss_streak_tolerance=3,
+            reward_to_risk=2, safety_reserve=0,
+        )
+        self.assertFalse(plan.target_reachable)
+        self.assertTrue(any("does not reach the target" in w for w in plan.warnings))
+
+    def test_a_thin_cushion_is_called_out(self):
+        plan = plan_evaluation(
+            self._rules(), current_balance=24_650, drawdown_floor=24_400,
+            sessions_remaining=10, loss_streak_tolerance=2, safety_reserve=100,
+        )
+        self.assertLessEqual(plan.losses_until_breach, 2)
+        self.assertTrue(any("separate this account from the floor" in w for w in plan.warnings))
+
+    def test_consistency_programs_get_an_extra_warning(self):
+        plan = plan_evaluation(
+            get_account_rules("lucidflex", "evaluation", 50_000),
+            current_balance=50_500, drawdown_floor=48_000, sessions_remaining=10,
+        )
+        self.assertTrue(any("largest single day" in w for w in plan.warnings))
+
+    def test_a_balance_at_or_below_the_floor_is_refused(self):
+        with self.assertRaises(ValueError):
+            plan_evaluation(
+                self._rules(), current_balance=24_000, drawdown_floor=24_000,
+                sessions_remaining=5,
+            )
+
+    def test_invalid_planner_inputs_fail_closed(self):
+        for kwargs in (
+            {"sessions_remaining": -1},
+            {"trades_per_session": 0},
+            {"loss_streak_tolerance": 0},
+            {"reward_to_risk": 0},
+        ):
+            with self.assertRaises(ValueError):
+                plan_evaluation(
+                    self._rules(), current_balance=25_400, drawdown_floor=24_400,
+                    **{"sessions_remaining": 10, **kwargs},
+                )
+
+
+class ComplianceMonitorTests(unittest.TestCase):
+    """Prohibited activity ends an evaluation as surely as the drawdown floor."""
+
+    BASE = datetime(2026, 8, 17, 13, 30, tzinfo=timezone.utc)
+
+    def _trade(self, start_s, length_s, pnl, instrument="MNQ", side="long"):
+        entry = self.BASE + timedelta(seconds=start_s)
+        return ComplianceTrade(
+            entry=entry, exit=entry + timedelta(seconds=length_s),
+            net_pnl=Decimal(str(pnl)), instrument=instrument, side=side,
+        )
+
+    def _check(self, report, name):
+        return next(c for c in report["checks"] if name in c["rule"])
+
+    def test_microscalping_uses_the_published_five_second_profit_share(self):
+        monitor = ComplianceMonitor()
+        monitor.record_trade(self._trade(0, 3, 300))
+        monitor.record_trade(self._trade(600, 1200, 100))
+        check = self._check(monitor.report(), "Microscalping")
+        self.assertEqual(check["value_pct"], "75.00")
+        self.assertEqual(check["limit_pct"], "50")
+        self.assertTrue(check["breached"])
+        self.assertEqual(check["confidence"], "verified")
+
+    def test_slow_trades_do_not_trip_microscalping(self):
+        monitor = ComplianceMonitor()
+        monitor.record_trade(self._trade(0, 900, 400))
+        monitor.record_trade(self._trade(3600, 3, 50))
+        self.assertFalse(self._check(monitor.report(), "Microscalping")["breached"])
+
+    def test_losing_fast_trades_are_excluded_from_the_profit_share(self):
+        monitor = ComplianceMonitor()
+        monitor.record_trade(self._trade(0, 2, -500))
+        monitor.record_trade(self._trade(600, 1200, 200))
+        check = self._check(monitor.report(), "Microscalping")
+        self.assertEqual(check["value_pct"], "0.00")
+        self.assertFalse(check["breached"])
+
+    def test_hft_rate_is_marked_estimated_because_lucid_publishes_no_number(self):
+        monitor = ComplianceMonitor(hft_orders_per_minute=10)
+        for index in range(20):
+            monitor.record_order(self.BASE + timedelta(seconds=index))
+        check = self._check(monitor.report(), "High-frequency")
+        self.assertEqual(check["confidence"], "estimated")
+        self.assertTrue(check["breached"])
+        self.assertIn("no", check["note"].lower())
+
+    def test_orders_spread_beyond_a_minute_do_not_trip_the_rate(self):
+        monitor = ComplianceMonitor(hft_orders_per_minute=10)
+        for index in range(20):
+            monitor.record_order(self.BASE + timedelta(seconds=index * 30))
+        self.assertFalse(self._check(monitor.report(), "High-frequency")["breached"])
+
+    def test_overlapping_opposite_sides_are_detected_as_hedging(self):
+        monitor = ComplianceMonitor()
+        monitor.record_trade(self._trade(0, 600, 100, "MNQ", "long"))
+        monitor.record_trade(self._trade(60, 120, -40, "MNQ", "short"))
+        check = self._check(monitor.report(), "Hedging")
+        self.assertTrue(check["breached"])
+        self.assertEqual(check["instruments"], ["MNQ"])
+
+    def test_sequential_opposite_sides_are_not_hedging(self):
+        monitor = ComplianceMonitor()
+        monitor.record_trade(self._trade(0, 60, 100, "MNQ", "long"))
+        monitor.record_trade(self._trade(600, 60, 40, "MNQ", "short"))
+        self.assertFalse(self._check(monitor.report(), "Hedging")["breached"])
+
+    def test_consistency_check_appears_only_for_programs_that_have_one(self):
+        monitor = ComplianceMonitor()
+        monitor.record_trade(self._trade(0, 600, 900))
+        pro = monitor.report(get_account_rules("lucidpro", "evaluation", 50_000))
+        self.assertFalse(any("consistency" in c["rule"].lower() for c in pro["checks"]))
+        flex = monitor.report(get_account_rules("lucidflex", "evaluation", 50_000))
+        self.assertTrue(any("consistency" in c["rule"].lower() for c in flex["checks"]))
+
+    def test_a_trade_that_exits_before_entry_is_refused(self):
+        monitor = ComplianceMonitor()
+        bad = ComplianceTrade(
+            entry=self.BASE, exit=self.BASE - timedelta(seconds=1), net_pnl=Decimal("1"),
+        )
+        with self.assertRaises(ValueError):
+            monitor.record_trade(bad)
+
+    def test_a_naive_order_timestamp_is_refused(self):
+        with self.assertRaises(ValueError):
+            ComplianceMonitor().record_order(datetime(2026, 8, 17, 13, 30))
+
+    def test_clean_activity_reports_no_breach(self):
+        monitor = ComplianceMonitor()
+        monitor.record_trade(self._trade(0, 900, 250, "MNQ", "long"))
+        monitor.record_trade(self._trade(5400, 700, -120, "MES", "short"))
+        self.assertFalse(monitor.report()["any_breached"])
 
 
 class PageScriptSyntaxTests(unittest.TestCase):
