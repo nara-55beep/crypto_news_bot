@@ -65,6 +65,36 @@ async def position_size(request: web.Request) -> web.Response:
         return _error(f"invalid calculator request: {type(exc).__name__}: {exc}", 400)
 
 
+async def plan(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise ValueError("JSON body must be an object")
+        return web.json_response(SERVICE.plan(payload), headers=NO_CACHE)
+    except (ValueError, ArithmeticError) as exc:
+        return _error(str(exc), 400)
+    except EvidenceError as exc:
+        return _error(str(exc), 503)
+    except Exception as exc:
+        if isinstance(exc, web.HTTPException):
+            raise
+        return _error(f"invalid plan request: {type(exc).__name__}: {exc}", 400)
+
+
+async def compliance(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise ValueError("JSON body must be an object")
+        return web.json_response(SERVICE.compliance(payload), headers=NO_CACHE)
+    except (ValueError, ArithmeticError) as exc:
+        return _error(str(exc), 400)
+    except Exception as exc:
+        if isinstance(exc, web.HTTPException):
+            raise
+        return _error(f"invalid compliance request: {type(exc).__name__}: {exc}", 400)
+
+
 async def paper_state(request: web.Request) -> web.Response:
     if PAPER_BOT is None:
         return web.json_response({
@@ -166,6 +196,8 @@ def routes() -> list[web.AbstractRouteDef]:
         web.get("/lucid-lab", page),
         web.get("/api/lucid-lab/snapshot", snapshot),
         web.post("/api/lucid-lab/position-size", position_size),
+        web.post("/api/lucid-lab/plan", plan),
+        web.post("/api/lucid-lab/compliance", compliance),
         web.get("/api/lucid-lab/paper/state", paper_state),
         web.post("/api/lucid-lab/paper/toggle", paper_toggle),
         web.post("/api/lucid-lab/paper/reset", paper_reset),
