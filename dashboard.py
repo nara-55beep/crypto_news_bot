@@ -65,6 +65,7 @@ import all_pattern_paper
 import apex_vwap_paper
 import ict_lab
 import lucid_lab.web as lucid_lab_web
+import strategy_lab.web as strategy_lab_web
 
 BINANCE_KLINES = "https://fapi.binance.com/fapi/v1/klines"
 CHART_SYMBOL = "BTCUSDT"
@@ -3482,6 +3483,7 @@ PAPER_HTML = r"""<!doctype html>
     <a class="nav" href="/ict">ICT Lab →</a>
     <a class="nav" href="/funding">Funding Bot →</a>
     <a class="nav" href="/lucid-lab" style="color:#f4bd4a;border-color:#6b4d19">Lucid Strategy Lab →</a>
+    <a class="nav" href="/strategies" style="color:#19c37d;border-color:#1c5">All Strategies →</a>
     <a class="nav" href="http://127.0.0.1:8100" target="_blank" rel="noopener">Research Bot ↗</a>
     <span class="sub">multiple paper strategies, one page · simulated fills on real Lighter data · no real money</span>
     <span class="spacer"></span>
@@ -5216,6 +5218,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.post("/api/penny/scan", _penny_scan),
         web.get("/paper", _paper_page),
         *lucid_lab_web.routes(),
+        *strategy_lab_web.routes(),
         web.get("/ict", _ictlab_page),
         web.get("/api/ictlab/state", _ictlab_state),
         web.post("/api/ictlab/toggle", _ictlab_toggle),

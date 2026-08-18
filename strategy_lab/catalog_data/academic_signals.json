@@ -1,0 +1,2936 @@
+[
+{
+"acronym": "AbnormalAccruals",
+"authors": "Xie",
+"data": "Accounting",
+"economic": "accruals",
+"journal": "AR",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "Accruals",
+"authors": "Sloan",
+"data": "Accounting",
+"economic": "accruals",
+"journal": "AR",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "AccrualsBM",
+"authors": "Bartov and Kim",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "RFQA",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "Activism1",
+"authors": "Cremers and Nair",
+"data": "13F",
+"economic": "other",
+"journal": "JF",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "AM",
+"authors": "Fama and French",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": true,
+"year": 1992
+},
+{
+"acronym": "AnalystRevision",
+"authors": "Hawkins, Chamberlin, Daniel",
+"data": "Analyst",
+"economic": "earnings forecast",
+"journal": "FAJ",
+"replicated": true,
+"year": 1984
+},
+{
+"acronym": "AnnouncementReturn",
+"authors": "Chan, Jegadeesh and Lakonishok",
+"data": "Price",
+"economic": "earnings event",
+"journal": "JF",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "AssetGrowth",
+"authors": "Cooper, Gulen and Schill",
+"data": "Accounting",
+"economic": "investment",
+"journal": "JF",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "BetaLiquidityPS",
+"authors": "Pastor and Stambaugh",
+"data": "Price",
+"economic": "liquidity",
+"journal": "JPE",
+"replicated": true,
+"year": 2003
+},
+{
+"acronym": "BetaTailRisk",
+"authors": "Kelly and Jiang",
+"data": "Price",
+"economic": "risk",
+"journal": "RFS",
+"replicated": true,
+"year": 2014
+},
+{
+"acronym": "betaVIX",
+"authors": "Ang et al.",
+"data": "Price",
+"economic": "volatility",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "BM",
+"authors": "Stattman",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "Other",
+"replicated": true,
+"year": 1980
+},
+{
+"acronym": "BMdec",
+"authors": "Fama and French",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": true,
+"year": 1992
+},
+{
+"acronym": "BookLeverage",
+"authors": "Fama and French",
+"data": "Accounting",
+"economic": "leverage",
+"journal": "JF",
+"replicated": true,
+"year": 1992
+},
+{
+"acronym": "BPEBM",
+"authors": "Penman, Richardson and Tuna",
+"data": "Accounting",
+"economic": "leverage",
+"journal": "JAR",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "Cash",
+"authors": "Palazzo",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JFE",
+"replicated": true,
+"year": 2012
+},
+{
+"acronym": "CashProd",
+"authors": "Chandrashekar and Rao",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "WP",
+"replicated": true,
+"year": 2009
+},
+{
+"acronym": "CBOperProf",
+"authors": "Ball et al.",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": true,
+"year": 2016
+},
+{
+"acronym": "CF",
+"authors": "Lakonishok, Shleifer, Vishny",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": true,
+"year": 1994
+},
+{
+"acronym": "cfp",
+"authors": "Desai, Rajgopal, Venkatachalam",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "AR",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "ChangeInRecommendation",
+"authors": "Jegadeesh et al.",
+"data": "Analyst",
+"economic": "recommendation",
+"journal": "JF",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "ChAssetTurnover",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "AR",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "ChEQ",
+"authors": "Lockwood and Prombutr",
+"data": "Accounting",
+"economic": "investment",
+"journal": "JFR",
+"replicated": true,
+"year": 2010
+},
+{
+"acronym": "ChForecastAccrual",
+"authors": "Barth and Hutton",
+"data": "Analyst",
+"economic": "earnings forecast",
+"journal": "RAS",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "ChInv",
+"authors": "Thomas and Zhang",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "RAS",
+"replicated": true,
+"year": 2002
+},
+{
+"acronym": "ChInvIA",
+"authors": "Abarbanell and Bushee",
+"data": "Accounting",
+"economic": "investment growth",
+"journal": "AR",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "ChNAnalyst",
+"authors": "Scherbina",
+"data": "Analyst",
+"economic": "earnings event",
+"journal": "ROF",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "ChNNCOA",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "AR",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "ChNWC",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "AR",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "ChTax",
+"authors": "Thomas and Zhang",
+"data": "Accounting",
+"economic": "other",
+"journal": "JAR",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "CitationsRD",
+"authors": "Hirschleifer, Hsu and Li",
+"data": "Other",
+"economic": "profitability alt",
+"journal": "JFE",
+"replicated": true,
+"year": 2013
+},
+{
+"acronym": "CompEquIss",
+"authors": "Daniel and Titman",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "CompositeDebtIssuance",
+"authors": "Lyandres, Sun and Zhang",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "RFS",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "ConvDebt",
+"authors": "Valta",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JFQA",
+"replicated": true,
+"year": 2016
+},
+{
+"acronym": "CoskewACX",
+"authors": "Ang, Chen and Xing",
+"data": "Price",
+"economic": "risk",
+"journal": "RFS",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "CPVolSpread",
+"authors": "Bali and Hovakimian",
+"data": "Options",
+"economic": "optionrisk",
+"journal": "MS",
+"replicated": true,
+"year": 2009
+},
+{
+"acronym": "dVolCall",
+"authors": "An, Ang, Bali, Cakici",
+"data": "Options",
+"economic": "informed trading",
+"journal": "JF",
+"replicated": true,
+"year": 2014
+},
+{
+"acronym": "dVolPut",
+"authors": "An, Ang, Bali, Cakici",
+"data": "Options",
+"economic": "informed trading",
+"journal": "JF",
+"replicated": true,
+"year": 2014
+},
+{
+"acronym": "dCPVolSpread",
+"authors": "An, Ang, Bali, Cakici",
+"data": "Options",
+"economic": "informed trading",
+"journal": "JF",
+"replicated": true,
+"year": 2014
+},
+{
+"acronym": "CredRatDG",
+"authors": "Dichev and Piotroski",
+"data": "Analyst",
+"economic": "other",
+"journal": "JF",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "CustomerMomentum",
+"authors": "Cohen and Frazzini",
+"data": "Other",
+"economic": "lead lag",
+"journal": "JF",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "DelBreadth",
+"authors": "Chen, Hong and Stein",
+"data": "13F",
+"economic": "ownership",
+"journal": "JFE",
+"replicated": true,
+"year": 2002
+},
+{
+"acronym": "DelCOA",
+"authors": "Richardson et al.",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "JAE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "DelCOL",
+"authors": "Richardson et al.",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JAE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "DelEqu",
+"authors": "Richardson et al.",
+"data": "Accounting",
+"economic": "investment",
+"journal": "JAE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "DelFINL",
+"authors": "Richardson et al.",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JAE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "DelLTI",
+"authors": "Richardson et al.",
+"data": "Accounting",
+"economic": "investment",
+"journal": "JAE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "DelNetFin",
+"authors": "Richardson et al.",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "JAE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "DivInit",
+"authors": "Michaely, Thaler and Womack",
+"data": "Event",
+"economic": "payout indicator",
+"journal": "JF",
+"replicated": true,
+"year": 1995
+},
+{
+"acronym": "DivOmit",
+"authors": "Michaely, Thaler and Womack",
+"data": "Event",
+"economic": "payout indicator",
+"journal": "JF",
+"replicated": true,
+"year": 1995
+},
+{
+"acronym": "DivSeason",
+"authors": "Hartzmark and Salomon",
+"data": "Event",
+"economic": "payout indicator",
+"journal": "JFE",
+"replicated": true,
+"year": 2013
+},
+{
+"acronym": "DivYieldST",
+"authors": "Litzenberger and Ramaswamy",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JFE",
+"replicated": true,
+"year": 1979
+},
+{
+"acronym": "dNoa",
+"authors": "Hirshleifer, Hou, Teoh, Zhang",
+"data": "Accounting",
+"economic": "investment",
+"journal": "JAE",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "DolVol",
+"authors": "Brennan, Chordia, Subra",
+"data": "Trading",
+"economic": "volume",
+"journal": "JFE",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "EarningsConsistency",
+"authors": "Alwathainani",
+"data": "Accounting",
+"economic": "earnings growth",
+"journal": "BAR",
+"replicated": true,
+"year": 2009
+},
+{
+"acronym": "EarningsForecastDisparity",
+"authors": "Da and Warachka",
+"data": "Analyst",
+"economic": "earnings forecast",
+"journal": "JFE",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "EarningsStreak",
+"authors": "Loh and Warachka",
+"data": "Accounting",
+"economic": "earnings growth",
+"journal": "MS",
+"replicated": true,
+"year": 2012
+},
+{
+"acronym": "EarningsSurprise",
+"authors": "Foster, Olsen and Shevlin",
+"data": "Accounting",
+"economic": "earnings growth",
+"journal": "AR",
+"replicated": true,
+"year": 1984
+},
+{
+"acronym": "EarnSupBig",
+"authors": "Hou",
+"data": "Accounting",
+"economic": "lead lag",
+"journal": "RFS",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "EBM",
+"authors": "Penman, Richardson and Tuna",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JAR",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "EntMult",
+"authors": "Loughran and Wellman",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JFQA",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "EP",
+"authors": "Basu",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": true,
+"year": 1977
+},
+{
+"acronym": "EquityDuration",
+"authors": "Dechow, Sloan and Soliman",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "RAS",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "ExchSwitch",
+"authors": "Dharan and Ikenberry",
+"data": "Event",
+"economic": "other",
+"journal": "JF",
+"replicated": true,
+"year": 1995
+},
+{
+"acronym": "ExclExp",
+"authors": "Doyle, Lundholm and Soliman",
+"data": "Analyst",
+"economic": "composite accounting",
+"journal": "RAS",
+"replicated": true,
+"year": 2003
+},
+{
+"acronym": "FEPS",
+"authors": "Cen, Wei, and Zhang",
+"data": "Analyst",
+"economic": "profitability",
+"journal": "WP",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "fgr5yrLag",
+"authors": "La Porta",
+"data": "Analyst",
+"economic": "earnings forecast",
+"journal": "JF",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "FirmAgeMom",
+"authors": "Zhang",
+"data": "Price",
+"economic": "momentum",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "ForecastDispersion",
+"authors": "Diether, Malloy and Scherbina",
+"data": "Analyst",
+"economic": "volatility",
+"journal": "JF",
+"replicated": true,
+"year": 2002
+},
+{
+"acronym": "Frontier",
+"authors": "Nguyen and Swanson",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JFQA",
+"replicated": true,
+"year": 2009
+},
+{
+"acronym": "Governance",
+"authors": "Gompers, Ishii and Metrick",
+"data": "Other",
+"economic": "other",
+"journal": "QJE",
+"replicated": true,
+"year": 2003
+},
+{
+"acronym": "GP",
+"authors": "Novy-Marx",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": true,
+"year": 2013
+},
+{
+"acronym": "GrAdExp",
+"authors": "Lou",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "RFS",
+"replicated": true,
+"year": 2014
+},
+{
+"acronym": "grcapx",
+"authors": "Anderson and Garcia-Feijoo",
+"data": "Accounting",
+"economic": "investment growth",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "grcapx3y",
+"authors": "Anderson and Garcia-Feijoo",
+"data": "Accounting",
+"economic": "investment growth",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "Herf",
+"authors": "Hou and Robinson",
+"data": "Other",
+"economic": "other",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "HerfBE",
+"authors": "Hou and Robinson",
+"data": "Other",
+"economic": "other",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "hire",
+"authors": "Bazdresch, Belo and Lin",
+"data": "Other",
+"economic": "investment alt",
+"journal": "JPE",
+"replicated": true,
+"year": 2014
+},
+{
+"acronym": "IdioVol3F",
+"authors": "Ang et al.",
+"data": "Price",
+"economic": "volatility",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "IdioVolAHT",
+"authors": "Ali, Hwang, and Trombley",
+"data": "Price",
+"economic": "volatility",
+"journal": "JFE",
+"replicated": true,
+"year": 2003
+},
+{
+"acronym": "Illiquidity",
+"authors": "Amihud",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFM",
+"replicated": true,
+"year": 2002
+},
+{
+"acronym": "IndIPO",
+"authors": "Ritter",
+"data": "Event",
+"economic": "external financing",
+"journal": "JF",
+"replicated": true,
+"year": 1991
+},
+{
+"acronym": "IndMom",
+"authors": "Grinblatt and Moskowitz",
+"data": "Price",
+"economic": "momentum",
+"journal": "JF",
+"replicated": true,
+"year": 1999
+},
+{
+"acronym": "IndRetBig",
+"authors": "Hou",
+"data": "Price",
+"economic": "lead lag",
+"journal": "RFS",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "IntanBM",
+"authors": "Daniel and Titman",
+"data": "Accounting",
+"economic": "long term reversal",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "IntanCFP",
+"authors": "Daniel and Titman",
+"data": "Accounting",
+"economic": "long term reversal",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "IntanEP",
+"authors": "Daniel and Titman",
+"data": "Accounting",
+"economic": "long term reversal",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "IntanSP",
+"authors": "Daniel and Titman",
+"data": "Accounting",
+"economic": "long term reversal",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "IntMom",
+"authors": "Novy-Marx",
+"data": "Price",
+"economic": "momentum",
+"journal": "JFE",
+"replicated": true,
+"year": 2012
+},
+{
+"acronym": "Investment",
+"authors": "Titman, Wei and Xie",
+"data": "Accounting",
+"economic": "investment",
+"journal": "JFQA",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "InvestPPEInv",
+"authors": "Lyandres, Sun and Zhang",
+"data": "Accounting",
+"economic": "investment",
+"journal": "RFS",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "InvGrowth",
+"authors": "Belo and Lin",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "RFS",
+"replicated": true,
+"year": 2012
+},
+{
+"acronym": "iomom_cust",
+"authors": "Menzly and Ozbas",
+"data": "Other",
+"economic": "lead lag",
+"journal": "JF",
+"replicated": true,
+"year": 2010
+},
+{
+"acronym": "iomom_supp",
+"authors": "Menzly and Ozbas",
+"data": "Other",
+"economic": "lead lag",
+"journal": "JF",
+"replicated": true,
+"year": 2010
+},
+{
+"acronym": "Leverage",
+"authors": "Bhandari",
+"data": "Accounting",
+"economic": "leverage",
+"journal": "JF",
+"replicated": true,
+"year": 1988
+},
+{
+"acronym": "LRreversal",
+"authors": "De Bondt and Thaler",
+"data": "Price",
+"economic": "long term reversal",
+"journal": "JF",
+"replicated": true,
+"year": 1985
+},
+{
+"acronym": "MaxRet",
+"authors": "Bali, Cakici, and Whitelaw",
+"data": "Price",
+"economic": "volatility",
+"journal": "JFE",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "MeanRankRevGrowth",
+"authors": "Lakonishok, Shleifer, Vishny",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "JF",
+"replicated": true,
+"year": 1994
+},
+{
+"acronym": "Mom12m",
+"authors": "Jegadeesh and Titman",
+"data": "Price",
+"economic": "momentum",
+"journal": "JF",
+"replicated": true,
+"year": 1993
+},
+{
+"acronym": "Mom12mOffSeason",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "Mom6m",
+"authors": "Jegadeesh and Titman",
+"data": "Price",
+"economic": "momentum",
+"journal": "JF",
+"replicated": true,
+"year": 1993
+},
+{
+"acronym": "Mom6mJunk",
+"authors": "Avramov et al",
+"data": "Price",
+"economic": "momentum",
+"journal": "JF",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "MomOffSeason",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MomOffSeason06YrPlus",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MomOffSeason16YrPlus",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MomRev",
+"authors": "Chan and Ko",
+"data": "Price",
+"economic": "momentum",
+"journal": "JOIM",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "MomSeason",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MomSeason06YrPlus",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MomSeason11YrPlus",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MomSeason16YrPlus",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MomSeasonShort",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MomVol",
+"authors": "Lee and Swaminathan",
+"data": "Price",
+"economic": "momentum",
+"journal": "JF",
+"replicated": true,
+"year": 2000
+},
+{
+"acronym": "MS",
+"authors": "Mohanram",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "RAS",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "NetDebtFinance",
+"authors": "Bradshaw, Richardson, Sloan",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JAE",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "NetDebtPrice",
+"authors": "Penman, Richardson and Tuna",
+"data": "Accounting",
+"economic": "leverage",
+"journal": "JAR",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "NetEquityFinance",
+"authors": "Bradshaw, Richardson, Sloan",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JAE",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "NetPayoutYield",
+"authors": "Boudoukh et al.",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "NOA",
+"authors": "Hirshleifer et al.",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JAE",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "OPLeverage",
+"authors": "Novy-Marx",
+"data": "Accounting",
+"economic": "other",
+"journal": "ROF",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "OptionVolume1",
+"authors": "Johnson and So",
+"data": "Options",
+"economic": "volume",
+"journal": "JFE",
+"replicated": true,
+"year": 2012
+},
+{
+"acronym": "OrderBacklog",
+"authors": "Rajgopal, Shevlin, Venkatachalam",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "RAS",
+"replicated": true,
+"year": 2003
+},
+{
+"acronym": "OrderBacklogChg",
+"authors": "Baik and Ahn",
+"data": "Accounting",
+"economic": "accruals",
+"journal": "Other",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "OrgCap",
+"authors": "Eisfeldt and Papanikolaou",
+"data": "Accounting",
+"economic": "R&D",
+"journal": "JF",
+"replicated": true,
+"year": 2013
+},
+{
+"acronym": "OScore",
+"authors": "Dichev",
+"data": "Accounting",
+"economic": "default risk",
+"journal": "JF",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "PatentsRD",
+"authors": "Hirschleifer, Hsu and Li",
+"data": "Other",
+"economic": "profitability alt",
+"journal": "JFE",
+"replicated": true,
+"year": 2013
+},
+{
+"acronym": "PayoutYield",
+"authors": "Boudoukh et al.",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": true,
+"year": 2007
+},
+{
+"acronym": "PctAcc",
+"authors": "Hafzalla, Lundholm, Van Winkle",
+"data": "Accounting",
+"economic": "accruals",
+"journal": "AR",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "PctTotAcc",
+"authors": "Hafzalla, Lundholm, Van Winkle",
+"data": "Accounting",
+"economic": "accruals",
+"journal": "AR",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "Price",
+"authors": "Blume and Husic",
+"data": "Price",
+"economic": "other",
+"journal": "JF",
+"replicated": true,
+"year": 1973
+},
+{
+"acronym": "PriceDelayRsq",
+"authors": "Hou and Moskowitz",
+"data": "Price",
+"economic": "lead lag",
+"journal": "RFS",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "PS",
+"authors": "Piotroski",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "JAR",
+"replicated": true,
+"year": 2000
+},
+{
+"acronym": "RD",
+"authors": "Chan, Lakonishok and Sougiannis",
+"data": "Accounting",
+"economic": "R&D",
+"journal": "JF",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "RDAbility",
+"authors": "Cohen, Diether and Malloy",
+"data": "Accounting",
+"economic": "other",
+"journal": "RFS",
+"replicated": true,
+"year": 2013
+},
+{
+"acronym": "RDcap",
+"authors": "Li",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "RFS",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "RDIPO",
+"authors": "Gou, Lev and Shi",
+"data": "Event",
+"economic": "R&D",
+"journal": "JBFA",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "RDS",
+"authors": "Landsman et al.",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "AR",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "RealizedVol",
+"authors": "Ang et al.",
+"data": "Price",
+"economic": "volatility",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "Recomm_ShortInterest",
+"authors": "Drake, Rees and Swanson",
+"data": "Analyst",
+"economic": "recommendation",
+"journal": "AR",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "ResidualMomentum",
+"authors": "Blitz, Huij and Martens",
+"data": "Price",
+"economic": "momentum",
+"journal": "JEmpFin",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "retConglomerate",
+"authors": "Cohen and Lou",
+"data": "Price",
+"economic": "lead lag",
+"journal": "JFE",
+"replicated": true,
+"year": 2012
+},
+{
+"acronym": "ReturnSkew",
+"authors": "Bali, Engle and Murray",
+"data": "Price",
+"economic": "risk",
+"journal": "Book",
+"replicated": true,
+"year": 2015
+},
+{
+"acronym": "ReturnSkew3F",
+"authors": "Bali, Engle and Murray",
+"data": "Price",
+"economic": "risk",
+"journal": "Book",
+"replicated": true,
+"year": 2015
+},
+{
+"acronym": "REV6",
+"authors": "Chan, Jegadeesh and Lakonishok",
+"data": "Analyst",
+"economic": "earnings forecast",
+"journal": "JF",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "RevenueSurprise",
+"authors": "Jegadeesh and Livnat",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "JAE",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "RIO_Disp",
+"authors": "Nagel",
+"data": "13F",
+"economic": "short sale constraints",
+"journal": "JFE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "RIO_MB",
+"authors": "Nagel",
+"data": "13F",
+"economic": "short sale constraints",
+"journal": "JFE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "RIO_Turnover",
+"authors": "Nagel",
+"data": "13F",
+"economic": "short sale constraints",
+"journal": "JFE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "RIO_Volatility",
+"authors": "Nagel",
+"data": "13F",
+"economic": "short sale constraints",
+"journal": "JFE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "RIVolSpread",
+"authors": "Bali and Hovakimian",
+"data": "Options",
+"economic": "optionrisk",
+"journal": "MS",
+"replicated": true,
+"year": 2009
+},
+{
+"acronym": "roaq",
+"authors": "Balakrishnan, Bartov and Faurel",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JAE",
+"replicated": true,
+"year": 2010
+},
+{
+"acronym": "sfe",
+"authors": "Elgers, Lo and Pfeiffer",
+"data": "Analyst",
+"economic": "valuation",
+"journal": "AR",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "ShareIss1Y",
+"authors": "Pontiff and Woodgate",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JF",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "ShareIss5Y",
+"authors": "Daniel and Titman",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "ShareVol",
+"authors": "Datar, Naik and Radcliffe",
+"data": "Trading",
+"economic": "volume",
+"journal": "JFM",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "Size",
+"authors": "Banz",
+"data": "Price",
+"economic": "size",
+"journal": "JFE",
+"replicated": true,
+"year": 1981
+},
+{
+"acronym": "SmileSlope",
+"authors": "Yan",
+"data": "Options",
+"economic": "optionrisk",
+"journal": "JFE",
+"replicated": true,
+"year": 2011
+},
+{
+"acronym": "std_turn",
+"authors": "Chordia, Subra, Anshuman",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "STreversal",
+"authors": "Jegadeesh",
+"data": "Price",
+"economic": "short-term reversal",
+"journal": "JF",
+"replicated": true,
+"year": 1990
+},
+{
+"acronym": "SurpriseRD",
+"authors": "Eberhart, Maxwell and Siddique",
+"data": "Accounting",
+"economic": "R&D",
+"journal": "JF",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "tang",
+"authors": "Hahn and Lee",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JF",
+"replicated": true,
+"year": 2009
+},
+{
+"acronym": "Tax",
+"authors": "Lev and Nissim",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "TotalAccruals",
+"authors": "Richardson et al.",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "JAE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "TrendFactor",
+"authors": "Han, Zhou, Zhu",
+"data": "Price",
+"economic": "momentum",
+"journal": "JFE",
+"replicated": true,
+"year": 2016
+},
+{
+"acronym": "VolSD",
+"authors": "Chordia, Subra, Anshuman",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "XFIN",
+"authors": "Bradshaw, Richardson, Sloan",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JAE",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "zerotrade6M",
+"authors": "Liu",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "zerotrade1M",
+"authors": "Liu",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "zerotrade12M",
+"authors": "Liu",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "Activism2",
+"authors": "Cremers and Nair",
+"data": "13F",
+"economic": "ownership",
+"journal": "JF",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "AdExp",
+"authors": "Chan, Lakonishok and Sougiannis",
+"data": "Accounting",
+"economic": "R&D",
+"journal": "JF",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "AgeIPO",
+"authors": "Ritter",
+"data": "Event",
+"economic": "other",
+"journal": "JF",
+"replicated": true,
+"year": 1991
+},
+{
+"acronym": "AnalystValue",
+"authors": "Frankel and Lee",
+"data": "Analyst",
+"economic": "valuation",
+"journal": "JAE",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "AOP",
+"authors": "Frankel and Lee",
+"data": "Analyst",
+"economic": "other",
+"journal": "JAE",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "Beta",
+"authors": "Fama and MacBeth",
+"data": "Price",
+"economic": "risk",
+"journal": "JPE",
+"replicated": true,
+"year": 1973
+},
+{
+"acronym": "BetaFP",
+"authors": "Frazzini and Pedersen",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2014
+},
+{
+"acronym": "BidAskSpread",
+"authors": "Amihud and Mendelson",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": true,
+"year": 1986
+},
+{
+"acronym": "BrandInvest",
+"authors": "Belo, Lin and Vitorino",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "RED",
+"replicated": true,
+"year": 2014
+},
+{
+"acronym": "ConsRecomm",
+"authors": "Barber et al.",
+"data": "Analyst",
+"economic": "recommendation",
+"journal": "JF",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "Coskewness",
+"authors": "Harvey and Siddique",
+"data": "Price",
+"economic": "risk",
+"journal": "JF",
+"replicated": true,
+"year": 2000
+},
+{
+"acronym": "DebtIssuance",
+"authors": "Spiess and Affleck-Graves",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JFE",
+"replicated": true,
+"year": 1999
+},
+{
+"acronym": "DelDRC",
+"authors": "Prakash and Sinha",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "CAR",
+"replicated": true,
+"year": 2013
+},
+{
+"acronym": "DownRecomm",
+"authors": "Barber et al.",
+"data": "Analyst",
+"economic": "earnings forecast",
+"journal": "JF",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "FirmAge",
+"authors": "Barry and Brown",
+"data": "Other",
+"economic": "info proxy",
+"journal": "JFE",
+"replicated": true,
+"year": 1984
+},
+{
+"acronym": "FR",
+"authors": "Franzoni and Marin",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "GrLTNOA",
+"authors": "Fairfield, Whisenant and Yohn",
+"data": "Accounting",
+"economic": "investment",
+"journal": "AR",
+"replicated": true,
+"year": 2003
+},
+{
+"acronym": "GrSaleToGrInv",
+"authors": "Abarbanell and Bushee",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "AR",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "GrSaleToGrOverhead",
+"authors": "Abarbanell and Bushee",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "AR",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "HerfAsset",
+"authors": "Hou and Robinson",
+"data": "Other",
+"economic": "other",
+"journal": "JF",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "High52",
+"authors": "George and Hwang",
+"data": "Price",
+"economic": "momentum",
+"journal": "JF",
+"replicated": true,
+"year": 2004
+},
+{
+"acronym": "IO_ShortInterest",
+"authors": "Asquith Pathak and Ritter",
+"data": "13F",
+"economic": "ownership",
+"journal": "JFE",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "MomOffSeason11YrPlus",
+"authors": "Heston and Sadka",
+"data": "Price",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2008
+},
+{
+"acronym": "MRreversal",
+"authors": "De Bondt and Thaler",
+"data": "Price",
+"economic": "long term reversal",
+"journal": "JF",
+"replicated": true,
+"year": 1985
+},
+{
+"acronym": "NumEarnIncrease",
+"authors": "Loh and Warachka",
+"data": "Accounting",
+"economic": "earnings growth",
+"journal": "MS",
+"replicated": true,
+"year": 2012
+},
+{
+"acronym": "OperProf",
+"authors": "Fama and French",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": true,
+"year": 2006
+},
+{
+"acronym": "OperProfRD",
+"authors": "Ball et al.",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": true,
+"year": 2016
+},
+{
+"acronym": "OptionVolume2",
+"authors": "Johnson and So",
+"data": "Options",
+"economic": "volume",
+"journal": "JFE",
+"replicated": true,
+"year": 2012
+},
+{
+"acronym": "PredictedFE",
+"authors": "Frankel and Lee",
+"data": "Accounting",
+"economic": "earnings forecast",
+"journal": "JAE",
+"replicated": true,
+"year": 1998
+},
+{
+"acronym": "PriceDelaySlope",
+"authors": "Hou and Moskowitz",
+"data": "Price",
+"economic": "lead lag",
+"journal": "RFS",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "PriceDelayTstat",
+"authors": "Hou and Moskowitz",
+"data": "Price",
+"economic": "lead lag",
+"journal": "RFS",
+"replicated": true,
+"year": 2005
+},
+{
+"acronym": "ProbInformedTrading",
+"authors": "Easley, Hvidkjaer and O'Hara",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JF",
+"replicated": true,
+"year": 2002
+},
+{
+"acronym": "realestate",
+"authors": "Tuzel",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "RFS",
+"replicated": true,
+"year": 2010
+},
+{
+"acronym": "RoE",
+"authors": "Haugen and Baker",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "ShareRepurchase",
+"authors": "Ikenberry, Lakonishok, Vermaelen",
+"data": "Accounting",
+"economic": "payout indicator",
+"journal": "JFE",
+"replicated": true,
+"year": 1995
+},
+{
+"acronym": "ShortInterest",
+"authors": "Dechow et al.",
+"data": "Trading",
+"economic": "short sale constraints",
+"journal": "JFE",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "sinAlgo",
+"authors": "Hong and Kacperczyk",
+"data": "Other",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 2009
+},
+{
+"acronym": "skew1",
+"authors": "Xing, Zhang and Zhao",
+"data": "Options",
+"economic": "optionrisk",
+"journal": "JFQA",
+"replicated": true,
+"year": 2010
+},
+{
+"acronym": "SP",
+"authors": "Barbee, Mukherji and Raines",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "FAJ",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "Spinoff",
+"authors": "Cusatis, Miles and Woolridge",
+"data": "Event",
+"economic": "other",
+"journal": "JFE",
+"replicated": true,
+"year": 1993
+},
+{
+"acronym": "UpRecomm",
+"authors": "Barber et al.",
+"data": "Analyst",
+"economic": "earnings forecast",
+"journal": "JF",
+"replicated": true,
+"year": 2001
+},
+{
+"acronym": "VarCF",
+"authors": "Haugen and Baker",
+"data": "Accounting",
+"economic": "cash flow risk",
+"journal": "JFE",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "VolMkt",
+"authors": "Haugen and Baker",
+"data": "Trading",
+"economic": "volume",
+"journal": "JFE",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "VolumeTrend",
+"authors": "Haugen and Baker",
+"data": "Trading",
+"economic": "volume",
+"journal": "JFE",
+"replicated": true,
+"year": 1996
+},
+{
+"acronym": "BetaBDLeverage",
+"authors": "Adrian, Etula and Muir",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JF",
+"replicated": false,
+"year": 2014
+},
+{
+"acronym": "BetaSquared",
+"authors": "Fama and MacBeth",
+"data": "Price",
+"economic": "other",
+"journal": "JPE",
+"replicated": false,
+"year": 1973
+},
+{
+"acronym": "BidAskTAQ",
+"authors": "Hou and Loh",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": false,
+"year": 2016
+},
+{
+"acronym": "DelayAcct",
+"authors": "Callen, Khan and Lu",
+"data": "Accounting",
+"economic": "lead lag",
+"journal": "CAR",
+"replicated": false,
+"year": 2013
+},
+{
+"acronym": "DelayNonAcct",
+"authors": "Callen, Khan and Lu",
+"data": "Accounting",
+"economic": "lead lag",
+"journal": "CAR",
+"replicated": false,
+"year": 2013
+},
+{
+"acronym": "DelSTI",
+"authors": "Richardson et al.",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "JAE",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "DownsideBeta",
+"authors": "Ang, Chen and Xing",
+"data": "Price",
+"economic": "risk",
+"journal": "RFS",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "FailureProbability",
+"authors": "Campbell, Hilscher and Szilagyi",
+"data": "Accounting",
+"economic": "default risk",
+"journal": "JF",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "ForecastDispersionLT",
+"authors": "Anderson, Ghysels, and Juergens",
+"data": "Analyst",
+"economic": "volatility",
+"journal": "RFS",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "KZ",
+"authors": "Lamont, Polk and Saa-Requejo",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "RFS",
+"replicated": false,
+"year": 2001
+},
+{
+"acronym": "rd_sale",
+"authors": "Chan, Lakonishok and Sougiannis",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "JF",
+"replicated": false,
+"year": 2001
+},
+{
+"acronym": "roic",
+"authors": "Brown and Rowe",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "WP",
+"replicated": false,
+"year": 2007
+},
+{
+"acronym": "WW",
+"authors": "Whited and Wu",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "RFS",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "ZScore",
+"authors": "Dichev",
+"data": "Accounting",
+"economic": "default risk",
+"journal": "JF",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "AbnormalAccrualsPercent",
+"authors": "Hafzalla, Lundholm, Van Winkle",
+"data": "Accounting",
+"economic": "accruals",
+"journal": "AR",
+"replicated": false,
+"year": 2011
+},
+{
+"acronym": "AccrualQuality",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "accruals",
+"journal": "JAE",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "AccrualQualityJune",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "accruals",
+"journal": "JAE",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "AMq",
+"authors": "Fama and French",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": false,
+"year": 1992
+},
+{
+"acronym": "AssetGrowth_q",
+"authors": "Cooper, Gulen and Schill",
+"data": "Accounting",
+"economic": "investment",
+"journal": "JF",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "AssetLiquidityBook",
+"authors": "Ortiz-Molina and Phillips",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JFQA",
+"replicated": false,
+"year": 2014
+},
+{
+"acronym": "AssetLiquidityBookQuart",
+"authors": "Ortiz-Molina and Phillips",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JFQA",
+"replicated": false,
+"year": 2014
+},
+{
+"acronym": "AssetLiquidityMarket",
+"authors": "Ortiz-Molina and Phillips",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JFQA",
+"replicated": false,
+"year": 2014
+},
+{
+"acronym": "AssetLiquidityMarketQuart",
+"authors": "Ortiz-Molina and Phillips",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JFQA",
+"replicated": false,
+"year": 2014
+},
+{
+"acronym": "AssetTurnover",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "AssetTurnover_q",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "betaCC",
+"authors": "Acharya and Pedersen",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "betaCR",
+"authors": "Acharya and Pedersen",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "BetaDimson",
+"authors": "Dimson",
+"data": "Price",
+"economic": "market risk",
+"journal": "JFE",
+"replicated": false,
+"year": 1979
+},
+{
+"acronym": "betaNet",
+"authors": "Acharya and Pedersen",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "betaRC",
+"authors": "Acharya and Pedersen",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "betaRR",
+"authors": "Acharya and Pedersen",
+"data": "Trading",
+"economic": "liquidity",
+"journal": "JFE",
+"replicated": false,
+"year": 2005
+},
+{
+"acronym": "BMq",
+"authors": "Rosenberg, Reid, and Lanstein",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JPM",
+"replicated": false,
+"year": 1985
+},
+{
+"acronym": "BookLeverageQuarterly",
+"authors": "Fama and French",
+"data": "Accounting",
+"economic": "leverage",
+"journal": "JF",
+"replicated": false,
+"year": 1992
+},
+{
+"acronym": "BrandCapital",
+"authors": "Belo, Lin and Vitorino",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "RED",
+"replicated": false,
+"year": 2014
+},
+{
+"acronym": "CapTurnover",
+"authors": "Haugen and Baker",
+"data": "Accounting",
+"economic": "turnover",
+"journal": "JFE",
+"replicated": false,
+"year": 1996
+},
+{
+"acronym": "CapTurnover_q",
+"authors": "Haugen and Baker",
+"data": "Accounting",
+"economic": "turnover",
+"journal": "JFE",
+"replicated": false,
+"year": 1996
+},
+{
+"acronym": "cashdebt",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "CBOperProfLagAT",
+"authors": "Ball et al.",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": false,
+"year": 2016
+},
+{
+"acronym": "CBOperProfLagAT_q",
+"authors": "Ball et al.",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": false,
+"year": 2016
+},
+{
+"acronym": "cfpq",
+"authors": "Desai, Rajgopal, Venkatachalam",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "CFq",
+"authors": "Lakonishok, Shleifer, Vishny",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": false,
+"year": 1994
+},
+{
+"acronym": "ChangeRoA",
+"authors": "Balakrishnan, Bartov and Faurel",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "",
+"replicated": false,
+"year": 2010
+},
+{
+"acronym": "ChangeRoE",
+"authors": "Balakrishnan, Bartov and Faurel",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "",
+"replicated": false,
+"year": 2010
+},
+{
+"acronym": "ChNCOA",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "investment",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "ChNCOL",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "ChPM",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "currat",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "depr",
+"authors": "Holthausen and Larcker",
+"data": "Accounting",
+"economic": "other",
+"journal": "JAE",
+"replicated": false,
+"year": 1992
+},
+{
+"acronym": "DivYield",
+"authors": "Naranjo, Nimalendran, Ryngaert",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "DivYieldAnn",
+"authors": "Naranjo, Nimalendran, Ryngaert",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "EarningsConservatism",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "EarningsPersistence",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "EarningsPredictability",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "EarningsSmoothness",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "EarningsTimeliness",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "EarningsValueRelevance",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "EBM_q",
+"authors": "Penman, Richardson and Tuna",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JAR",
+"replicated": false,
+"year": 2007
+},
+{
+"acronym": "EntMult_q",
+"authors": "Loughran and Wellman",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JFQA",
+"replicated": false,
+"year": 2011
+},
+{
+"acronym": "EPq",
+"authors": "Basu",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": false,
+"year": 1977
+},
+{
+"acronym": "ETR",
+"authors": "Abarbanell and Bushee",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "FailureProbabilityJune",
+"authors": "Campbell, Hilscher and Szilagyi",
+"data": "Accounting",
+"economic": "default risk",
+"journal": "JF",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "fgr5yrNoLag",
+"authors": "La Porta",
+"data": "Analyst",
+"economic": "earnings forecast",
+"journal": "JF",
+"replicated": false,
+"year": 1996
+},
+{
+"acronym": "FRbook",
+"authors": "Franzoni and Marin",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "JF",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "GPlag",
+"authors": "Novy-Marx",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": false,
+"year": 2013
+},
+{
+"acronym": "GPlag_q",
+"authors": "Novy-Marx",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": false,
+"year": 2013
+},
+{
+"acronym": "grcapx1y",
+"authors": "Anderson and Garcia-Feijoo",
+"data": "Accounting",
+"economic": "investment",
+"journal": "AR",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "GrGMToGrSales",
+"authors": "Abarbanell and Bushee",
+"data": "Accounting",
+"economic": "earnings growth",
+"journal": "AR",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "GrSaleToGrReceivables",
+"authors": "Abarbanell and Bushee",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "AR",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "IdioVolCAPM",
+"authors": "Ang et al.",
+"data": "Price",
+"economic": "volatility",
+"journal": "JF",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "IdioVolQF",
+"authors": "Ang et al.",
+"data": "Price",
+"economic": "volatility",
+"journal": "JF",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "IntrinsicValue",
+"authors": "Frankel and Lee",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JAE",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "KZ_q",
+"authors": "Lamont, Polk and Saa-Requejo",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "RFS",
+"replicated": false,
+"year": 2001
+},
+{
+"acronym": "LaborforceEfficiency",
+"authors": "Abarbanell and Bushee",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "AR",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "Leverage_q",
+"authors": "Bhandari",
+"data": "Accounting",
+"economic": "leverage",
+"journal": "JFE",
+"replicated": false,
+"year": 1988
+},
+{
+"acronym": "nanalyst",
+"authors": "Elgers, Lo and Pfeiffer",
+"data": "Analyst",
+"economic": "info proxy",
+"journal": "AR",
+"replicated": false,
+"year": 2001
+},
+{
+"acronym": "NetDebtPrice_q",
+"authors": "Penman, Richardson and Tuna",
+"data": "Accounting",
+"economic": "leverage",
+"journal": "JAR",
+"replicated": false,
+"year": 2007
+},
+{
+"acronym": "NetPayoutYield_q",
+"authors": "Boudoukh et al.",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": false,
+"year": 2007
+},
+{
+"acronym": "OperProfLag",
+"authors": "Fama and French",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "OperProfLag_q",
+"authors": "Fama and French",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "OperProfRDLagAT",
+"authors": "Ball et al.",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": false,
+"year": 2016
+},
+{
+"acronym": "OperProfRDLagAT_q",
+"authors": "Ball et al.",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "JFE",
+"replicated": false,
+"year": 2016
+},
+{
+"acronym": "OPLeverage_q",
+"authors": "Novy-Marx",
+"data": "Accounting",
+"economic": "other",
+"journal": "ROF",
+"replicated": false,
+"year": 2011
+},
+{
+"acronym": "OrgCapNoAdj",
+"authors": "Eisfeldt and Papanikolaou",
+"data": "Accounting",
+"economic": "R&D",
+"journal": "JF",
+"replicated": false,
+"year": 2013
+},
+{
+"acronym": "OScore_q",
+"authors": "Dichev",
+"data": "Accounting",
+"economic": "default risk",
+"journal": "JF",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "PayoutYield_q",
+"authors": "Boudoukh et al.",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "JF",
+"replicated": false,
+"year": 2007
+},
+{
+"acronym": "pchcurrat",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "pchdepr",
+"authors": "Holthausen and Larcker",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "JAE",
+"replicated": false,
+"year": 1992
+},
+{
+"acronym": "pchgm_pchsale",
+"authors": "Abarbanell and Bushee",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "AR",
+"replicated": false,
+"year": 1998
+},
+{
+"acronym": "pchquick",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "investment alt",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "pchsaleinv",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "PM",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "PM_q",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "profitability",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "PS_q",
+"authors": "Piotroski",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "JAR",
+"replicated": false,
+"year": 2000
+},
+{
+"acronym": "quick",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "RD_q",
+"authors": "Chan, Lakonishok and Sougiannis",
+"data": "Accounting",
+"economic": "R&D",
+"journal": "JF",
+"replicated": false,
+"year": 2001
+},
+{
+"acronym": "rd_sale_q",
+"authors": "Chan, Lakonishok and Sougiannis",
+"data": "Accounting",
+"economic": "R&D",
+"journal": "JF",
+"replicated": false,
+"year": 2001
+},
+{
+"acronym": "ResidualMomentum6m",
+"authors": "Blitz, Huij and Martens",
+"data": "Price",
+"economic": "momentum",
+"journal": "JEmpFin",
+"replicated": false,
+"year": 2011
+},
+{
+"acronym": "RetNOA",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "RetNOA_q",
+"authors": "Soliman",
+"data": "Accounting",
+"economic": "composite accounting",
+"journal": "AR",
+"replicated": false,
+"year": 2008
+},
+{
+"acronym": "ReturnSkewCAPM",
+"authors": "Bali, Engle and Murray",
+"data": "Price",
+"economic": "risk",
+"journal": "Book",
+"replicated": false,
+"year": 2015
+},
+{
+"acronym": "ReturnSkewQF",
+"authors": "Bali, Engle and Murray",
+"data": "Price",
+"economic": "risk",
+"journal": "Book",
+"replicated": false,
+"year": 2015
+},
+{
+"acronym": "roavol",
+"authors": "Francis, LaFond, Olsson, Schipper",
+"data": "Accounting",
+"economic": "cash flow risk",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "salecash",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "saleinv",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "salerec",
+"authors": "Ou and Penman",
+"data": "Accounting",
+"economic": "profitability alt",
+"journal": "JAR",
+"replicated": false,
+"year": 1989
+},
+{
+"acronym": "secured",
+"authors": "Valta",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JFQA",
+"replicated": false,
+"year": 2016
+},
+{
+"acronym": "securedind",
+"authors": "Valta",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "JFQA",
+"replicated": false,
+"year": 2016
+},
+{
+"acronym": "sgr",
+"authors": "Lakonishok, Shleifer, Vishny",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "JF",
+"replicated": false,
+"year": 1994
+},
+{
+"acronym": "sgr_q",
+"authors": "Lakonishok, Shleifer, Vishny",
+"data": "Accounting",
+"economic": "sales growth",
+"journal": "JF",
+"replicated": false,
+"year": 1994
+},
+{
+"acronym": "SP_q",
+"authors": "Barbee, Mukherji and Raines",
+"data": "Accounting",
+"economic": "valuation",
+"journal": "FAJ",
+"replicated": false,
+"year": 1996
+},
+{
+"acronym": "tang_q",
+"authors": "Hahn and Lee",
+"data": "Accounting",
+"economic": "asset composition",
+"journal": "JF",
+"replicated": false,
+"year": 2009
+},
+{
+"acronym": "Tax_q",
+"authors": "Lev and Nissim",
+"data": "Accounting",
+"economic": "other",
+"journal": "AR",
+"replicated": false,
+"year": 2004
+},
+{
+"acronym": "WW_Q",
+"authors": "Whited and Wu",
+"data": "Accounting",
+"economic": "external financing",
+"journal": "RFS",
+"replicated": false,
+"year": 2006
+},
+{
+"acronym": "ZScore_q",
+"authors": "Dichev",
+"data": "Accounting",
+"economic": "default risk",
+"journal": "JFE",
+"replicated": false,
+"year": 1998
+}
+]
