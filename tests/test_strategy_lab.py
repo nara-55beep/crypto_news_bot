@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -20,6 +22,7 @@ from strategy_lab.engine import (
     run_backtest,
 )
 from strategy_lab.page import STRATEGY_LAB_HTML
+from strategy_lab.paper import START_BALANCE, PaperAccount, PaperDesk
 from strategy_lab.rules import RULES, Signal, run_rule
 from strategy_lab.runner import BatchRunner, run_id_for, run_strategy
 from strategy_lab.schema import (
@@ -670,6 +673,158 @@ class RouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_batch_state_404_for_unknown_job(self):
         response = await self.client.get("/api/strategies/batch/deadbeef")
         self.assertEqual(response.status, 404)
+
+
+# --------------------------------------------------------------- paper desk
+class PaperDeskTests(unittest.TestCase):
+    """Every strategy gets its own persistent paper account, walked bar by bar."""
+
+    def setUp(self):
+        self.frame = synthetic(400, seed=13)
+        self.tmp = tempfile.mkdtemp()
+        self.path = str(Path(self.tmp) / "desk.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _desk(self):
+        return PaperDesk(CATALOG, symbol="SYN", state_path=self.path)
+
+    def test_every_executable_strategy_gets_an_account(self):
+        summary = self._desk().tick(self.frame)
+        self.assertEqual(summary["accounts"], len(CATALOG.executable()))
+        self.assertEqual(summary["failed"], 0)
+
+    def test_each_account_reports_the_paper_trading_fields(self):
+        desk = self._desk()
+        desk.tick(self.frame)
+        for row in desk.rows()[:20]:
+            for field in ("balance", "equity", "net_pnl", "net_pnl_pct", "win_rate",
+                          "trades", "wins", "losses", "max_drawdown_pct", "costs",
+                          "position", "realized_pnl", "unrealized_pnl"):
+                self.assertIn(field, row)
+            self.assertEqual(row["start_balance"], START_BALANCE)
+
+    def test_equity_and_balance_never_go_negative(self):
+        desk = self._desk()
+        desk.tick(self.frame)
+        for row in desk.rows():
+            self.assertGreaterEqual(row["equity"], 0.0, row["strategy_id"])
+            self.assertGreaterEqual(row["balance"], 0.0, row["strategy_id"])
+
+    def test_win_rate_and_trade_counts_are_consistent(self):
+        desk = self._desk()
+        desk.tick(self.frame)
+        for row in desk.rows():
+            self.assertEqual(row["trades"], row["wins"] + row["losses"])
+            if row["trades"]:
+                self.assertAlmostEqual(
+                    row["win_rate"], round(100.0 * row["wins"] / row["trades"], 1), places=1)
+            else:
+                self.assertEqual(row["win_rate"], 0.0)
+
+    def test_state_survives_a_restart(self):
+        first = self._desk()
+        first.tick(self.frame)
+        before = {r["strategy_id"]: r["equity"] for r in first.rows()}
+        after = {r["strategy_id"]: r["equity"] for r in self._desk().rows()}
+        self.assertEqual(before, after)
+        self.assertGreater(len(before), 0)
+
+    def test_a_second_tick_without_new_bars_changes_nothing(self):
+        desk = self._desk()
+        desk.tick(self.frame)
+        before = {r["strategy_id"]: r["equity"] for r in desk.rows()}
+        summary = desk.tick(self.frame)
+        self.assertEqual(summary["advanced"], 0)
+        self.assertEqual({r["strategy_id"]: r["equity"] for r in desk.rows()}, before)
+
+    def test_a_new_bar_advances_the_accounts(self):
+        desk = self._desk()
+        desk.tick(self.frame)
+        first_id = CATALOG.executable()[0].id
+        processed = desk.accounts[first_id].processed
+        desk.tick(synthetic(401, seed=13))
+        self.assertGreater(desk.accounts[first_id].processed, processed)
+
+    def test_a_different_symbol_does_not_reuse_a_saved_account(self):
+        self._desk().tick(self.frame)
+        other = PaperDesk(CATALOG, symbol="OTHER", state_path=self.path)
+        self.assertEqual(len(other.accounts), 0)
+
+    def test_pausing_stops_the_desk_advancing(self):
+        desk = self._desk()
+        desk.set_enabled(False)
+        self.assertEqual(desk.tick(self.frame)["status"], "paused")
+
+    def test_reset_clears_every_account(self):
+        desk = self._desk()
+        desk.tick(self.frame)
+        self.assertGreater(len(desk.accounts), 0)
+        desk.reset()
+        self.assertEqual(len(desk.accounts), 0)
+
+    def test_unusable_market_data_is_refused_rather_than_traded(self):
+        desk = self._desk()
+        summary = desk.tick(self.frame.iloc[:5])
+        self.assertEqual(summary["status"], "waiting for market data")
+
+    def test_short_is_force_closed_before_the_balance_goes_negative(self):
+        n = 120
+        index = pd.bdate_range("2022-01-03", periods=n)
+        price = [100.0 * (1.06 ** i) for i in range(n)]
+        frame = pd.DataFrame({"open": price, "high": [p * 1.01 for p in price],
+                              "low": [p * 0.99 for p in price], "close": price,
+                              "volume": [1e6] * n}, index=index, dtype=float)
+        account = PaperAccount(strategy_id="test.short.always")
+        account.advance(frame, pd.Series(-1.0, index=index), CostModel())
+        self.assertGreaterEqual(account.balance, 0.0)
+        self.assertGreaterEqual(account.equity(), 0.0)
+        self.assertTrue(account.busted or any(
+            t["reason"] in {"margin-call", "account-bust"} for t in account.history))
+
+    def test_account_fills_on_the_next_bar_open(self):
+        account = PaperAccount(strategy_id="test.one")
+        signal = pd.Series(0.0, index=self.frame.index)
+        signal.iloc[10] = 1.0
+        account.advance(self.frame, signal, CostModel(
+            commission_per_share=0, commission_minimum=0, spread_bps=0, slippage_bps=0))
+        # Signal is set on bar 10 only, so the account opens at bar 11's open and
+        # closes at bar 12's open; the entry is recorded on the closed trade.
+        self.assertTrue(account.history)
+        self.assertEqual(account.history[0]["opened"], str(self.frame.index[11])[:10])
+        self.assertAlmostEqual(account.history[0]["entry"],
+                               round(float(self.frame["open"].iloc[11]), 4), places=3)
+
+    def test_costs_are_charged_on_every_paper_fill(self):
+        account = PaperAccount(strategy_id="test.costs")
+        account.advance(self.frame, pd.Series(1.0, index=self.frame.index), CostModel())
+        self.assertGreater(account.commission_paid + account.edge_paid, 0.0)
+
+
+class PaperServiceTests(unittest.TestCase):
+    def test_paper_state_paginates_and_declares_paper_only(self):
+        state = ServiceTests.service.paper_state({"page_size": 5})
+        self.assertTrue(state["ok"])
+        self.assertLessEqual(len(state["rows"]), 5)
+        self.assertTrue(state["paper_only"])
+        self.assertFalse(state["live_order_routing"])
+
+    def test_paper_detail_resolves_by_alias(self):
+        account = ServiceTests.service.paper_detail("Golden cross")["account"]
+        self.assertEqual(account["strategy_id"], "trend.ma-crossover.sma-50-200-long")
+
+
+class PaperPageTests(unittest.TestCase):
+    def test_desk_panel_shows_the_paper_trading_metrics(self):
+        for marker in ("Paper desk", "desk-grid", "desk-stats", "Balance", "Equity",
+                       "Win rate", "Trades", "Max DD", "no live order routing"):
+            self.assertIn(marker, STRATEGY_LAB_HTML, marker)
+
+    def test_desk_has_pause_and_reset_like_the_paper_bots(self):
+        for marker in ("desk-toggle", "desk-reset", "desk-refresh",
+                       "/api/strategies/paper/toggle", "/api/strategies/paper/reset"):
+            self.assertIn(marker, STRATEGY_LAB_HTML, marker)
 
 
 if __name__ == "__main__":

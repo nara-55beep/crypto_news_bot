@@ -15,6 +15,7 @@ import pandas as pd
 
 from .catalog import RESEARCH_DATE, load_catalog
 from .engine import CostModel, RunConfig
+from .paper import PaperDesk
 from .rules import RULES
 from .runner import BatchRunner, run_id_for, run_strategy, data_fingerprint
 from .schema import StrategyValidationError, resolve_parameters
@@ -170,10 +171,15 @@ SORT_KEYS = {
 
 
 class StrategyLabService:
-    def __init__(self) -> None:
+    PAPER_MIN_INTERVAL = 30.0   # seconds between automatic desk ticks
+
+    def __init__(self, paper_symbol: str = DEFAULT_SYMBOL) -> None:
         self.catalog = load_catalog()
         self.data = MarketDataLoader()
         self.runner = BatchRunner(self.catalog)
+        self.desk = PaperDesk(self.catalog, symbol=paper_symbol)
+        self._paper_lock = threading.Lock()
+        self._paper_ticked = 0.0
 
     # ------------------------------------------------------------- catalog
     def overview(self) -> dict[str, Any]:
@@ -311,6 +317,76 @@ class StrategyLabService:
 
     def cancel_batch(self, job_id: str) -> dict[str, Any]:
         return {"ok": True, **self.runner.cancel(job_id).summary(include_rows=False)}
+
+    # ------------------------------------------------------------ paper desk
+    def paper_tick(self, *, force: bool = False) -> dict[str, Any]:
+        """Advance every paper account over the latest bars.
+
+        Rate-limited so page polling cannot hammer the data provider; the desk
+        short-circuits anyway when no account has an unprocessed bar.
+        """
+        with self._paper_lock:
+            fresh = (time.time() - self._paper_ticked) >= self.PAPER_MIN_INTERVAL
+            if not force and not fresh:
+                return self.desk.summary()
+            try:
+                frame = self.data.load(self.desk.symbol)
+            except MarketDataError as exc:
+                self.desk.data_error = str(exc)
+                self.desk.status = "market data unavailable"
+                return self.desk.summary()
+            self._paper_ticked = time.time()
+            return self.desk.tick(frame)
+
+    def paper_state(self, query: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Desk summary plus a filtered, paginated slice of the accounts."""
+        query = query or {}
+        summary = self.paper_tick()
+        rows = self.desk.rows()
+
+        text = str(query.get("q", "")).strip().lower()
+        if text:
+            rows = [r for r in rows if text in r["name"].lower()
+                    or text in r["strategy_id"].lower() or text in r["category"].lower()]
+        category = str(query.get("category", "")).strip()
+        if category:
+            rows = [r for r in rows if r["category"] == category]
+        view = str(query.get("view", "all")).strip()
+        if view == "profitable":
+            rows = [r for r in rows if r["net_pnl"] > 0]
+        elif view == "unprofitable":
+            rows = [r for r in rows if r["net_pnl"] < 0]
+        elif view == "in-position":
+            rows = [r for r in rows if r["position"]]
+        elif view == "traded":
+            rows = [r for r in rows if r["trades"] > 0]
+        elif view == "idle":
+            rows = [r for r in rows if r["trades"] == 0]
+
+        sort = str(query.get("sort", "net_pnl"))
+        keys = {"net_pnl": lambda r: -r["net_pnl"], "equity": lambda r: -r["equity"],
+                "win_rate": lambda r: -r["win_rate"], "trades": lambda r: -r["trades"],
+                "drawdown": lambda r: r["max_drawdown_pct"], "name": lambda r: r["name"].lower()}
+        rows = sorted(rows, key=keys.get(sort, keys["net_pnl"]))
+
+        page = max(1, int(query.get("page", 1) or 1))
+        size = min(MAX_PAGE_SIZE, max(1, int(query.get("page_size", 60) or 60)))
+        total = len(rows)
+        start = (page - 1) * size
+        return {"ok": True, **summary, "total": total, "page": page, "page_size": size,
+                "pages": max(1, (total + size - 1) // size),
+                "rows": [dict(r, history=r["history"][:5]) for r in rows[start:start + size]]}
+
+    def paper_detail(self, strategy_id: str) -> dict[str, Any]:
+        resolved = self.catalog.resolve_alias(strategy_id) or strategy_id
+        return {"ok": True, "account": self.desk.detail(resolved)}
+
+    def paper_toggle(self, enabled: bool) -> dict[str, Any]:
+        return {"ok": True, **self.desk.set_enabled(enabled)}
+
+    def paper_reset(self) -> dict[str, Any]:
+        self._paper_ticked = 0.0
+        return {"ok": True, **self.desk.reset()}
 
     def compare(self, payload: dict[str, Any]) -> dict[str, Any]:
         ids = payload.get("strategy_ids") or []
