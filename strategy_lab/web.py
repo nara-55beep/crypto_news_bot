@@ -80,6 +80,30 @@ async def compare(request: web.Request) -> web.Response:
     return await _guard(lambda: service().compare(payload))
 
 
+async def paper_state(request: web.Request) -> web.Response:
+    return await _guard(lambda: service().paper_state(dict(request.query)))
+
+
+async def paper_detail(request: web.Request) -> web.Response:
+    return await _guard(lambda: service().paper_detail(request.match_info["strategy_id"]))
+
+
+async def paper_refresh(request: web.Request) -> web.Response:
+    return await _guard(lambda: {"ok": True, **service().paper_tick(force=True)})
+
+
+async def paper_toggle(request: web.Request) -> web.Response:
+    try:
+        payload = await _json_body(request)
+    except ValueError as exc:
+        return _error(str(exc), 400)
+    return await _guard(lambda: service().paper_toggle(bool(payload.get("enabled"))))
+
+
+async def paper_reset(request: web.Request) -> web.Response:
+    return await _guard(lambda: service().paper_reset())
+
+
 async def start_batch(request: web.Request) -> web.Response:
     try:
         payload = await _json_body(request)
@@ -113,6 +137,11 @@ def routes() -> list[web.AbstractRouteDef]:
         web.get("/api/strategies/detail/{strategy_id}", detail),
         web.post("/api/strategies/run", run_one),
         web.post("/api/strategies/compare", compare),
+        web.get("/api/strategies/paper", paper_state),
+        web.get("/api/strategies/paper/detail/{strategy_id}", paper_detail),
+        web.post("/api/strategies/paper/refresh", paper_refresh),
+        web.post("/api/strategies/paper/toggle", paper_toggle),
+        web.post("/api/strategies/paper/reset", paper_reset),
         web.post("/api/strategies/batch", start_batch),
         web.get("/api/strategies/batch/{job_id}", batch_state),
         web.post("/api/strategies/batch/{job_id}/cancel", cancel_batch),

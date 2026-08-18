@@ -112,6 +112,19 @@ STRATEGY_LAB_HTML = r"""<!doctype html>
   @keyframes pulse{to{background-position:-220% 0}}
   @media (prefers-reduced-motion:reduce){.skel{animation:none}.progress i{transition:none}}
   svg.spark{width:100%;height:120px;display:block}
+  /* paper desk: one mini bot card per strategy, same look as a Paper Trading panel */
+  #desk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px;padding:12px 15px}
+  .acct{border:1px solid #202a39;border-radius:6px;background:#090d13;overflow:hidden}
+  .acct .ah{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .acct .an{font-family:var(--bin);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .acct .ag{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line)}
+  .acct .ac{background:var(--panel);padding:7px 9px;min-width:0}
+  .acct .ac .k{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+  .acct .ac .v{font-family:var(--bin);font-size:13px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .acct .af{padding:6px 11px;font-family:var(--bin);font-size:10px;color:var(--muted);border-top:1px solid var(--line);
+    display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .acct.busted{border-color:#722}
+  @media(max-width:520px){.acct .ag{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -140,6 +153,48 @@ STRATEGY_LAB_HTML = r"""<!doctype html>
       <div class="stat"><div class="k">Rule engines</div><div class="v">—</div></div>
     </div>
     <p class="warn" id="disclaimer">Paper trading and historical replay only.</p>
+  </section>
+
+  <section class="bot wide" aria-labelledby="hdr-desk">
+    <div class="bhead"><span class="dot" id="desk-dot"></span>
+      <span class="bname" id="hdr-desk">Paper desk — every strategy trading paper money</span>
+      <span class="badge" id="desk-symbol">—</span>
+      <span class="badge info">no live order routing</span>
+      <span class="spacer"></span>
+      <button class="btn" id="desk-refresh">Refresh now</button>
+      <button class="btn on" id="desk-toggle">Pause</button>
+      <button class="btn off" id="desk-reset">Reset all</button></div>
+    <div class="stats" id="desk-stats">
+      <div class="stat"><div class="k">Accounts</div><div class="v">—</div></div>
+      <div class="stat"><div class="k">Total equity</div><div class="v">—</div></div>
+      <div class="stat"><div class="k">Total net P&amp;L</div><div class="v">—</div></div>
+      <div class="stat"><div class="k">In position</div><div class="v">—</div></div>
+    </div>
+    <p class="warn" id="desk-note">Each strategy holds its own $100,000 paper account. Balances persist
+      across restarts and advance one bar at a time. Simulated fills only — no broker order is ever sent.</p>
+    <div class="controls">
+      <div class="field"><label for="d-q">Find account</label><input id="d-q" placeholder="strategy name…"></div>
+      <div class="field"><label for="d-view">Show</label><select id="d-view">
+        <option value="all">All accounts</option><option value="traded">Has traded</option>
+        <option value="profitable">Profitable</option><option value="unprofitable">Unprofitable</option>
+        <option value="in-position">In position now</option><option value="idle">No trades yet</option>
+      </select></div>
+      <div class="field"><label for="d-sort">Sort</label><select id="d-sort">
+        <option value="net_pnl">Net P&amp;L</option><option value="equity">Equity</option>
+        <option value="win_rate">Win rate</option><option value="trades">Trades</option>
+        <option value="drawdown">Max drawdown</option><option value="name">Name</option>
+      </select></div>
+      <div class="field"><label for="d-size">Per page</label><select id="d-size">
+        <option value="30">30</option><option value="60" selected>60</option><option value="120">120</option>
+      </select></div>
+    </div>
+    <div class="ph"><span id="desk-count">—</span></div>
+    <div id="desk-grid"><div class="empty">Loading paper accounts…</div></div>
+    <div class="actions">
+      <button class="btn" id="desk-prev">← Previous</button>
+      <span class="sub" id="desk-page">page 1</span>
+      <button class="btn" id="desk-next">Next →</button>
+    </div>
   </section>
 
   <section class="bot wide" aria-labelledby="hdr-browse">
@@ -247,6 +302,10 @@ const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=(v,d=2)=>v==null||v===''?'—':Number(v).toFixed(d);
 const money=v=>v==null?'—':'$'+Number(v).toLocaleString(undefined,{maximumFractionDigits:0});
+const compact=v=>{if(v==null)return'—';const n=Number(v),a=Math.abs(n),sg=n<0?'-':'';
+  if(a>=1e6)return sg+'$'+(a/1e6).toFixed(2)+'M';
+  if(a>=1e4)return sg+'$'+(a/1e3).toFixed(1)+'k';
+  return sg+'$'+a.toLocaleString(undefined,{maximumFractionDigits:0})};
 const ROW_H=44;
 let OVERVIEW=null,ITEMS=[],TOTAL=0,SELECTED=null,COMPARE=[],BATCH=null,POLL=null,LB=[],LBFILTER='all';
 let PAGE=1,PAGE_SIZE=200,LOADING=false,EXHAUSTED=false;
@@ -486,7 +545,82 @@ document.querySelectorAll('[data-lb]').forEach(b=>b.addEventListener('click',()=
   LBFILTER=b.dataset.lb;document.querySelectorAll('[data-lb]').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');renderLeaderboard()}));
 
-loadOverview().then(()=>loadPage(true));
+
+// ---- paper desk: one live account card per strategy ----
+let DESK_PAGE=1, DESK_TIMER=null;
+function deskQuery(){const p=new URLSearchParams();
+  const q=$('d-q').value.trim(); if(q)p.set('q',q);
+  p.set('view',$('d-view').value); p.set('sort',$('d-sort').value);
+  p.set('page',String(DESK_PAGE)); p.set('page_size',$('d-size').value); return p.toString()}
+
+function acctCard(r){
+  const pnlCls=r.net_pnl>0?'pos':(r.net_pnl<0?'neg':'');
+  const pos=r.position;
+  return `<article class="acct${r.busted?' busted':''}">
+    <div class="ah"><span class="dot ${pos?'on':(r.busted?'off':'')}"></span>
+      <span class="an" title="${esc(r.strategy_id)}">${esc(r.name)}</span>
+      ${r.busted?'<span class="badge bad">busted</span>':''}
+      ${pos?`<span class="badge ${pos.side==='long'?'ok':'bad'}">${esc(pos.side)}</span>`:'<span class="badge">flat</span>'}
+    </div>
+    <div class="ag">
+      <div class="ac"><div class="k">Balance</div><div class="v" title="${money(r.balance)}">${compact(r.balance)}</div></div>
+      <div class="ac"><div class="k">Equity</div><div class="v" title="${money(r.equity)}">${compact(r.equity)}</div></div>
+      <div class="ac"><div class="k">Net P&amp;L</div><div class="v ${pnlCls}" title="${money(r.net_pnl)}">${r.net_pnl>=0?'+':''}${compact(r.net_pnl)}</div></div>
+      <div class="ac"><div class="k">Return</div><div class="v ${pnlCls}">${num(r.net_pnl_pct,1)}%</div></div>
+      <div class="ac"><div class="k">Win rate</div><div class="v">${num(r.win_rate,1)}%</div></div>
+      <div class="ac"><div class="k">Trades</div><div class="v">${r.trades}</div></div>
+      <div class="ac"><div class="k">Max DD</div><div class="v neg">${num(r.max_drawdown_pct,1)}%</div></div>
+      <div class="ac"><div class="k">Costs</div><div class="v" title="${money(r.costs)}">${compact(r.costs)}</div></div>
+    </div>
+    <div class="af">
+      ${pos?`<span>${esc(pos.side)} ${pos.shares} @ ${num(pos.entry)} since ${esc(pos.since)}</span>
+        <span class="${pos.unrealized>=0?'pos':'neg'}">${pos.unrealized>=0?'+':''}${money(pos.unrealized)} open</span>`
+        :'<span>no open position</span>'}
+      <span class="spacer"></span><span>${esc(r.last_bar||'—')}</span>
+    </div>
+    ${r.error?`<div class="af neg">${esc(r.error)}</div>`:''}
+  </article>`}
+
+async function loadDesk(){try{
+  const j=await api('/api/strategies/paper?'+deskQuery());
+  $('desk-dot').className='dot '+(j.enabled?'on':'off');
+  $('desk-symbol').textContent=j.symbol+' · '+j.bars+' bars · '+(j.last_bar||'—');
+  $('desk-toggle').textContent=j.enabled?'Pause':'Resume';
+  $('desk-toggle').className='btn '+(j.enabled?'on':'off');
+  $('desk-stats').innerHTML=[
+    ['Accounts',String(j.accounts)],['Total equity',money(j.total_equity)],
+    ['Total net P&L',(j.total_net_pnl>=0?'+':'')+money(j.total_net_pnl)],
+    ['In position',String(j.in_position)],['Has traded',String(j.with_trades)],
+    ['Profitable',String(j.profitable)],['Unprofitable',String(j.unprofitable)],
+    ['Busted',String(j.busted??0)],
+  ].map(x=>`<div class="stat"><div class="k">${esc(x[0])}</div><div class="v">${esc(x[1])}</div></div>`).join('');
+  $('desk-count').textContent=`${j.total.toLocaleString()} accounts · page ${j.page} of ${j.pages}`;
+  $('desk-page').textContent=`page ${j.page} of ${j.pages}`;
+  $('desk-prev').disabled=j.page<=1; $('desk-next').disabled=j.page>=j.pages;
+  $('desk-grid').innerHTML=j.rows.length?j.rows.map(acctCard).join('')
+    :'<div class="empty">No paper account matches this filter.</div>';
+  if(j.data_error){$('desk-note').className='warn err';$('desk-note').textContent=j.data_error}
+}catch(e){$('desk-dot').className='dot off';
+  $('desk-grid').innerHTML=`<div class="empty">Paper desk failed to load: ${esc(e.message)}</div>`}}
+
+async function deskAction(url,body){try{
+  await api(url,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:body?JSON.stringify(body):undefined});
+  await loadDesk()}catch(e){alert('Paper desk: '+e.message)}}
+
+['d-view','d-sort','d-size'].forEach(id=>$(id).addEventListener('change',()=>{DESK_PAGE=1;loadDesk()}));
+$('d-q').addEventListener('input',()=>{clearTimeout(DESK_TIMER);DESK_TIMER=setTimeout(()=>{DESK_PAGE=1;loadDesk()},200)});
+$('desk-prev').addEventListener('click',()=>{if(DESK_PAGE>1){DESK_PAGE--;loadDesk()}});
+$('desk-next').addEventListener('click',()=>{DESK_PAGE++;loadDesk()});
+$('desk-refresh').addEventListener('click',()=>deskAction('/api/strategies/paper/refresh'));
+$('desk-toggle').addEventListener('click',()=>deskAction('/api/strategies/paper/toggle',
+  {enabled:$('desk-toggle').textContent==='Resume'}));
+$('desk-reset').addEventListener('click',()=>{
+  if(confirm('Reset every paper account back to $100,000 and erase their trade history?'))
+    deskAction('/api/strategies/paper/reset')});
+setInterval(loadDesk,60000);
+
+loadOverview().then(()=>loadPage(true)).then(loadDesk);
 </script>
 </body>
 </html>"""
