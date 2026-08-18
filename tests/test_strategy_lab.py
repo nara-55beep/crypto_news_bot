@@ -32,7 +32,13 @@ from strategy_lab.schema import (
     resolve_parameters,
     validate,
 )
-from strategy_lab.service import MarketDataError, MarketDataLoader, StrategyLabService, build_config
+from strategy_lab.service import (
+    DESK_SORTS,
+    MarketDataError,
+    MarketDataLoader,
+    StrategyLabService,
+    build_config,
+)
 import strategy_lab.web as slab_web
 
 
@@ -882,6 +888,96 @@ class PaperPageTests(unittest.TestCase):
         for marker in ("desk-toggle", "desk-reset", "desk-refresh",
                        "/api/strategies/paper/toggle", "/api/strategies/paper/reset"):
             self.assertIn(marker, STRATEGY_LAB_HTML, marker)
+
+
+class DeskSortTests(unittest.TestCase):
+    """The daily-check sort menu."""
+
+    ROWS = [
+        {"name": "alpha", "net_pnl": 500.0, "net_pnl_pct": 1.0, "equity": 50500.0,
+         "balance": 50500.0, "win_rate": 60.0, "trades": 5, "max_drawdown_pct": -4.0,
+         "realized_pnl": 500.0, "unrealized_pnl": 0.0, "costs": 20.0, "bars_live": 30,
+         "category": "Trend following", "history": [{"closed": "2026-08-10"}]},
+        {"name": "bravo", "net_pnl": -200.0, "net_pnl_pct": -0.4, "equity": 49800.0,
+         "balance": 49800.0, "win_rate": 20.0, "trades": 10, "max_drawdown_pct": -9.0,
+         "realized_pnl": -200.0, "unrealized_pnl": 0.0, "costs": 40.0, "bars_live": 30,
+         "category": "Mean reversion", "history": [{"closed": "2026-08-17"}]},
+        {"name": "charlie", "net_pnl": 0.0, "net_pnl_pct": 0.0, "equity": 50000.0,
+         "balance": 50000.0, "win_rate": 0.0, "trades": 0, "max_drawdown_pct": 0.0,
+         "realized_pnl": 0.0, "unrealized_pnl": 0.0, "costs": 0.0, "bars_live": 30,
+         "category": "Breakout", "history": []},
+    ]
+
+    def _first(self, key):
+        return sorted(self.ROWS, key=DESK_SORTS[key])[0]["name"]
+
+    def test_every_advertised_sort_exists(self):
+        for key in ("net_pnl", "net_pnl_worst", "return_pct", "equity", "balance",
+                    "win_rate", "win_rate_worst", "trades", "trades_least",
+                    "drawdown", "drawdown_worst", "realized", "unrealized",
+                    "costs", "recent", "days_live", "category", "name"):
+            self.assertIn(key, DESK_SORTS, key)
+
+    def test_pnl_sorts_both_directions(self):
+        self.assertEqual(self._first("net_pnl"), "alpha")
+        self.assertEqual(self._first("net_pnl_worst"), "bravo")
+
+    def test_trade_count_sorts_both_directions(self):
+        self.assertEqual(self._first("trades"), "bravo")
+        self.assertEqual(self._first("trades_least"), "charlie")
+
+    def test_balance_and_return_sorts(self):
+        self.assertEqual(self._first("equity"), "alpha")
+        self.assertEqual(self._first("balance"), "alpha")
+        self.assertEqual(self._first("return_pct"), "alpha")
+
+    def test_untraded_accounts_never_win_the_win_rate_sort(self):
+        """A 0% win rate from never trading is not the worst win rate."""
+        self.assertEqual(self._first("win_rate"), "alpha")
+        self.assertEqual(self._first("win_rate_worst"), "bravo")
+
+    def test_untraded_accounts_never_win_the_drawdown_sort(self):
+        """A 0% drawdown from never trading is not the smallest drawdown."""
+        self.assertEqual(self._first("drawdown"), "alpha")
+        self.assertEqual(self._first("drawdown_worst"), "bravo")
+
+    def test_recent_sorts_newest_close_first_and_untraded_last(self):
+        order = [r["name"] for r in sorted(self.ROWS, key=DESK_SORTS["recent"])]
+        self.assertEqual(order, ["bravo", "alpha", "charlie"])
+
+    def test_sorts_are_stable_when_values_tie(self):
+        tied = [dict(self.ROWS[2], name=n) for n in ("zulu", "alpha", "mike")]
+        order = [r["name"] for r in sorted(tied, key=DESK_SORTS["net_pnl"])]
+        self.assertEqual(order, ["alpha", "mike", "zulu"])
+
+    def test_service_accepts_every_sort_key(self):
+        for key in DESK_SORTS:
+            state = ServiceTests.service.paper_state({"sort": key})
+            self.assertTrue(state["ok"], key)
+
+    def test_unknown_sort_falls_back_instead_of_failing(self):
+        state = ServiceTests.service.paper_state({"sort": "not-a-sort"})
+        self.assertTrue(state["ok"])
+
+
+class DeskSortMenuPageTests(unittest.TestCase):
+    def test_quick_sort_buttons_are_visible_on_the_page(self):
+        for label in ("Best P&amp;L", "Worst P&amp;L", "Best return %", "Best balance",
+                      "Best win rate", "Most trades", "Smallest drawdown",
+                      "Most recent trade"):
+            self.assertIn(label, STRATEGY_LAB_HTML, label)
+        self.assertIn('class="sortbar"', STRATEGY_LAB_HTML)
+
+    def test_view_chips_cover_traded_and_untraded(self):
+        for label in ("Has traded", "Profitable", "Losing", "In position", "Not traded yet"):
+            self.assertIn(label, STRATEGY_LAB_HTML, label)
+
+    def test_active_sort_is_reflected_in_the_chips_and_the_count_line(self):
+        self.assertIn("syncSortChips", STRATEGY_LAB_HTML)
+        self.assertIn("sorted by ${sortLabel}", STRATEGY_LAB_HTML)
+
+    def test_sort_bar_is_grouped_for_assistive_tech(self):
+        self.assertIn('role="group" aria-label="Sort paper accounts"', STRATEGY_LAB_HTML)
 
 
 if __name__ == "__main__":

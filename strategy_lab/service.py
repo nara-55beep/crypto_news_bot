@@ -170,6 +170,35 @@ SORT_KEYS = {
 }
 
 
+# Desk sort keys. Every entry ends with the name so the order is stable when many
+# accounts share a value, which is the normal case before they have traded.
+DESK_SORTS = {
+    "net_pnl":        lambda r: (-r["net_pnl"], r["name"].lower()),
+    "net_pnl_worst":  lambda r: (r["net_pnl"], r["name"].lower()),
+    "return_pct":     lambda r: (-r["net_pnl_pct"], r["name"].lower()),
+    "equity":         lambda r: (-r["equity"], r["name"].lower()),
+    "balance":        lambda r: (-r["balance"], r["name"].lower()),
+    # An account that has never traded has a 0% win rate and a 0% drawdown, which
+    # would otherwise rank it "best" on those sorts. Untraded accounts go last.
+    "win_rate":       lambda r: (not r["trades"], -r["win_rate"], -r["trades"], r["name"].lower()),
+    "win_rate_worst": lambda r: (not r["trades"], r["win_rate"], -r["trades"], r["name"].lower()),
+    "trades":         lambda r: (-r["trades"], r["name"].lower()),
+    "trades_least":   lambda r: (r["trades"], r["name"].lower()),
+    "drawdown":       lambda r: (not r["trades"], -r["max_drawdown_pct"], r["name"].lower()),
+    "drawdown_worst": lambda r: (not r["trades"], r["max_drawdown_pct"], r["name"].lower()),
+    "realized":       lambda r: (-r["realized_pnl"], r["name"].lower()),
+    "unrealized":     lambda r: (-r["unrealized_pnl"], r["name"].lower()),
+    "costs":          lambda r: (-r["costs"], r["name"].lower()),
+    # Most recent close first; anything that has not closed a trade sorts last.
+    "recent":         lambda r: (not r["history"],
+                                 [-ord(c) for c in (r["history"][0]["closed"] if r["history"] else "")],
+                                 r["name"].lower()),
+    "days_live":      lambda r: (-(r.get("bars_live") or 0), r["name"].lower()),
+    "category":       lambda r: (r["category"], r["name"].lower()),
+    "name":           lambda r: r["name"].lower(),
+}
+
+
 class StrategyLabService:
     PAPER_MIN_INTERVAL = 30.0   # seconds between automatic desk ticks
 
@@ -364,10 +393,7 @@ class StrategyLabService:
             rows = [r for r in rows if r["trades"] == 0]
 
         sort = str(query.get("sort", "net_pnl"))
-        keys = {"net_pnl": lambda r: -r["net_pnl"], "equity": lambda r: -r["equity"],
-                "win_rate": lambda r: -r["win_rate"], "trades": lambda r: -r["trades"],
-                "drawdown": lambda r: r["max_drawdown_pct"], "name": lambda r: r["name"].lower()}
-        rows = sorted(rows, key=keys.get(sort, keys["net_pnl"]))
+        rows = sorted(rows, key=DESK_SORTS.get(sort, DESK_SORTS["net_pnl"]))
 
         # The desk is meant to be scanned in one scroll, so every matching account
         # is returned. Trade history is trimmed hard because 614 accounts x 40
