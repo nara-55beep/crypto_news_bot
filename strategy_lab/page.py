@@ -125,6 +125,14 @@ STRATEGY_LAB_HTML = r"""<!doctype html>
     display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .acct.busted{border-color:#722}
   @media(max-width:520px){.acct .ag{grid-template-columns:repeat(2,1fr)}}
+  /* quick-sort bar: the daily-check controls, visible rather than buried in a form */
+  .sortbar{display:flex;gap:6px;flex-wrap:wrap;padding:10px 15px;border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);background:#0b0f16;align-items:center}
+  .sortbar .lbl{font-family:var(--bin);font-size:10px;letter-spacing:.4px;text-transform:uppercase;
+    color:var(--muted);margin-right:2px}
+  .sortbar .btn{padding:5px 10px;font-size:11.5px}
+  .sortbar .btn.on{background:#103024;border-color:#1c5;color:var(--green)}
+  .sortbar .sep{width:1px;align-self:stretch;background:var(--line2);margin:0 4px}
 </style>
 </head>
 <body>
@@ -181,12 +189,46 @@ STRATEGY_LAB_HTML = r"""<!doctype html>
         <option value="profitable">Profitable</option><option value="unprofitable">Unprofitable</option>
         <option value="in-position">In position now</option><option value="idle">No trades yet</option>
       </select></div>
-      <div class="field"><label for="d-sort">Sort</label><select id="d-sort">
-        <option value="net_pnl">Net P&amp;L</option><option value="equity">Equity</option>
-        <option value="win_rate">Win rate</option><option value="trades">Trades</option>
-        <option value="drawdown">Max drawdown</option><option value="name">Name</option>
+      <div class="field"><label for="d-sort">More sorts</label><select id="d-sort">
+        <option value="net_pnl">Best net P&amp;L</option>
+        <option value="net_pnl_worst">Worst net P&amp;L</option>
+        <option value="return_pct">Best return %</option>
+        <option value="equity">Best equity</option>
+        <option value="balance">Best cash balance</option>
+        <option value="win_rate">Best win rate</option>
+        <option value="win_rate_worst">Worst win rate</option>
+        <option value="trades">Most trades</option>
+        <option value="trades_least">Fewest trades</option>
+        <option value="drawdown">Smallest drawdown</option>
+        <option value="drawdown_worst">Biggest drawdown</option>
+        <option value="realized">Most realised P&amp;L</option>
+        <option value="unrealized">Most open P&amp;L</option>
+        <option value="costs">Highest costs</option>
+        <option value="recent">Most recent trade</option>
+        <option value="days_live">Longest running</option>
+        <option value="category">Category</option>
+        <option value="name">Name A-Z</option>
       </select></div>
       <div class="field"><label for="d-cat">Category</label><select id="d-cat"><option value="">All</option></select></div>
+    </div>
+    <div class="sortbar" role="group" aria-label="Sort paper accounts">
+      <span class="lbl">Sort by</span>
+      <button class="btn" data-sort="net_pnl">Best P&amp;L</button>
+      <button class="btn" data-sort="net_pnl_worst">Worst P&amp;L</button>
+      <button class="btn" data-sort="return_pct">Best return %</button>
+      <button class="btn" data-sort="equity">Best balance</button>
+      <button class="btn" data-sort="win_rate">Best win rate</button>
+      <button class="btn" data-sort="trades">Most trades</button>
+      <button class="btn" data-sort="drawdown">Smallest drawdown</button>
+      <button class="btn" data-sort="recent">Most recent trade</button>
+      <span class="sep"></span>
+      <span class="lbl">Show</span>
+      <button class="btn" data-dview="all">All</button>
+      <button class="btn" data-dview="traded">Has traded</button>
+      <button class="btn" data-dview="profitable">Profitable</button>
+      <button class="btn" data-dview="unprofitable">Losing</button>
+      <button class="btn" data-dview="in-position">In position</button>
+      <button class="btn" data-dview="idle">Not traded yet</button>
     </div>
     <div class="ph"><span id="desk-count">—</span></div>
     <div id="desk-grid"><div class="empty">Loading paper accounts…</div></div>
@@ -594,7 +636,8 @@ async function loadDesk(){try{
     ['Not traded yet',String(j.awaiting_first_trade??0),''],
     ['Last bar',esc(j.last_bar||'—'),''],
   ].map(x=>`<div class="stat"><div class="k">${esc(x[0])}</div><div class="v ${x[2]}">${esc(x[1])}</div></div>`).join('');
-  $('desk-count').textContent=`${j.total.toLocaleString()} accounts shown · scroll for all`
+  const sortLabel=$('d-sort').options[$('d-sort').selectedIndex].text;
+  $('desk-count').textContent=`${j.total.toLocaleString()} accounts · sorted by ${sortLabel} · scroll for all`
     +(j.opened_on?` · opened ${j.opened_on}`:'');
   $('desk-grid').innerHTML=j.rows.length?j.rows.map(acctCard).join('')
     :'<div class="empty">No paper account matches this filter.</div>';
@@ -607,7 +650,15 @@ async function deskAction(url,body){try{
     body:body?JSON.stringify(body):undefined});
   await loadDesk()}catch(e){alert('Paper desk: '+e.message)}}
 
-['d-view','d-sort','d-cat'].forEach(id=>$(id).addEventListener('change',loadDesk));
+function syncSortChips(){
+  document.querySelectorAll('[data-sort]').forEach(b=>b.classList.toggle('on',b.dataset.sort===$('d-sort').value));
+  document.querySelectorAll('[data-dview]').forEach(b=>b.classList.toggle('on',b.dataset.dview===$('d-view').value));}
+document.querySelectorAll('[data-sort]').forEach(b=>b.addEventListener('click',()=>{
+  $('d-sort').value=b.dataset.sort;syncSortChips();loadDesk()}));
+document.querySelectorAll('[data-dview]').forEach(b=>b.addEventListener('click',()=>{
+  $('d-view').value=b.dataset.dview;syncSortChips();loadDesk()}));
+['d-view','d-sort','d-cat'].forEach(id=>$(id).addEventListener('change',()=>{syncSortChips();loadDesk()}));
+syncSortChips();
 $('d-q').addEventListener('input',()=>{clearTimeout(DESK_TIMER);DESK_TIMER=setTimeout(loadDesk,200)});
 $('desk-refresh').addEventListener('click',()=>deskAction('/api/strategies/paper/refresh'));
 $('desk-toggle').addEventListener('click',()=>deskAction('/api/strategies/paper/toggle',
