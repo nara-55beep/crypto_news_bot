@@ -5,12 +5,14 @@ This is the difference between the backtest tab and this one. A backtest answers
 balance, position and trade history persist across restarts, exactly like the bots
 on the Paper Trading page.
 
-Each account records the last bar it processed. A tick loads the shared price
-history once and advances every account through whatever bars it has not seen yet.
-The first tick therefore walks the whole history (which is what gives the account a
-real equity curve, win rate and P&L immediately), and every tick after that advances
-one bar at a time as new data arrives. It is the same code path either way, so a
-freshly seeded account and a long-running one are not special cases of each other.
+An account starts FLAT on the day it is opened. It is never backfilled with
+historical trades: on its first tick it records where the market is and takes no
+position, and from then on it acts only on bars that print after that moment. So
+every number on the desk -- balance, P&L, win rate -- is money this strategy made
+or lost going forward, not a backtest wearing a paper-trading label.
+
+Price history is still loaded, because an indicator needs history to have a value
+at all; it is used to compute signals and never to trade.
 
 Fills use the same conservative contract as the backtest engine: a signal read from
 a completed bar is filled at the NEXT bar's open, with half-spread, slippage and
@@ -34,9 +36,12 @@ from .rules import run_rule
 from .schema import TradingStrategy
 
 
-START_BALANCE = 100_000.0
+START_BALANCE = 50_000.0
 MAX_HISTORY = 40
 MAX_LOG = 25
+# Bumped whenever the account model changes in a way that makes an older saved
+# desk meaningless (starting balance, seeding policy). Old state is discarded.
+STATE_VERSION = 2
 # A short's loss is unbounded, so the desk models a maintenance requirement the way
 # a real margin account does: if equity falls under this share of the position's
 # market value the position is force-closed instead of running the balance negative.
@@ -84,6 +89,9 @@ class PaperAccount:
     max_drawdown_pct: float = 0.0
     mark_price: float = 0.0
     started: str = ""
+    inception_price: float = 0.0
+    inception_index: int = 0
+    live: bool = False
     error: str = ""
     busted: bool = False
     history: list[dict[str, Any]] = field(default_factory=list)
@@ -106,6 +114,7 @@ class PaperAccount:
 
     def win_rate(self) -> float:
         return 100.0 * self.wins / self.trades if self.trades else 0.0
+
 
     def to_state(self, strategy: TradingStrategy) -> dict[str, Any]:
         equity = self.equity()
@@ -139,6 +148,9 @@ class PaperAccount:
             "costs": round(self.commission_paid + self.edge_paid, 2),
             "position": open_position,
             "busted": self.busted,
+            "live": self.live,
+            "inception_price": round(self.inception_price, 2),
+            "bars_live": max(0, self.processed - self.inception_index),
             "bars_processed": self.processed,
             "last_bar": self.last_bar,
             "started": self.started,
@@ -165,11 +177,22 @@ class PaperAccount:
         target = signal.reindex(frame.index).fillna(0.0).clip(-1.0, 1.0).to_numpy(dtype=float)
         dates = [str(x)[:10] for x in frame.index]
         total = len(frame)
-        if self.processed >= total:
-            self.mark_price = float(closes[-1]) if total else 0.0
+        if not total:
             return 0
-        if not self.started and total:
-            self.started = dates[0]
+        if not self.live:
+            # Day one. Note where the market is, take nothing, and only act on
+            # bars that print from here on. No historical trade is invented.
+            self.live = True
+            self.started = dates[-1]
+            self.inception_price = float(closes[-1])
+            self.mark_price = float(closes[-1])
+            self.processed = total
+            self.inception_index = total
+            self.last_bar = dates[-1]
+            return 0
+        if self.processed >= total:
+            self.mark_price = float(closes[-1])
+            return 0
 
         moved = 0
         # Start at max(1, processed): bar 0 can never be acted on, because acting
@@ -288,6 +311,10 @@ class PaperDesk:
                 return
             with open(self._path, encoding="utf-8") as handle:
                 data = json.load(handle)
+            if int(data.get("state_version", 1)) != STATE_VERSION:
+                # Starting balance or seeding policy changed; an old desk would
+                # mix two different experiments together.
+                return
             if data.get("symbol") != self.symbol:
                 # A different instrument is a different experiment; do not silently
                 # continue an SPY account against QQQ bars.
@@ -306,6 +333,7 @@ class PaperDesk:
             os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
             temporary = self._path + ".tmp"
             payload = {
+                "state_version": STATE_VERSION,
                 "symbol": self.symbol,
                 "enabled": self.enabled,
                 "ticks": self.ticks,
@@ -393,6 +421,8 @@ class PaperDesk:
             "unprofitable": len(traded) - len(profitable),
             "in_position": sum(1 for r in rows if r["position"]),
             "busted": sum(1 for r in rows if r.get("busted")),
+            "awaiting_first_trade": sum(1 for r in rows if r["trades"] == 0),
+            "opened_on": min((r["started"] for r in rows if r["started"]), default=""),
             "advanced": advanced,
             "failed": failed,
             "start_balance_each": START_BALANCE,

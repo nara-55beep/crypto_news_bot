@@ -695,9 +695,39 @@ class PaperDeskTests(unittest.TestCase):
         self.assertEqual(summary["accounts"], len(CATALOG.executable()))
         self.assertEqual(summary["failed"], 0)
 
+    def test_accounts_open_flat_and_are_never_backfilled(self):
+        """Day one must show $50,000 and zero trades, not a replayed backtest."""
+        desk = self._desk()
+        summary = desk.tick(self.frame)
+        self.assertEqual(summary["with_trades"], 0)
+        self.assertEqual(summary["total_net_pnl"], 0.0)
+        self.assertEqual(summary["awaiting_first_trade"], summary["accounts"])
+        for row in desk.rows():
+            self.assertEqual(row["balance"], START_BALANCE)
+            self.assertEqual(row["equity"], START_BALANCE)
+            self.assertEqual(row["trades"], 0)
+            self.assertIsNone(row["position"])
+
+    def test_every_account_starts_with_fifty_thousand(self):
+        self.assertEqual(START_BALANCE, 50_000.0)
+        desk = self._desk()
+        desk.tick(self.frame)
+        self.assertTrue(all(r["start_balance"] == 50_000.0 for r in desk.rows()))
+
+    def test_accounts_trade_only_bars_that_print_after_they_open(self):
+        desk = self._desk()
+        desk.tick(self.frame)                      # opens flat
+        desk.tick(synthetic(430, seed=13))         # 30 further sessions
+        rows = desk.rows()
+        self.assertGreater(sum(1 for r in rows if r["trades"] > 0), 0)
+        for row in rows:
+            for trade in row["history"]:
+                self.assertGreaterEqual(trade["opened"], row["started"])
+
     def test_each_account_reports_the_paper_trading_fields(self):
         desk = self._desk()
         desk.tick(self.frame)
+        desk.tick(synthetic(430, seed=13))
         for row in desk.rows()[:20]:
             for field in ("balance", "equity", "net_pnl", "net_pnl_pct", "win_rate",
                           "trades", "wins", "losses", "max_drawdown_pct", "costs",
@@ -708,6 +738,7 @@ class PaperDeskTests(unittest.TestCase):
     def test_equity_and_balance_never_go_negative(self):
         desk = self._desk()
         desk.tick(self.frame)
+        desk.tick(synthetic(430, seed=13))
         for row in desk.rows():
             self.assertGreaterEqual(row["equity"], 0.0, row["strategy_id"])
             self.assertGreaterEqual(row["balance"], 0.0, row["strategy_id"])
@@ -715,6 +746,7 @@ class PaperDeskTests(unittest.TestCase):
     def test_win_rate_and_trade_counts_are_consistent(self):
         desk = self._desk()
         desk.tick(self.frame)
+        desk.tick(synthetic(430, seed=13))
         for row in desk.rows():
             self.assertEqual(row["trades"], row["wins"] + row["losses"])
             if row["trades"]:
@@ -747,6 +779,15 @@ class PaperDeskTests(unittest.TestCase):
         desk.tick(synthetic(401, seed=13))
         self.assertGreater(desk.accounts[first_id].processed, processed)
 
+    def test_saved_state_from_an_older_account_model_is_discarded(self):
+        import json
+        desk = self._desk()
+        desk.tick(self.frame)
+        raw = json.loads(Path(self.path).read_text(encoding="utf-8"))
+        raw["state_version"] = 1                      # pretend it is the $100k era
+        Path(self.path).write_text(json.dumps(raw), encoding="utf-8")
+        self.assertEqual(len(self._desk().accounts), 0)
+
     def test_a_different_symbol_does_not_reuse_a_saved_account(self):
         self._desk().tick(self.frame)
         other = PaperDesk(CATALOG, symbol="OTHER", state_path=self.path)
@@ -777,6 +818,7 @@ class PaperDeskTests(unittest.TestCase):
                               "low": [p * 0.99 for p in price], "close": price,
                               "volume": [1e6] * n}, index=index, dtype=float)
         account = PaperAccount(strategy_id="test.short.always")
+        account.advance(frame.iloc[:2], pd.Series(-1.0, index=index[:2]), CostModel())
         account.advance(frame, pd.Series(-1.0, index=index), CostModel())
         self.assertGreaterEqual(account.balance, 0.0)
         self.assertGreaterEqual(account.equity(), 0.0)
@@ -785,6 +827,9 @@ class PaperDeskTests(unittest.TestCase):
 
     def test_account_fills_on_the_next_bar_open(self):
         account = PaperAccount(strategy_id="test.one")
+        # Open the account on a short prefix, then let it act on later bars.
+        account.advance(self.frame.iloc[:10], pd.Series(0.0, index=self.frame.index[:10]),
+                        CostModel())
         signal = pd.Series(0.0, index=self.frame.index)
         signal.iloc[10] = 1.0
         account.advance(self.frame, signal, CostModel(
@@ -798,15 +843,18 @@ class PaperDeskTests(unittest.TestCase):
 
     def test_costs_are_charged_on_every_paper_fill(self):
         account = PaperAccount(strategy_id="test.costs")
+        account.advance(self.frame.iloc[:10], pd.Series(1.0, index=self.frame.index[:10]),
+                        CostModel())
         account.advance(self.frame, pd.Series(1.0, index=self.frame.index), CostModel())
         self.assertGreater(account.commission_paid + account.edge_paid, 0.0)
 
 
 class PaperServiceTests(unittest.TestCase):
-    def test_paper_state_paginates_and_declares_paper_only(self):
-        state = ServiceTests.service.paper_state({"page_size": 5})
+    def test_paper_state_returns_every_account_without_paging(self):
+        state = ServiceTests.service.paper_state({})
         self.assertTrue(state["ok"])
-        self.assertLessEqual(len(state["rows"]), 5)
+        self.assertEqual(len(state["rows"]), state["total"])
+        self.assertNotIn("pages", state)
         self.assertTrue(state["paper_only"])
         self.assertFalse(state["live_order_routing"])
 
@@ -820,6 +868,15 @@ class PaperPageTests(unittest.TestCase):
         for marker in ("Paper desk", "desk-grid", "desk-stats", "Balance", "Equity",
                        "Win rate", "Trades", "Max DD", "no live order routing"):
             self.assertIn(marker, STRATEGY_LAB_HTML, marker)
+
+    def test_desk_has_no_pagination_controls(self):
+        for gone in ("desk-prev", "desk-next", "Previous"):
+            self.assertNotIn(gone, STRATEGY_LAB_HTML, gone)
+        self.assertIn("scroll for all", STRATEGY_LAB_HTML)
+
+    def test_desk_states_the_fifty_thousand_starting_balance(self):
+        self.assertIn("$50,000", STRATEGY_LAB_HTML)
+        self.assertIn("no backfilled history", STRATEGY_LAB_HTML)
 
     def test_desk_has_pause_and_reset_like_the_paper_bots(self):
         for marker in ("desk-toggle", "desk-reset", "desk-refresh",

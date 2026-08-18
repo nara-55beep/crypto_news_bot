@@ -170,8 +170,10 @@ STRATEGY_LAB_HTML = r"""<!doctype html>
       <div class="stat"><div class="k">Total net P&amp;L</div><div class="v">—</div></div>
       <div class="stat"><div class="k">In position</div><div class="v">—</div></div>
     </div>
-    <p class="warn" id="desk-note">Each strategy holds its own $100,000 paper account. Balances persist
-      across restarts and advance one bar at a time. Simulated fills only — no broker order is ever sent.</p>
+    <p class="warn" id="desk-note">Each strategy holds its own <b>$50,000</b> paper account that started
+      <b>flat on the day it was opened</b> — no backfilled history, so every number here is money made or lost
+      going forward. Accounts advance one daily bar at a time and persist across restarts.
+      Simulated fills only; no broker order is ever sent.</p>
     <div class="controls">
       <div class="field"><label for="d-q">Find account</label><input id="d-q" placeholder="strategy name…"></div>
       <div class="field"><label for="d-view">Show</label><select id="d-view">
@@ -184,17 +186,10 @@ STRATEGY_LAB_HTML = r"""<!doctype html>
         <option value="win_rate">Win rate</option><option value="trades">Trades</option>
         <option value="drawdown">Max drawdown</option><option value="name">Name</option>
       </select></div>
-      <div class="field"><label for="d-size">Per page</label><select id="d-size">
-        <option value="30">30</option><option value="60" selected>60</option><option value="120">120</option>
-      </select></div>
+      <div class="field"><label for="d-cat">Category</label><select id="d-cat"><option value="">All</option></select></div>
     </div>
     <div class="ph"><span id="desk-count">—</span></div>
     <div id="desk-grid"><div class="empty">Loading paper accounts…</div></div>
-    <div class="actions">
-      <button class="btn" id="desk-prev">← Previous</button>
-      <span class="sub" id="desk-page">page 1</span>
-      <button class="btn" id="desk-next">Next →</button>
-    </div>
   </section>
 
   <section class="bot wide" aria-labelledby="hdr-browse">
@@ -338,7 +333,7 @@ async function loadOverview(){try{
   const f=OVERVIEW.facets;
   const fill=(id,vals)=>{const el=$(id);const keep=el.value;
     el.innerHTML='<option value="">All</option>'+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');el.value=keep};
-  fill('f-category',f.category);fill('f-status',f.implementation_status);fill('f-evidence',f.evidence_level);
+  fill('f-category',f.category);fill('d-cat',f.category);fill('f-status',f.implementation_status);fill('f-evidence',f.evidence_level);
   fill('f-direction',f.direction);fill('f-timeframe',f.timeframe);fill('f-complexity',f.complexity);
 }catch(e){$('headline').textContent='catalog failed to load';$('status-dot').className='dot off';
   $('disclaimer').className='warn err';$('disclaimer').textContent='Could not load the catalog: '+e.message}}
@@ -547,11 +542,11 @@ document.querySelectorAll('[data-lb]').forEach(b=>b.addEventListener('click',()=
 
 
 // ---- paper desk: one live account card per strategy ----
-let DESK_PAGE=1, DESK_TIMER=null;
+let DESK_TIMER=null;
 function deskQuery(){const p=new URLSearchParams();
   const q=$('d-q').value.trim(); if(q)p.set('q',q);
-  p.set('view',$('d-view').value); p.set('sort',$('d-sort').value);
-  p.set('page',String(DESK_PAGE)); p.set('page_size',$('d-size').value); return p.toString()}
+  const c=$('d-cat').value; if(c)p.set('category',c);
+  p.set('view',$('d-view').value); p.set('sort',$('d-sort').value); return p.toString()}
 
 function acctCard(r){
   const pnlCls=r.net_pnl>0?'pos':(r.net_pnl<0?'neg':'');
@@ -575,8 +570,9 @@ function acctCard(r){
     <div class="af">
       ${pos?`<span>${esc(pos.side)} ${pos.shares} @ ${num(pos.entry)} since ${esc(pos.since)}</span>
         <span class="${pos.unrealized>=0?'pos':'neg'}">${pos.unrealized>=0?'+':''}${money(pos.unrealized)} open</span>`
-        :'<span>no open position</span>'}
-      <span class="spacer"></span><span>${esc(r.last_bar||'—')}</span>
+        :(r.trades?'<span>flat, waiting for the next signal</span>'
+                  :'<span>no trade yet — waiting for its first signal</span>')}
+      <span class="spacer"></span><span>${r.bars_live??0}d live</span>
     </div>
     ${r.error?`<div class="af neg">${esc(r.error)}</div>`:''}
   </article>`}
@@ -587,16 +583,19 @@ async function loadDesk(){try{
   $('desk-symbol').textContent=j.symbol+' · '+j.bars+' bars · '+(j.last_bar||'—');
   $('desk-toggle').textContent=j.enabled?'Pause':'Resume';
   $('desk-toggle').className='btn '+(j.enabled?'on':'off');
+  const pnlCls=j.total_net_pnl>0?'pos':(j.total_net_pnl<0?'neg':'');
   $('desk-stats').innerHTML=[
-    ['Accounts',String(j.accounts)],['Total equity',money(j.total_equity)],
-    ['Total net P&L',(j.total_net_pnl>=0?'+':'')+money(j.total_net_pnl)],
-    ['In position',String(j.in_position)],['Has traded',String(j.with_trades)],
-    ['Profitable',String(j.profitable)],['Unprofitable',String(j.unprofitable)],
-    ['Busted',String(j.busted??0)],
-  ].map(x=>`<div class="stat"><div class="k">${esc(x[0])}</div><div class="v">${esc(x[1])}</div></div>`).join('');
-  $('desk-count').textContent=`${j.total.toLocaleString()} accounts · page ${j.page} of ${j.pages}`;
-  $('desk-page').textContent=`page ${j.page} of ${j.pages}`;
-  $('desk-prev').disabled=j.page<=1; $('desk-next').disabled=j.page>=j.pages;
+    ['Accounts',String(j.accounts),''],
+    ['Each started with',money(j.start_balance_each),''],
+    ['Total net P&L',(j.total_net_pnl>=0?'+':'')+money(j.total_net_pnl),pnlCls],
+    ['Profitable',`${j.profitable} / ${j.with_trades}`,j.profitable>j.unprofitable?'pos':'neg'],
+    ['In position now',String(j.in_position),''],
+    ['Traded so far',String(j.with_trades),''],
+    ['Not traded yet',String(j.awaiting_first_trade??0),''],
+    ['Last bar',esc(j.last_bar||'—'),''],
+  ].map(x=>`<div class="stat"><div class="k">${esc(x[0])}</div><div class="v ${x[2]}">${esc(x[1])}</div></div>`).join('');
+  $('desk-count').textContent=`${j.total.toLocaleString()} accounts shown · scroll for all`
+    +(j.opened_on?` · opened ${j.opened_on}`:'');
   $('desk-grid').innerHTML=j.rows.length?j.rows.map(acctCard).join('')
     :'<div class="empty">No paper account matches this filter.</div>';
   if(j.data_error){$('desk-note').className='warn err';$('desk-note').textContent=j.data_error}
@@ -608,10 +607,8 @@ async function deskAction(url,body){try{
     body:body?JSON.stringify(body):undefined});
   await loadDesk()}catch(e){alert('Paper desk: '+e.message)}}
 
-['d-view','d-sort','d-size'].forEach(id=>$(id).addEventListener('change',()=>{DESK_PAGE=1;loadDesk()}));
-$('d-q').addEventListener('input',()=>{clearTimeout(DESK_TIMER);DESK_TIMER=setTimeout(()=>{DESK_PAGE=1;loadDesk()},200)});
-$('desk-prev').addEventListener('click',()=>{if(DESK_PAGE>1){DESK_PAGE--;loadDesk()}});
-$('desk-next').addEventListener('click',()=>{DESK_PAGE++;loadDesk()});
+['d-view','d-sort','d-cat'].forEach(id=>$(id).addEventListener('change',loadDesk));
+$('d-q').addEventListener('input',()=>{clearTimeout(DESK_TIMER);DESK_TIMER=setTimeout(loadDesk,200)});
 $('desk-refresh').addEventListener('click',()=>deskAction('/api/strategies/paper/refresh'));
 $('desk-toggle').addEventListener('click',()=>deskAction('/api/strategies/paper/toggle',
   {enabled:$('desk-toggle').textContent==='Resume'}));

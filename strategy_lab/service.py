@@ -369,13 +369,11 @@ class StrategyLabService:
                 "drawdown": lambda r: r["max_drawdown_pct"], "name": lambda r: r["name"].lower()}
         rows = sorted(rows, key=keys.get(sort, keys["net_pnl"]))
 
-        page = max(1, int(query.get("page", 1) or 1))
-        size = min(MAX_PAGE_SIZE, max(1, int(query.get("page_size", 60) or 60)))
-        total = len(rows)
-        start = (page - 1) * size
-        return {"ok": True, **summary, "total": total, "page": page, "page_size": size,
-                "pages": max(1, (total + size - 1) // size),
-                "rows": [dict(r, history=r["history"][:5]) for r in rows[start:start + size]]}
+        # The desk is meant to be scanned in one scroll, so every matching account
+        # is returned. Trade history is trimmed hard because 614 accounts x 40
+        # trades would dominate the payload for no benefit on this view.
+        return {"ok": True, **summary, "total": len(rows),
+                "rows": [dict(r, history=r["history"][:3]) for r in rows]}
 
     def paper_detail(self, strategy_id: str) -> dict[str, Any]:
         resolved = self.catalog.resolve_alias(strategy_id) or strategy_id
