@@ -29,7 +29,7 @@ from .schema import (
     validate,
 )
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+DATA_DIR = Path(__file__).resolve().parent / "catalog_data"
 RESEARCH_DATE = "2026-08-18"
 
 OHLCV = ("daily OHLCV",)
