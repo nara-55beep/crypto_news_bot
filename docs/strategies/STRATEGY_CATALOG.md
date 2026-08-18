@@ -1,0 +1,1154 @@
+# Strategy catalog
+
+Generated from the live registry on 2026-08-18. Do not hand-edit.
+
+**1056 strategies** — 614 executable, 379 requires-data, 18 research-only, 45 unsupported.
+
+| Category | Total | Executable | Needs data / other |
+| --- | ---: | ---: | ---: |
+| Academic anomaly | 326 | 0 | 326 |
+| Trend following | 215 | 215 | 0 |
+| Mean reversion | 152 | 152 | 0 |
+| Breakout | 50 | 50 | 0 |
+| Price action | 50 | 50 | 0 |
+| Momentum | 46 | 46 | 0 |
+| Volume | 36 | 36 | 0 |
+| Options | 26 | 0 | 26 |
+| Machine learning and AI | 26 | 0 | 26 |
+| Calendar and seasonal | 19 | 19 | 0 |
+| Risk and exit methods | 18 | 0 | 18 |
+| Gap | 16 | 16 | 0 |
+| Fundamental | 14 | 0 | 14 |
+| Multi-signal | 12 | 12 | 0 |
+| Institutional execution | 11 | 0 | 11 |
+| Volatility | 9 | 9 | 0 |
+| Portfolio and allocation | 8 | 8 | 0 |
+| Arbitrage | 8 | 0 | 8 |
+| Event driven | 5 | 0 | 5 |
+| Sentiment and alternative data | 5 | 0 | 5 |
+| Statistical arbitrage | 3 | 0 | 3 |
+| Long-term investment | 1 | 1 | 0 |
+
+## Entries by category
+
+### Academic anomaly (326)
+
+- `academic.accruals.abnormalaccruals` **Abnormal Accruals** — aka AbnormalAccruals · requires-data · academic
+- `academic.accruals.abnormalaccrualspercent` **Abnormal Accruals Percent** — aka AbnormalAccrualsPercent · requires-data · experimental
+- `academic.accruals.accrualquality` **Accrual Quality** — aka AccrualQuality · requires-data · experimental
+- `academic.accruals.accrualqualityjune` **Accrual Quality June** — aka AccrualQualityJune · requires-data · experimental
+- `academic.accruals.accruals` **Accruals** — aka Accruals · requires-data · academic
+- `academic.valuation.accrualsbm` **Accruals BM** — aka AccrualsBM · requires-data · academic
+- `academic.other.activism1` **Activism1** — aka Activism1 · requires-data · academic
+- `academic.ownership.activism2` **Activism2** — aka Activism2 · requires-data · academic
+- `academic.r-d.adexp` **Ad Exp** — aka AdExp · requires-data · academic
+- `academic.other.ageipo` **Age IPO** — aka AgeIPO · requires-data · academic
+- `academic.valuation.am` **AM** — aka AM · requires-data · academic
+- `academic.valuation.amq` **AMq** — aka AMq · requires-data · experimental
+- `academic.earnings-forecast.analystrevision` **Analyst Revision** — aka AnalystRevision · requires-data · academic
+- `academic.valuation.analystvalue` **Analyst Value** — aka AnalystValue · requires-data · academic
+- `academic.earnings-event.announcementreturn` **Announcement Return** — aka AnnouncementReturn · requires-data · academic
+- `academic.other.aop` **AOP** — aka AOP · requires-data · academic
+- `academic.investment.assetgrowth` **Asset Growth** — aka AssetGrowth · requires-data · academic
+- `academic.investment.assetgrowth-q` **Asset Growth q** — aka AssetGrowth_q · requires-data · experimental
+- `academic.asset-composition.assetliquiditybook` **Asset Liquidity Book** — aka AssetLiquidityBook · requires-data · experimental
+- `academic.asset-composition.assetliquiditybookquart` **Asset Liquidity Book Quart** — aka AssetLiquidityBookQuart · requires-data · experimental
+- `academic.asset-composition.assetliquiditymarket` **Asset Liquidity Market** — aka AssetLiquidityMarket · requires-data · experimental
+- `academic.asset-composition.assetliquiditymarketquart` **Asset Liquidity Market Quart** — aka AssetLiquidityMarketQuart · requires-data · experimental
+- `academic.composite-accounting.assetturnover` **Asset Turnover** — aka AssetTurnover · requires-data · experimental
+- `academic.composite-accounting.assetturnover-q` **Asset Turnover q** — aka AssetTurnover_q · requires-data · experimental
+- `academic.risk.beta` **Beta** — aka Beta · requires-data · academic
+- `academic.liquidity.betabdleverage` **Beta BDLeverage** — aka BetaBDLeverage · requires-data · experimental
+- `academic.liquidity.betacc` **beta CC** — aka betaCC · requires-data · experimental
+- `academic.liquidity.betacr` **beta CR** — aka betaCR · requires-data · experimental
+- `academic.market-risk.betadimson` **Beta Dimson** — aka BetaDimson · requires-data · experimental
+- `academic.other.betafp` **Beta FP** — aka BetaFP · requires-data · academic
+- `academic.liquidity.betaliquidityps` **Beta Liquidity PS** — aka BetaLiquidityPS · requires-data · academic
+- `academic.liquidity.betanet` **beta Net** — aka betaNet · requires-data · experimental
+- `academic.liquidity.betarc` **beta RC** — aka betaRC · requires-data · experimental
+- `academic.liquidity.betarr` **beta RR** — aka betaRR · requires-data · experimental
+- `academic.other.betasquared` **Beta Squared** — aka BetaSquared · requires-data · experimental
+- `academic.risk.betatailrisk` **Beta Tail Risk** — aka BetaTailRisk · requires-data · academic
+- `academic.volatility.betavix` **beta VIX** — aka betaVIX · requires-data · academic
+- `academic.liquidity.bidaskspread` **Bid Ask Spread** — aka BidAskSpread · requires-data · academic
+- `academic.liquidity.bidasktaq` **Bid Ask TAQ** — aka BidAskTAQ · requires-data · experimental
+- `academic.valuation.bm` **BM** — aka BM · requires-data · academic
+- `academic.valuation.bmdec` **BMdec** — aka BMdec · requires-data · academic
+- `academic.valuation.bmq` **BMq** — aka BMq · requires-data · experimental
+- `academic.leverage.bookleverage` **Book Leverage** — aka BookLeverage · requires-data · academic
+- `academic.leverage.bookleveragequarterly` **Book Leverage Quarterly** — aka BookLeverageQuarterly · requires-data · experimental
+- `academic.leverage.bpebm` **BPEBM** — aka BPEBM · requires-data · academic
+- `academic.investment-alt.brandcapital` **Brand Capital** — aka BrandCapital · requires-data · experimental
+- `academic.investment-alt.brandinvest` **Brand Invest** — aka BrandInvest · requires-data · academic
+- `academic.turnover.capturnover` **Cap Turnover** — aka CapTurnover · requires-data · experimental
+- `academic.turnover.capturnover-q` **Cap Turnover q** — aka CapTurnover_q · requires-data · experimental
+- `academic.asset-composition.cash` **Cash** — aka Cash · requires-data · academic
+- `academic.profitability-alt.cashprod` **Cash Prod** — aka CashProd · requires-data · academic
+- `academic.profitability-alt.cashdebt` **cashdebt** — aka cashdebt · requires-data · experimental
+- `academic.profitability.cboperprof` **CBOper Prof** — aka CBOperProf · requires-data · academic
+- `academic.profitability.cboperproflagat` **CBOper Prof Lag AT** — aka CBOperProfLagAT · requires-data · experimental
+- `academic.profitability.cboperproflagat-q` **CBOper Prof Lag AT q** — aka CBOperProfLagAT_q · requires-data · experimental
+- `academic.valuation.cf` **CF** — aka CF · requires-data · academic
+- `academic.valuation.cfp` **cfp** — aka cfp · requires-data · academic
+- `academic.valuation.cfpq` **cfpq** — aka cfpq · requires-data · experimental
+- `academic.valuation.cfq` **CFq** — aka CFq · requires-data · experimental
+- `academic.sales-growth.chassetturnover` **Ch Asset Turnover** — aka ChAssetTurnover · requires-data · academic
+- `academic.investment.cheq` **Ch EQ** — aka ChEQ · requires-data · academic
+- `academic.earnings-forecast.chforecastaccrual` **Ch Forecast Accrual** — aka ChForecastAccrual · requires-data · academic
+- `academic.investment-alt.chinv` **Ch Inv** — aka ChInv · requires-data · academic
+- `academic.investment-growth.chinvia` **Ch Inv IA** — aka ChInvIA · requires-data · academic
+- `academic.earnings-event.chnanalyst` **Ch NAnalyst** — aka ChNAnalyst · requires-data · academic
+- `academic.investment.chncoa` **Ch NCOA** — aka ChNCOA · requires-data · experimental
+- `academic.investment-alt.chncol` **Ch NCOL** — aka ChNCOL · requires-data · experimental
+- `academic.investment-alt.chnncoa` **Ch NNCOA** — aka ChNNCOA · requires-data · academic
+- `academic.investment-alt.chnwc` **Ch NWC** — aka ChNWC · requires-data · academic
+- `academic.sales-growth.chpm` **Ch PM** — aka ChPM · requires-data · experimental
+- `academic.other.chtax` **Ch Tax** — aka ChTax · requires-data · academic
+- `academic.recommendation.changeinrecommendation` **Change In Recommendation** — aka ChangeInRecommendation · requires-data · academic
+- `academic.composite-accounting.changeroa` **Change Ro A** — aka ChangeRoA · requires-data · experimental
+- `academic.composite-accounting.changeroe` **Change Ro E** — aka ChangeRoE · requires-data · experimental
+- `academic.profitability-alt.citationsrd` **Citations RD** — aka CitationsRD · requires-data · academic
+- `academic.external-financing.compequiss` **Comp Equ Iss** — aka CompEquIss · requires-data · academic
+- `academic.external-financing.compositedebtissuance` **Composite Debt Issuance** — aka CompositeDebtIssuance · requires-data · academic
+- `academic.recommendation.consrecomm` **Cons Recomm** — aka ConsRecomm · requires-data · academic
+- `academic.external-financing.convdebt` **Conv Debt** — aka ConvDebt · requires-data · academic
+- `academic.risk.coskewacx` **Coskew ACX** — aka CoskewACX · requires-data · academic
+- `academic.risk.coskewness` **Coskewness** — aka Coskewness · requires-data · academic
+- `academic.optionrisk.cpvolspread` **CPVol Spread** — aka CPVolSpread · requires-data · academic
+- `academic.other.credratdg` **Cred Rat DG** — aka CredRatDG · requires-data · academic
+- `academic.asset-composition.currat` **currat** — aka currat · requires-data · experimental
+- `academic.lead-lag.customermomentum` **Customer Momentum** — aka CustomerMomentum · requires-data · academic
+- `academic.informed-trading.dcpvolspread` **d CPVol Spread** — aka dCPVolSpread · requires-data · academic
+- `academic.investment.dnoa` **d Noa** — aka dNoa · requires-data · academic
+- `academic.informed-trading.dvolcall` **d Vol Call** — aka dVolCall · requires-data · academic
+- `academic.informed-trading.dvolput` **d Vol Put** — aka dVolPut · requires-data · academic
+- `academic.external-financing.debtissuance` **Debt Issuance** — aka DebtIssuance · requires-data · academic
+- `academic.ownership.delbreadth` **Del Breadth** — aka DelBreadth · requires-data · academic
+- `academic.investment-alt.delcoa` **Del COA** — aka DelCOA · requires-data · academic
+- `academic.external-financing.delcol` **Del COL** — aka DelCOL · requires-data · academic
+- `academic.investment-alt.deldrc` **Del DRC** — aka DelDRC · requires-data · academic
+- `academic.investment.delequ` **Del Equ** — aka DelEqu · requires-data · academic
+- `academic.external-financing.delfinl` **Del FINL** — aka DelFINL · requires-data · academic
+- `academic.investment.dellti` **Del LTI** — aka DelLTI · requires-data · academic
+- `academic.investment-alt.delnetfin` **Del Net Fin** — aka DelNetFin · requires-data · academic
+- `academic.investment-alt.delsti` **Del STI** — aka DelSTI · requires-data · experimental
+- `academic.lead-lag.delayacct` **Delay Acct** — aka DelayAcct · requires-data · experimental
+- `academic.lead-lag.delaynonacct` **Delay Non Acct** — aka DelayNonAcct · requires-data · experimental
+- `academic.other.depr` **depr** — aka depr · requires-data · experimental
+- `academic.payout-indicator.divinit` **Div Init** — aka DivInit · requires-data · academic
+- `academic.payout-indicator.divomit` **Div Omit** — aka DivOmit · requires-data · academic
+- `academic.payout-indicator.divseason` **Div Season** — aka DivSeason · requires-data · academic
+- `academic.valuation.divyield` **Div Yield** — aka DivYield · requires-data · experimental
+- `academic.valuation.divyieldann` **Div Yield Ann** — aka DivYieldAnn · requires-data · experimental
+- `academic.valuation.divyieldst` **Div Yield ST** — aka DivYieldST · requires-data · academic
+- `academic.volume.dolvol` **Dol Vol** — aka DolVol · requires-data · academic
+- `academic.earnings-forecast.downrecomm` **Down Recomm** — aka DownRecomm · requires-data · academic
+- `academic.risk.downsidebeta` **Downside Beta** — aka DownsideBeta · requires-data · experimental
+- `academic.lead-lag.earnsupbig` **Earn Sup Big** — aka EarnSupBig · requires-data · academic
+- `academic.other.earningsconservatism` **Earnings Conservatism** — aka EarningsConservatism · requires-data · experimental
+- `academic.earnings-growth.earningsconsistency` **Earnings Consistency** — aka EarningsConsistency · requires-data · academic
+- `academic.earnings-forecast.earningsforecastdisparity` **Earnings Forecast Disparity** — aka EarningsForecastDisparity · requires-data · academic
+- `academic.other.earningspersistence` **Earnings Persistence** — aka EarningsPersistence · requires-data · experimental
+- `academic.other.earningspredictability` **Earnings Predictability** — aka EarningsPredictability · requires-data · experimental
+- `academic.other.earningssmoothness` **Earnings Smoothness** — aka EarningsSmoothness · requires-data · experimental
+- `academic.earnings-growth.earningsstreak` **Earnings Streak** — aka EarningsStreak · requires-data · academic
+- `academic.earnings-growth.earningssurprise` **Earnings Surprise** — aka EarningsSurprise · requires-data · academic
+- `academic.other.earningstimeliness` **Earnings Timeliness** — aka EarningsTimeliness · requires-data · experimental
+- `academic.other.earningsvaluerelevance` **Earnings Value Relevance** — aka EarningsValueRelevance · requires-data · experimental
+- `academic.valuation.ebm` **EBM** — aka EBM · requires-data · academic
+- `academic.valuation.ebm-q` **EBM q** — aka EBM_q · requires-data · experimental
+- `academic.valuation.entmult` **Ent Mult** — aka EntMult · requires-data · academic
+- `academic.valuation.entmult-q` **Ent Mult q** — aka EntMult_q · requires-data · experimental
+- `academic.valuation.ep` **EP** — aka EP · requires-data · academic
+- `academic.valuation.epq` **EPq** — aka EPq · requires-data · experimental
+- `academic.valuation.equityduration` **Equity Duration** — aka EquityDuration · requires-data · academic
+- `academic.other.etr` **ETR** — aka ETR · requires-data · experimental
+- `academic.other.exchswitch` **Exch Switch** — aka ExchSwitch · requires-data · academic
+- `academic.composite-accounting.exclexp` **Excl Exp** — aka ExclExp · requires-data · academic
+- `academic.default-risk.failureprobability` **Failure Probability** — aka FailureProbability · requires-data · experimental
+- `academic.default-risk.failureprobabilityjune` **Failure Probability June** — aka FailureProbabilityJune · requires-data · experimental
+- `academic.profitability.feps` **FEPS** — aka FEPS · requires-data · academic
+- `academic.earnings-forecast.fgr5yrlag` **fgr5yr Lag** — aka fgr5yrLag · requires-data · academic
+- `academic.earnings-forecast.fgr5yrnolag` **fgr5yr No Lag** — aka fgr5yrNoLag · requires-data · experimental
+- `academic.info-proxy.firmage` **Firm Age** — aka FirmAge · requires-data · academic
+- `academic.momentum.firmagemom` **Firm Age Mom** — aka FirmAgeMom · requires-data · academic
+- `academic.volatility.forecastdispersion` **Forecast Dispersion** — aka ForecastDispersion · requires-data · academic
+- `academic.volatility.forecastdispersionlt` **Forecast Dispersion LT** — aka ForecastDispersionLT · requires-data · experimental
+- `academic.composite-accounting.fr` **FR** — aka FR · requires-data · academic
+- `academic.composite-accounting.frbook` **FRbook** — aka FRbook · requires-data · experimental
+- `academic.valuation.frontier` **Frontier** — aka Frontier · requires-data · academic
+- `academic.other.governance` **Governance** — aka Governance · requires-data · academic
+- `academic.profitability.gp` **GP** — aka GP · requires-data · academic
+- `academic.profitability.gplag` **GPlag** — aka GPlag · requires-data · experimental
+- `academic.profitability.gplag-q` **GPlag q** — aka GPlag_q · requires-data · experimental
+- `academic.investment-alt.gradexp` **Gr Ad Exp** — aka GrAdExp · requires-data · academic
+- `academic.earnings-growth.grgmtogrsales` **Gr GMTo Gr Sales** — aka GrGMToGrSales · requires-data · experimental
+- `academic.investment.grltnoa` **Gr LTNOA** — aka GrLTNOA · requires-data · academic
+- `academic.sales-growth.grsaletogrinv` **Gr Sale To Gr Inv** — aka GrSaleToGrInv · requires-data · academic
+- `academic.sales-growth.grsaletogroverhead` **Gr Sale To Gr Overhead** — aka GrSaleToGrOverhead · requires-data · academic
+- `academic.profitability-alt.grsaletogrreceivables` **Gr Sale To Gr Receivables** — aka GrSaleToGrReceivables · requires-data · experimental
+- `academic.investment-growth.grcapx` **grcapx** — aka grcapx · requires-data · academic
+- `academic.investment.grcapx1y` **grcapx1y** — aka grcapx1y · requires-data · experimental
+- `academic.investment-growth.grcapx3y` **grcapx3y** — aka grcapx3y · requires-data · academic
+- `academic.other.herf` **Herf** — aka Herf · requires-data · academic
+- `academic.other.herfasset` **Herf Asset** — aka HerfAsset · requires-data · academic
+- `academic.other.herfbe` **Herf BE** — aka HerfBE · requires-data · academic
+- `academic.momentum.high52` **High52** — aka High52 · requires-data · academic
+- `academic.investment-alt.hire` **hire** — aka hire · requires-data · academic
+- `academic.volatility.idiovolaht` **Idio Vol AHT** — aka IdioVolAHT · requires-data · academic
+- `academic.volatility.idiovolcapm` **Idio Vol CAPM** — aka IdioVolCAPM · requires-data · experimental
+- `academic.volatility.idiovolqf` **Idio Vol QF** — aka IdioVolQF · requires-data · experimental
+- `academic.volatility.idiovol3f` **Idio Vol3 F** — aka IdioVol3F · requires-data · academic
+- `academic.liquidity.illiquidity` **Illiquidity** — aka Illiquidity · requires-data · academic
+- `academic.external-financing.indipo` **Ind IPO** — aka IndIPO · requires-data · academic
+- `academic.momentum.indmom` **Ind Mom** — aka IndMom · requires-data · academic
+- `academic.lead-lag.indretbig` **Ind Ret Big** — aka IndRetBig · requires-data · academic
+- `academic.momentum.intmom` **Int Mom** — aka IntMom · requires-data · academic
+- `academic.long-term-reversal.intanbm` **Intan BM** — aka IntanBM · requires-data · academic
+- `academic.long-term-reversal.intancfp` **Intan CFP** — aka IntanCFP · requires-data · academic
+- `academic.long-term-reversal.intanep` **Intan EP** — aka IntanEP · requires-data · academic
+- `academic.long-term-reversal.intansp` **Intan SP** — aka IntanSP · requires-data · academic
+- `academic.valuation.intrinsicvalue` **Intrinsic Value** — aka IntrinsicValue · requires-data · experimental
+- `academic.profitability.invgrowth` **Inv Growth** — aka InvGrowth · requires-data · academic
+- `academic.investment.investppeinv` **Invest PPEInv** — aka InvestPPEInv · requires-data · academic
+- `academic.investment.investment` **Investment** — aka Investment · requires-data · academic
+- `academic.ownership.io-shortinterest` **IO  Short Interest** — aka IO_ShortInterest · requires-data · academic
+- `academic.lead-lag.iomom-cust` **iomom cust** — aka iomom_cust · requires-data · academic
+- `academic.lead-lag.iomom-supp` **iomom supp** — aka iomom_supp · requires-data · academic
+- `academic.composite-accounting.kz` **KZ** — aka KZ · requires-data · experimental
+- `academic.composite-accounting.kz-q` **KZ q** — aka KZ_q · requires-data · experimental
+- `academic.profitability-alt.laborforceefficiency` **Laborforce Efficiency** — aka LaborforceEfficiency · requires-data · experimental
+- `academic.leverage.leverage` **Leverage** — aka Leverage · requires-data · academic
+- `academic.leverage.leverage-q` **Leverage q** — aka Leverage_q · requires-data · experimental
+- `academic.long-term-reversal.lrreversal` **LRreversal** — aka LRreversal · requires-data · academic
+- `academic.volatility.maxret` **Max Ret** — aka MaxRet · requires-data · academic
+- `academic.sales-growth.meanrankrevgrowth` **Mean Rank Rev Growth** — aka MeanRankRevGrowth · requires-data · academic
+- `academic.other.momoffseason` **Mom Off Season** — aka MomOffSeason · requires-data · academic
+- `academic.other.momoffseason06yrplus` **Mom Off Season06 Yr Plus** — aka MomOffSeason06YrPlus · requires-data · academic
+- `academic.other.momoffseason11yrplus` **Mom Off Season11 Yr Plus** — aka MomOffSeason11YrPlus · requires-data · academic
+- `academic.other.momoffseason16yrplus` **Mom Off Season16 Yr Plus** — aka MomOffSeason16YrPlus · requires-data · academic
+- `academic.momentum.momrev` **Mom Rev** — aka MomRev · requires-data · academic
+- `academic.other.momseason` **Mom Season** — aka MomSeason · requires-data · academic
+- `academic.other.momseasonshort` **Mom Season Short** — aka MomSeasonShort · requires-data · academic
+- `academic.other.momseason06yrplus` **Mom Season06 Yr Plus** — aka MomSeason06YrPlus · requires-data · academic
+- `academic.other.momseason11yrplus` **Mom Season11 Yr Plus** — aka MomSeason11YrPlus · requires-data · academic
+- `academic.other.momseason16yrplus` **Mom Season16 Yr Plus** — aka MomSeason16YrPlus · requires-data · academic
+- `academic.momentum.momvol` **Mom Vol** — aka MomVol · requires-data · academic
+- `academic.momentum.mom12m` **Mom12m** — aka Mom12m · requires-data · academic
+- `academic.other.mom12moffseason` **Mom12m Off Season** — aka Mom12mOffSeason · requires-data · academic
+- `academic.momentum.mom6m` **Mom6m** — aka Mom6m · requires-data · academic
+- `academic.momentum.mom6mjunk` **Mom6m Junk** — aka Mom6mJunk · requires-data · academic
+- `academic.long-term-reversal.mrreversal` **MRreversal** — aka MRreversal · requires-data · academic
+- `academic.composite-accounting.ms` **MS** — aka MS · requires-data · academic
+- `academic.info-proxy.nanalyst` **nanalyst** — aka nanalyst · requires-data · experimental
+- `academic.external-financing.netdebtfinance` **Net Debt Finance** — aka NetDebtFinance · requires-data · academic
+- `academic.leverage.netdebtprice` **Net Debt Price** — aka NetDebtPrice · requires-data · academic
+- `academic.leverage.netdebtprice-q` **Net Debt Price q** — aka NetDebtPrice_q · requires-data · experimental
+- `academic.external-financing.netequityfinance` **Net Equity Finance** — aka NetEquityFinance · requires-data · academic
+- `academic.valuation.netpayoutyield` **Net Payout Yield** — aka NetPayoutYield · requires-data · academic
+- `academic.valuation.netpayoutyield-q` **Net Payout Yield q** — aka NetPayoutYield_q · requires-data · experimental
+- `academic.asset-composition.noa` **NOA** — aka NOA · requires-data · academic
+- `academic.earnings-growth.numearnincrease` **Num Earn Increase** — aka NumEarnIncrease · requires-data · academic
+- `academic.profitability.operprof` **Oper Prof** — aka OperProf · requires-data · academic
+- `academic.profitability.operproflag` **Oper Prof Lag** — aka OperProfLag · requires-data · experimental
+- `academic.profitability.operproflag-q` **Oper Prof Lag q** — aka OperProfLag_q · requires-data · experimental
+- `academic.profitability.operprofrd` **Oper Prof RD** — aka OperProfRD · requires-data · academic
+- `academic.profitability.operprofrdlagat` **Oper Prof RDLag AT** — aka OperProfRDLagAT · requires-data · experimental
+- `academic.profitability.operprofrdlagat-q` **Oper Prof RDLag AT q** — aka OperProfRDLagAT_q · requires-data · experimental
+- `academic.other.opleverage` **OPLeverage** — aka OPLeverage · requires-data · academic
+- `academic.other.opleverage-q` **OPLeverage q** — aka OPLeverage_q · requires-data · experimental
+- `academic.volume.optionvolume1` **Option Volume1** — aka OptionVolume1 · requires-data · academic
+- `academic.volume.optionvolume2` **Option Volume2** — aka OptionVolume2 · requires-data · academic
+- `academic.sales-growth.orderbacklog` **Order Backlog** — aka OrderBacklog · requires-data · academic
+- `academic.accruals.orderbacklogchg` **Order Backlog Chg** — aka OrderBacklogChg · requires-data · academic
+- `academic.r-d.orgcap` **Org Cap** — aka OrgCap · requires-data · academic
+- `academic.r-d.orgcapnoadj` **Org Cap No Adj** — aka OrgCapNoAdj · requires-data · experimental
+- `academic.default-risk.oscore` **OScore** — aka OScore · requires-data · academic
+- `academic.default-risk.oscore-q` **OScore q** — aka OScore_q · requires-data · experimental
+- `academic.profitability-alt.patentsrd` **Patents RD** — aka PatentsRD · requires-data · academic
+- `academic.valuation.payoutyield` **Payout Yield** — aka PayoutYield · requires-data · academic
+- `academic.valuation.payoutyield-q` **Payout Yield q** — aka PayoutYield_q · requires-data · experimental
+- `academic.investment-alt.pchcurrat` **pchcurrat** — aka pchcurrat · requires-data · experimental
+- `academic.investment-alt.pchdepr` **pchdepr** — aka pchdepr · requires-data · experimental
+- `academic.profitability-alt.pchgm-pchsale` **pchgm pchsale** — aka pchgm_pchsale · requires-data · experimental
+- `academic.investment-alt.pchquick` **pchquick** — aka pchquick · requires-data · experimental
+- `academic.profitability-alt.pchsaleinv` **pchsaleinv** — aka pchsaleinv · requires-data · experimental
+- `academic.accruals.pctacc` **Pct Acc** — aka PctAcc · requires-data · academic
+- `academic.accruals.pcttotacc` **Pct Tot Acc** — aka PctTotAcc · requires-data · academic
+- `academic.profitability.pm` **PM** — aka PM · requires-data · experimental
+- `academic.profitability.pm-q` **PM q** — aka PM_q · requires-data · experimental
+- `academic.earnings-forecast.predictedfe` **Predicted FE** — aka PredictedFE · requires-data · academic
+- `academic.other.price` **Price** — aka Price · requires-data · academic
+- `academic.lead-lag.pricedelayrsq` **Price Delay Rsq** — aka PriceDelayRsq · requires-data · academic
+- `academic.lead-lag.pricedelayslope` **Price Delay Slope** — aka PriceDelaySlope · requires-data · academic
+- `academic.lead-lag.pricedelaytstat` **Price Delay Tstat** — aka PriceDelayTstat · requires-data · academic
+- `academic.liquidity.probinformedtrading` **Prob Informed Trading** — aka ProbInformedTrading · requires-data · academic
+- `academic.composite-accounting.ps` **PS** — aka PS · requires-data · academic
+- `academic.composite-accounting.ps-q` **PS q** — aka PS_q · requires-data · experimental
+- `academic.asset-composition.quick` **quick** — aka quick · requires-data · experimental
+- `academic.r-d.rd` **RD** — aka RD · requires-data · academic
+- `academic.r-d.rd-q` **RD q** — aka RD_q · requires-data · experimental
+- `academic.investment-alt.rd-sale` **rd sale** — aka rd_sale · requires-data · experimental
+- `academic.r-d.rd-sale-q` **rd sale q** — aka rd_sale_q · requires-data · experimental
+- `academic.other.rdability` **RDAbility** — aka RDAbility · requires-data · academic
+- `academic.asset-composition.rdcap` **RDcap** — aka RDcap · requires-data · academic
+- `academic.r-d.rdipo` **RDIPO** — aka RDIPO · requires-data · academic
+- `academic.composite-accounting.rds` **RDS** — aka RDS · requires-data · academic
+- `academic.asset-composition.realestate` **realestate** — aka realestate · requires-data · academic
+- `academic.volatility.realizedvol` **Realized Vol** — aka RealizedVol · requires-data · academic
+- `academic.recommendation.recomm-shortinterest` **Recomm  Short Interest** — aka Recomm_ShortInterest · requires-data · academic
+- `academic.momentum.residualmomentum` **Residual Momentum** — aka ResidualMomentum · requires-data · academic
+- `academic.momentum.residualmomentum6m` **Residual Momentum6m** — aka ResidualMomentum6m · requires-data · experimental
+- `academic.lead-lag.retconglomerate` **ret Conglomerate** — aka retConglomerate · requires-data · academic
+- `academic.composite-accounting.retnoa` **Ret NOA** — aka RetNOA · requires-data · experimental
+- `academic.composite-accounting.retnoa-q` **Ret NOA q** — aka RetNOA_q · requires-data · experimental
+- `academic.risk.returnskew` **Return Skew** — aka ReturnSkew · requires-data · academic
+- `academic.risk.returnskewcapm` **Return Skew CAPM** — aka ReturnSkewCAPM · requires-data · experimental
+- `academic.risk.returnskewqf` **Return Skew QF** — aka ReturnSkewQF · requires-data · experimental
+- `academic.risk.returnskew3f` **Return Skew3 F** — aka ReturnSkew3F · requires-data · academic
+- `academic.earnings-forecast.rev6` **REV6** — aka REV6 · requires-data · academic
+- `academic.sales-growth.revenuesurprise` **Revenue Surprise** — aka RevenueSurprise · requires-data · academic
+- `academic.short-sale-constraints.rio-disp` **RIO  Disp** — aka RIO_Disp · requires-data · academic
+- `academic.short-sale-constraints.rio-mb` **RIO  MB** — aka RIO_MB · requires-data · academic
+- `academic.short-sale-constraints.rio-turnover` **RIO  Turnover** — aka RIO_Turnover · requires-data · academic
+- `academic.short-sale-constraints.rio-volatility` **RIO  Volatility** — aka RIO_Volatility · requires-data · academic
+- `academic.optionrisk.rivolspread` **RIVol Spread** — aka RIVolSpread · requires-data · academic
+- `academic.profitability.roe` **Ro E** — aka RoE · requires-data · academic
+- `academic.profitability.roaq` **roaq** — aka roaq · requires-data · academic
+- `academic.cash-flow-risk.roavol` **roavol** — aka roavol · requires-data · experimental
+- `academic.profitability.roic` **roic** — aka roic · requires-data · experimental
+- `academic.profitability-alt.salecash` **salecash** — aka salecash · requires-data · experimental
+- `academic.profitability-alt.saleinv` **saleinv** — aka saleinv · requires-data · experimental
+- `academic.profitability-alt.salerec` **salerec** — aka salerec · requires-data · experimental
+- `academic.external-financing.secured` **secured** — aka secured · requires-data · experimental
+- `academic.external-financing.securedind` **securedind** — aka securedind · requires-data · experimental
+- `academic.valuation.sfe` **sfe** — aka sfe · requires-data · academic
+- `academic.sales-growth.sgr` **sgr** — aka sgr · requires-data · experimental
+- `academic.sales-growth.sgr-q` **sgr q** — aka sgr_q · requires-data · experimental
+- `academic.external-financing.shareiss1y` **Share Iss1 Y** — aka ShareIss1Y · requires-data · academic
+- `academic.external-financing.shareiss5y` **Share Iss5 Y** — aka ShareIss5Y · requires-data · academic
+- `academic.payout-indicator.sharerepurchase` **Share Repurchase** — aka ShareRepurchase · requires-data · academic
+- `academic.volume.sharevol` **Share Vol** — aka ShareVol · requires-data · academic
+- `academic.short-sale-constraints.shortinterest` **Short Interest** — aka ShortInterest · requires-data · academic
+- `academic.other.sinalgo` **sin Algo** — aka sinAlgo · requires-data · academic
+- `academic.size.size` **Size** — aka Size · requires-data · academic
+- `academic.optionrisk.skew1` **skew1** — aka skew1 · requires-data · academic
+- `academic.optionrisk.smileslope` **Smile Slope** — aka SmileSlope · requires-data · academic
+- `academic.valuation.sp` **SP** — aka SP · requires-data · academic
+- `academic.valuation.sp-q` **SP q** — aka SP_q · requires-data · experimental
+- `academic.other.spinoff` **Spinoff** — aka Spinoff · requires-data · academic
+- `academic.liquidity.std-turn` **std turn** — aka std_turn · requires-data · academic
+- `academic.short-term-reversal.streversal` **STreversal** — aka STreversal · requires-data · academic
+- `academic.r-d.surpriserd` **Surprise RD** — aka SurpriseRD · requires-data · academic
+- `academic.asset-composition.tang` **tang** — aka tang · requires-data · academic
+- `academic.asset-composition.tang-q` **tang q** — aka tang_q · requires-data · experimental
+- `academic.other.tax` **Tax** — aka Tax · requires-data · academic
+- `academic.other.tax-q` **Tax q** — aka Tax_q · requires-data · experimental
+- `academic.investment-alt.totalaccruals` **Total Accruals** — aka TotalAccruals · requires-data · academic
+- `academic.momentum.trendfactor` **Trend Factor** — aka TrendFactor · requires-data · academic
+- `academic.earnings-forecast.uprecomm` **Up Recomm** — aka UpRecomm · requires-data · academic
+- `academic.cash-flow-risk.varcf` **Var CF** — aka VarCF · requires-data · academic
+- `academic.volume.volmkt` **Vol Mkt** — aka VolMkt · requires-data · academic
+- `academic.liquidity.volsd` **Vol SD** — aka VolSD · requires-data · academic
+- `academic.volume.volumetrend` **Volume Trend** — aka VolumeTrend · requires-data · academic
+- `academic.external-financing.ww` **WW** — aka WW · requires-data · experimental
+- `academic.external-financing.ww-q` **WW  Q** — aka WW_Q · requires-data · experimental
+- `academic.external-financing.xfin` **XFIN** — aka XFIN · requires-data · academic
+- `academic.liquidity.zerotrade1m` **zerotrade1 M** — aka zerotrade1M · requires-data · academic
+- `academic.liquidity.zerotrade12m` **zerotrade12 M** — aka zerotrade12M · requires-data · academic
+- `academic.liquidity.zerotrade6m` **zerotrade6 M** — aka zerotrade6M · requires-data · academic
+- `academic.default-risk.zscore` **ZScore** — aka ZScore · requires-data · experimental
+- `academic.default-risk.zscore-q` **ZScore q** — aka ZScore_q · requires-data · experimental
+
+### Arbitrage (8)
+
+- `arbitrage.relative-value.adr-arbitrage` **ADR arbitrage** · unsupported · institutional
+- `arbitrage.relative-value.capital-structure` **Capital-structure arbitrage** · unsupported · institutional
+- `arbitrage.relative-value.closed-end-fund` **Closed-end fund arbitrage** · unsupported · institutional
+- `arbitrage.relative-value.convertible-arbitrage` **Convertible arbitrage** · unsupported · institutional
+- `arbitrage.relative-value.cross-exchange` **Cross-exchange arbitrage** · unsupported · institutional
+- `arbitrage.relative-value.dual-listed` **Dual-listed arbitrage** · unsupported · institutional
+- `arbitrage.relative-value.etf-arbitrage` **ETF creation/redemption arbitrage** · unsupported · institutional
+- `arbitrage.relative-value.index-arbitrage` **Index arbitrage** · unsupported · institutional
+
+### Breakout (50)
+
+- `breakout.donchian.10-5-long` **Donchian 10/5 breakout** — aka Price channel breakout · executable · community
+- `breakout.donchian.10-5-ls` **Donchian 10/5 breakout (long-short)** — aka Price channel breakout · executable · community
+- `breakout.donchian.100-50-long` **Donchian 100/50 breakout** — aka Price channel breakout · executable · community
+- `breakout.donchian.100-50-ls` **Donchian 100/50 breakout (long-short)** — aka Price channel breakout · executable · community
+- `breakout.donchian.20-10-long` **Donchian 20/10 breakout** — aka Turtle system 1, Price channel breakout · executable · historical
+- `breakout.donchian.20-10-ls` **Donchian 20/10 breakout (long-short)** — aka Turtle system 1, Price channel breakout · executable · historical
+- `breakout.donchian.40-20-long` **Donchian 40/20 breakout** — aka Price channel breakout · executable · community
+- `breakout.donchian.40-20-ls` **Donchian 40/20 breakout (long-short)** — aka Price channel breakout · executable · community
+- `breakout.donchian.55-20-long` **Donchian 55/20 breakout** — aka Turtle system 2, Price channel breakout · executable · historical
+- `breakout.donchian.55-20-ls` **Donchian 55/20 breakout (long-short)** — aka Turtle system 2, Price channel breakout · executable · historical
+- `breakout.inside-bar.hold10-long` **Inside bar breakout 10-bar hold** · executable · community
+- `breakout.inside-bar.hold10-ls` **Inside bar breakout 10-bar hold (long-short)** · executable · community
+- `breakout.inside-bar.hold3-long` **Inside bar breakout 3-bar hold** · executable · community
+- `breakout.inside-bar.hold3-ls` **Inside bar breakout 3-bar hold (long-short)** · executable · community
+- `breakout.inside-bar.hold5-long` **Inside bar breakout 5-bar hold** · executable · community
+- `breakout.inside-bar.hold5-ls` **Inside bar breakout 5-bar hold (long-short)** · executable · community
+- `breakout.price-channel.10-long` **N-bar high breakout 10-bar** · executable · community
+- `breakout.price-channel.10-ls` **N-bar high breakout 10-bar (long-short)** · executable · community
+- `breakout.price-channel.100-long` **N-bar high breakout 100-bar** · executable · community
+- `breakout.price-channel.100-ls` **N-bar high breakout 100-bar (long-short)** · executable · community
+- `breakout.price-channel.20-long` **N-bar high breakout 20-bar** · executable · community
+- `breakout.price-channel.20-ls` **N-bar high breakout 20-bar (long-short)** · executable · community
+- `breakout.price-channel.252-long` **N-bar high breakout 252-bar** · executable · community
+- `breakout.price-channel.252-ls` **N-bar high breakout 252-bar (long-short)** · executable · community
+- `breakout.price-channel.5-long` **N-bar high breakout 5-bar** · executable · community
+- `breakout.price-channel.5-ls` **N-bar high breakout 5-bar (long-short)** · executable · community
+- `breakout.price-channel.50-long` **N-bar high breakout 50-bar** · executable · community
+- `breakout.price-channel.50-ls` **N-bar high breakout 50-bar (long-short)** · executable · community
+- `breakout.narrow-range.nr10-long` **Narrow range breakout 10 bars** · executable · community
+- `breakout.narrow-range.nr10-ls` **Narrow range breakout 10 bars (long-short)** · executable · community
+- `breakout.narrow-range.nr4-long` **Narrow range breakout 4 bars** · executable · community
+- `breakout.narrow-range.nr4-ls` **Narrow range breakout 4 bars (long-short)** · executable · community
+- `breakout.narrow-range.nr7-long` **Narrow range breakout 7 bars** · executable · community
+- `breakout.narrow-range.nr7-ls` **Narrow range breakout 7 bars (long-short)** · executable · community
+- `breakout.prior-period-high.100-long` **New high breakout 100-bar** · executable · community
+- `breakout.prior-period-high.100-ls` **New high breakout 100-bar (long-short)** · executable · community
+- `breakout.prior-period-high.20-long` **New high breakout 20-bar** · executable · community
+- `breakout.prior-period-high.20-ls` **New high breakout 20-bar (long-short)** · executable · community
+- `breakout.prior-period-high.252-long` **New high breakout 252-bar** · executable · community
+- `breakout.prior-period-high.252-ls` **New high breakout 252-bar (long-short)** · executable · community
+- `breakout.prior-period-high.50-long` **New high breakout 50-bar** · executable · community
+- `breakout.prior-period-high.50-ls` **New high breakout 50-bar (long-short)** · executable · community
+- `breakout.squeeze.20-1p5-long` **Squeeze breakout 20-bar, 1.5x** · executable · community
+- `breakout.squeeze.20-1p5-ls` **Squeeze breakout 20-bar, 1.5x (long-short)** · executable · community
+- `breakout.squeeze.20-2p0-long` **Squeeze breakout 20-bar, 2.0x** · executable · community
+- `breakout.squeeze.20-2p0-ls` **Squeeze breakout 20-bar, 2.0x (long-short)** · executable · community
+- `breakout.squeeze.50-1p5-long` **Squeeze breakout 50-bar, 1.5x** · executable · community
+- `breakout.squeeze.50-1p5-ls` **Squeeze breakout 50-bar, 1.5x (long-short)** · executable · community
+- `breakout.squeeze.50-2p0-long` **Squeeze breakout 50-bar, 2.0x** · executable · community
+- `breakout.squeeze.50-2p0-ls` **Squeeze breakout 50-bar, 2.0x (long-short)** · executable · community
+
+### Calendar and seasonal (19)
+
+- `seasonal.day-of-week.friday-long` **Day-of-week effect Friday** · executable · academic
+- `seasonal.day-of-week.monday-long` **Day-of-week effect Monday** · executable · academic
+- `seasonal.day-of-week.thursday-long` **Day-of-week effect Thursday** · executable · academic
+- `seasonal.day-of-week.tuesday-long` **Day-of-week effect Tuesday** · executable · academic
+- `seasonal.day-of-week.wednesday-long` **Day-of-week effect Wednesday** · executable · academic
+- `seasonal.month-window.santa-long` **Seasonal month window December only** · executable · academic
+- `seasonal.month-window.january-long` **Seasonal month window January only** · executable · academic
+- `seasonal.month-window.summer-long` **Seasonal month window May-Oct** · executable · academic
+- `seasonal.month-window.halloween-long` **Seasonal month window Nov-Apr (Halloween)** · executable · academic
+- `seasonal.month-window.q4-long` **Seasonal month window Oct-Dec** · executable · academic
+- `seasonal.turn-of-month.1-1-long` **Turn-of-the-month effect 1 before / 1 after** · executable · academic
+- `seasonal.turn-of-month.1-3-long` **Turn-of-the-month effect 1 before / 3 after** · executable · academic
+- `seasonal.turn-of-month.1-5-long` **Turn-of-the-month effect 1 before / 5 after** · executable · academic
+- `seasonal.turn-of-month.3-1-long` **Turn-of-the-month effect 3 before / 1 after** · executable · academic
+- `seasonal.turn-of-month.3-3-long` **Turn-of-the-month effect 3 before / 3 after** · executable · academic
+- `seasonal.turn-of-month.3-5-long` **Turn-of-the-month effect 3 before / 5 after** · executable · academic
+- `seasonal.turn-of-month.5-1-long` **Turn-of-the-month effect 5 before / 1 after** · executable · academic
+- `seasonal.turn-of-month.5-3-long` **Turn-of-the-month effect 5 before / 3 after** · executable · academic
+- `seasonal.turn-of-month.5-5-long` **Turn-of-the-month effect 5 before / 5 after** · executable · academic
+
+### Event driven (5)
+
+- `event.dividend.dividend-capture` **Dividend capture** · requires-data · academic
+- `event.index.index-addition` **Index addition** · requires-data · academic
+- `event.insider.insider-buying` **Insider buying** · requires-data · academic
+- `event.corporate-action.merger-arbitrage` **Merger arbitrage** · requires-data · academic
+- `event.earnings.earnings-drift` **Post-earnings-announcement drift** · requires-data · academic
+
+### Fundamental (14)
+
+- `fundamental.screen.accrual-anomaly` **Accrual anomaly** · requires-data · academic
+- `fundamental.screen.altman-z` **Altman Z-score** · requires-data · academic
+- `fundamental.screen.betting-against-beta` **Betting against beta** · requires-data · academic
+- `fundamental.screen.can-slim` **CAN SLIM** · requires-data · academic
+- `fundamental.screen.deep-value` **Deep value** · requires-data · academic
+- `fundamental.screen.dividend-growth` **Dividend growth** · requires-data · academic
+- `fundamental.screen.dogs-of-the-dow` **Dogs of the Dow** · requires-data · academic
+- `fundamental.screen.gross-profitability` **Gross profitability** · requires-data · academic
+- `fundamental.screen.garp` **Growth at a reasonable price** · requires-data · academic
+- `fundamental.screen.magic-formula` **Magic Formula** · requires-data · academic
+- `fundamental.screen.net-net` **Net-net working capital** · requires-data · academic
+- `fundamental.screen.piotroski-f` **Piotroski F-score** · requires-data · academic
+- `fundamental.screen.quality-minus-junk` **Quality minus junk** · requires-data · academic
+- `fundamental.screen.shareholder-yield` **Shareholder yield** · requires-data · academic
+
+### Gap (16)
+
+- `breakout.gap.go-1p0-long` **Overnight gap reaction 1.0% (continuation)** · executable · community
+- `breakout.gap.go-1p0-ls` **Overnight gap reaction 1.0% (continuation) (long-short)** · executable · community
+- `breakout.gap.fade-1p0-long` **Overnight gap reaction 1.0% (fade)** · executable · community
+- `breakout.gap.fade-1p0-ls` **Overnight gap reaction 1.0% (fade) (long-short)** · executable · community
+- `breakout.gap.go-2p0-long` **Overnight gap reaction 2.0% (continuation)** · executable · community
+- `breakout.gap.go-2p0-ls` **Overnight gap reaction 2.0% (continuation) (long-short)** · executable · community
+- `breakout.gap.fade-2p0-long` **Overnight gap reaction 2.0% (fade)** · executable · community
+- `breakout.gap.fade-2p0-ls` **Overnight gap reaction 2.0% (fade) (long-short)** · executable · community
+- `breakout.gap.go-3p0-long` **Overnight gap reaction 3.0% (continuation)** · executable · community
+- `breakout.gap.go-3p0-ls` **Overnight gap reaction 3.0% (continuation) (long-short)** · executable · community
+- `breakout.gap.fade-3p0-long` **Overnight gap reaction 3.0% (fade)** · executable · community
+- `breakout.gap.fade-3p0-ls` **Overnight gap reaction 3.0% (fade) (long-short)** · executable · community
+- `breakout.gap.go-5p0-long` **Overnight gap reaction 5.0% (continuation)** · executable · community
+- `breakout.gap.go-5p0-ls` **Overnight gap reaction 5.0% (continuation) (long-short)** · executable · community
+- `breakout.gap.fade-5p0-long` **Overnight gap reaction 5.0% (fade)** · executable · community
+- `breakout.gap.fade-5p0-ls` **Overnight gap reaction 5.0% (fade) (long-short)** · executable · community
+
+### Institutional execution (11)
+
+- `execution.algorithm.arrival-price` **Arrival price** · unsupported · institutional
+- `execution.algorithm.close-auction` **Closing auction** · unsupported · institutional
+- `execution.algorithm.dark-aggregation` **Dark aggregation** · unsupported · institutional
+- `execution.algorithm.iceberg` **Iceberg order** · unsupported · institutional
+- `execution.algorithm.implementation-shortfall` **Implementation shortfall** · unsupported · institutional
+- `execution.algorithm.liquidity-seeking` **Liquidity seeking** · unsupported · institutional
+- `execution.algorithm.open-auction` **Opening auction** · unsupported · institutional
+- `execution.algorithm.pov` **Percentage of volume** · unsupported · institutional
+- `execution.algorithm.smart-order-routing` **Smart order routing** · unsupported · institutional
+- `execution.algorithm.twap` **TWAP** · unsupported · institutional
+- `execution.algorithm.vwap` **VWAP** · unsupported · institutional
+
+### Long-term investment (1)
+
+- `benchmark.buy-and-hold.base` **Buy and hold (benchmark)** — aka Passive, Long only index · executable · academic
+
+### Machine learning and AI (26)
+
+- `machine-learning.model.anomaly-detection` **Anomaly detection** · requires-data · experimental
+- `machine-learning.model.autoencoder` **Autoencoder factors** · requires-data · experimental
+- `machine-learning.model.bayesian` **Bayesian shrinkage model** · requires-data · experimental
+- `machine-learning.model.clustering` **Clustering regimes** · requires-data · experimental
+- `machine-learning.model.contextual-bandit` **Contextual bandit** · requires-data · experimental
+- `machine-learning.model.decision-tree` **Decision tree** · requires-data · experimental
+- `machine-learning.model.mlp` **Feed-forward neural network** · requires-data · experimental
+- `machine-learning.model.gradient-boosting` **Gradient boosting** · requires-data · experimental
+- `machine-learning.model.gnn` **Graph neural network** · requires-data · experimental
+- `machine-learning.model.gru` **GRU sequence model** · requires-data · experimental
+- `machine-learning.model.hmm` **Hidden Markov regime model** · requires-data · experimental
+- `machine-learning.model.knn` **k-nearest neighbours** · requires-data · experimental
+- `machine-learning.model.lightgbm` **LightGBM model** · requires-data · experimental
+- `machine-learning.model.linear-regression` **Linear regression forecast** · requires-data · experimental
+- `machine-learning.model.logistic-regression` **Logistic direction classifier** · requires-data · experimental
+- `machine-learning.model.lstm` **LSTM sequence model** · requires-data · experimental
+- `machine-learning.model.meta-labeling` **Meta-labelling** · requires-data · experimental
+- `machine-learning.model.ensemble` **Model ensemble** · requires-data · experimental
+- `machine-learning.model.nlp-event` **NLP event extraction** · requires-data · experimental
+- `machine-learning.model.random-forest` **Random forest** · requires-data · experimental
+- `machine-learning.model.reinforcement-learning` **Reinforcement learning agent** · requires-data · experimental
+- `machine-learning.model.svm` **Support vector machine** · requires-data · experimental
+- `machine-learning.model.tcn` **Temporal convolutional network** · requires-data · experimental
+- `machine-learning.model.transformer` **Transformer sequence model** · requires-data · experimental
+- `machine-learning.model.triple-barrier` **Triple-barrier labelling** · requires-data · experimental
+- `machine-learning.model.xgboost` **XGBoost model** · requires-data · experimental
+
+### Mean reversion (152)
+
+- `reversion.bollinger.10-1p5-long` **Bollinger 10, 1.5σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.10-1p5-ls` **Bollinger 10, 1.5σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.10-2p0-long` **Bollinger 10, 2.0σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.10-2p0-ls` **Bollinger 10, 2.0σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.10-2p5-long` **Bollinger 10, 2.5σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.10-2p5-ls` **Bollinger 10, 2.5σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.10-3p0-long` **Bollinger 10, 3.0σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.10-3p0-ls` **Bollinger 10, 3.0σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.20-1p5-long` **Bollinger 20, 1.5σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.20-1p5-ls` **Bollinger 20, 1.5σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.20-2p0-long` **Bollinger 20, 2.0σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.20-2p0-ls` **Bollinger 20, 2.0σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.20-2p5-long` **Bollinger 20, 2.5σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.20-2p5-ls` **Bollinger 20, 2.5σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.20-3p0-long` **Bollinger 20, 3.0σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.20-3p0-ls` **Bollinger 20, 3.0σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.50-1p5-long` **Bollinger 50, 1.5σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.50-1p5-ls` **Bollinger 50, 1.5σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.50-2p0-long` **Bollinger 50, 2.0σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.50-2p0-ls` **Bollinger 50, 2.0σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.50-2p5-long` **Bollinger 50, 2.5σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.50-2p5-ls` **Bollinger 50, 2.5σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.50-3p0-long` **Bollinger 50, 3.0σ reversion** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.bollinger.50-3p0-ls` **Bollinger 50, 3.0σ reversion (long-short)** — aka Bollinger bounce, Band fade · executable · community
+- `reversion.cci.cci-14-100-100-long` **CCI(14) -100/100 reversion** — aka CCI oversold/overbought bounce · executable · community
+- `reversion.cci.cci-14-100-100-ls` **CCI(14) -100/100 reversion (long-short)** — aka CCI oversold/overbought bounce · executable · community
+- `reversion.cci.cci-20-100-100-long` **CCI(20) -100/100 reversion** — aka CCI oversold/overbought bounce · executable · community
+- `reversion.cci.cci-20-100-100-ls` **CCI(20) -100/100 reversion (long-short)** — aka CCI oversold/overbought bounce · executable · community
+- `reversion.cci.cci-20-200-200-long` **CCI(20) -200/200 reversion** — aka CCI oversold/overbought bounce · executable · community
+- `reversion.cci.cci-20-200-200-ls` **CCI(20) -200/200 reversion (long-short)** — aka CCI oversold/overbought bounce · executable · community
+- `reversion.cci.cci-50-100-100-long` **CCI(50) -100/100 reversion** — aka CCI oversold/overbought bounce · executable · community
+- `reversion.cci.cci-50-100-100-ls` **CCI(50) -100/100 reversion (long-short)** — aka CCI oversold/overbought bounce · executable · community
+- `reversion.consecutive-bars.2-long` **Consecutive down bars 2** · executable · community
+- `reversion.consecutive-bars.2-ls` **Consecutive down bars 2 (long-short)** · executable · community
+- `reversion.consecutive-bars.3-long` **Consecutive down bars 3** · executable · community
+- `reversion.consecutive-bars.3-ls` **Consecutive down bars 3 (long-short)** · executable · community
+- `reversion.consecutive-bars.4-long` **Consecutive down bars 4** · executable · community
+- `reversion.consecutive-bars.4-ls` **Consecutive down bars 4 (long-short)** · executable · community
+- `reversion.consecutive-bars.5-long` **Consecutive down bars 5** · executable · community
+- `reversion.consecutive-bars.5-ls` **Consecutive down bars 5 (long-short)** · executable · community
+- `reversion.mfi.mfi-14-10-90-long` **Money Flow Index(14) 10/90 reversion** — aka Money Flow Index oversold/overbought bounce · executable · community
+- `reversion.mfi.mfi-14-10-90-ls` **Money Flow Index(14) 10/90 reversion (long-short)** — aka Money Flow Index oversold/overbought bounce · executable · community
+- `reversion.mfi.mfi-14-20-80-long` **Money Flow Index(14) 20/80 reversion** — aka Money Flow Index oversold/overbought bounce · executable · community
+- `reversion.mfi.mfi-14-20-80-ls` **Money Flow Index(14) 20/80 reversion (long-short)** — aka Money Flow Index oversold/overbought bounce · executable · community
+- `reversion.mfi.mfi-7-20-80-long` **Money Flow Index(7) 20/80 reversion** — aka Money Flow Index oversold/overbought bounce · executable · community
+- `reversion.mfi.mfi-7-20-80-ls` **Money Flow Index(7) 20/80 reversion (long-short)** — aka Money Flow Index oversold/overbought bounce · executable · community
+- `reversion.zscore.10-1p5-long` **Rolling z-score reversion 10-bar, 1.5σ** · executable · community
+- `reversion.zscore.10-1p5-ls` **Rolling z-score reversion 10-bar, 1.5σ (long-short)** · executable · community
+- `reversion.zscore.10-2p0-long` **Rolling z-score reversion 10-bar, 2.0σ** · executable · community
+- `reversion.zscore.10-2p0-ls` **Rolling z-score reversion 10-bar, 2.0σ (long-short)** · executable · community
+- `reversion.zscore.10-2p5-long` **Rolling z-score reversion 10-bar, 2.5σ** · executable · community
+- `reversion.zscore.10-2p5-ls` **Rolling z-score reversion 10-bar, 2.5σ (long-short)** · executable · community
+- `reversion.zscore.10-3p0-long` **Rolling z-score reversion 10-bar, 3.0σ** · executable · community
+- `reversion.zscore.10-3p0-ls` **Rolling z-score reversion 10-bar, 3.0σ (long-short)** · executable · community
+- `reversion.zscore.20-1p5-long` **Rolling z-score reversion 20-bar, 1.5σ** · executable · community
+- `reversion.zscore.20-1p5-ls` **Rolling z-score reversion 20-bar, 1.5σ (long-short)** · executable · community
+- `reversion.zscore.20-2p0-long` **Rolling z-score reversion 20-bar, 2.0σ** · executable · community
+- `reversion.zscore.20-2p0-ls` **Rolling z-score reversion 20-bar, 2.0σ (long-short)** · executable · community
+- `reversion.zscore.20-2p5-long` **Rolling z-score reversion 20-bar, 2.5σ** · executable · community
+- `reversion.zscore.20-2p5-ls` **Rolling z-score reversion 20-bar, 2.5σ (long-short)** · executable · community
+- `reversion.zscore.20-3p0-long` **Rolling z-score reversion 20-bar, 3.0σ** · executable · community
+- `reversion.zscore.20-3p0-ls` **Rolling z-score reversion 20-bar, 3.0σ (long-short)** · executable · community
+- `reversion.zscore.50-1p5-long` **Rolling z-score reversion 50-bar, 1.5σ** · executable · community
+- `reversion.zscore.50-1p5-ls` **Rolling z-score reversion 50-bar, 1.5σ (long-short)** · executable · community
+- `reversion.zscore.50-2p0-long` **Rolling z-score reversion 50-bar, 2.0σ** · executable · community
+- `reversion.zscore.50-2p0-ls` **Rolling z-score reversion 50-bar, 2.0σ (long-short)** · executable · community
+- `reversion.zscore.50-2p5-long` **Rolling z-score reversion 50-bar, 2.5σ** · executable · community
+- `reversion.zscore.50-2p5-ls` **Rolling z-score reversion 50-bar, 2.5σ (long-short)** · executable · community
+- `reversion.zscore.50-3p0-long` **Rolling z-score reversion 50-bar, 3.0σ** · executable · community
+- `reversion.zscore.50-3p0-ls` **Rolling z-score reversion 50-bar, 3.0σ (long-short)** · executable · community
+- `reversion.rsi.rsi-14-20-80-long` **RSI(14) 20/80 reversion** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-14-20-80-ls` **RSI(14) 20/80 reversion (long-short)** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-14-30-70-long` **RSI(14) 30/70 reversion** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-14-30-70-ls` **RSI(14) 30/70 reversion (long-short)** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-2-10-90-long` **RSI(2) 10/90 reversion** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-2-10-90-ls` **RSI(2) 10/90 reversion (long-short)** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-2-5-95-long` **RSI(2) 5/95 reversion** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-2-5-95-ls` **RSI(2) 5/95 reversion (long-short)** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-21-35-65-long` **RSI(21) 35/65 reversion** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-21-35-65-ls` **RSI(21) 35/65 reversion (long-short)** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-3-15-85-long` **RSI(3) 15/85 reversion** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-3-15-85-ls` **RSI(3) 15/85 reversion (long-short)** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-7-25-75-long` **RSI(7) 25/75 reversion** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.rsi.rsi-7-25-75-ls` **RSI(7) 25/75 reversion (long-short)** — aka RSI oversold/overbought bounce · executable · community
+- `reversion.short-term-reversal.1-10-long` **Short-term reversal 1-bar, 10%** · executable · academic
+- `reversion.short-term-reversal.1-10-ls` **Short-term reversal 1-bar, 10% (long-short)** · executable · academic
+- `reversion.short-term-reversal.1-3-long` **Short-term reversal 1-bar, 3%** · executable · academic
+- `reversion.short-term-reversal.1-3-ls` **Short-term reversal 1-bar, 3% (long-short)** · executable · academic
+- `reversion.short-term-reversal.1-5-long` **Short-term reversal 1-bar, 5%** · executable · academic
+- `reversion.short-term-reversal.1-5-ls` **Short-term reversal 1-bar, 5% (long-short)** · executable · academic
+- `reversion.short-term-reversal.10-10-long` **Short-term reversal 10-bar, 10%** · executable · academic
+- `reversion.short-term-reversal.10-10-ls` **Short-term reversal 10-bar, 10% (long-short)** · executable · academic
+- `reversion.short-term-reversal.10-3-long` **Short-term reversal 10-bar, 3%** · executable · academic
+- `reversion.short-term-reversal.10-3-ls` **Short-term reversal 10-bar, 3% (long-short)** · executable · academic
+- `reversion.short-term-reversal.10-5-long` **Short-term reversal 10-bar, 5%** · executable · academic
+- `reversion.short-term-reversal.10-5-ls` **Short-term reversal 10-bar, 5% (long-short)** · executable · academic
+- `reversion.short-term-reversal.3-10-long` **Short-term reversal 3-bar, 10%** · executable · academic
+- `reversion.short-term-reversal.3-10-ls` **Short-term reversal 3-bar, 10% (long-short)** · executable · academic
+- `reversion.short-term-reversal.3-3-long` **Short-term reversal 3-bar, 3%** · executable · academic
+- `reversion.short-term-reversal.3-3-ls` **Short-term reversal 3-bar, 3% (long-short)** · executable · academic
+- `reversion.short-term-reversal.3-5-long` **Short-term reversal 3-bar, 5%** · executable · academic
+- `reversion.short-term-reversal.3-5-ls` **Short-term reversal 3-bar, 5% (long-short)** · executable · academic
+- `reversion.short-term-reversal.5-10-long` **Short-term reversal 5-bar, 10%** · executable · academic
+- `reversion.short-term-reversal.5-10-ls` **Short-term reversal 5-bar, 10% (long-short)** · executable · academic
+- `reversion.short-term-reversal.5-3-long` **Short-term reversal 5-bar, 3%** · executable · academic
+- `reversion.short-term-reversal.5-3-ls` **Short-term reversal 5-bar, 3% (long-short)** · executable · academic
+- `reversion.short-term-reversal.5-5-long` **Short-term reversal 5-bar, 5%** · executable · academic
+- `reversion.short-term-reversal.5-5-ls` **Short-term reversal 5-bar, 5% (long-short)** · executable · academic
+- `reversion.stochastic.stochastic-14-10-90-long` **Stochastic(14) 10/90 reversion** — aka Stochastic oversold/overbought bounce · executable · community
+- `reversion.stochastic.stochastic-14-10-90-ls` **Stochastic(14) 10/90 reversion (long-short)** — aka Stochastic oversold/overbought bounce · executable · community
+- `reversion.stochastic.stochastic-14-20-80-long` **Stochastic(14) 20/80 reversion** — aka Stochastic oversold/overbought bounce · executable · community
+- `reversion.stochastic.stochastic-14-20-80-ls` **Stochastic(14) 20/80 reversion (long-short)** — aka Stochastic oversold/overbought bounce · executable · community
+- `reversion.stochastic.stochastic-21-25-75-long` **Stochastic(21) 25/75 reversion** — aka Stochastic oversold/overbought bounce · executable · community
+- `reversion.stochastic.stochastic-21-25-75-ls` **Stochastic(21) 25/75 reversion (long-short)** — aka Stochastic oversold/overbought bounce · executable · community
+- `reversion.stochastic.stochastic-5-20-80-long` **Stochastic(5) 20/80 reversion** — aka Stochastic oversold/overbought bounce · executable · community
+- `reversion.stochastic.stochastic-5-20-80-ls` **Stochastic(5) 20/80 reversion (long-short)** — aka Stochastic oversold/overbought bounce · executable · community
+- `reversion.ma-distance.20-10-long` **Stretch from moving average 10.0% from MA(20)** · executable · community
+- `reversion.ma-distance.20-10-ls` **Stretch from moving average 10.0% from MA(20) (long-short)** · executable · community
+- `reversion.ma-distance.200-10-long` **Stretch from moving average 10.0% from MA(200)** · executable · community
+- `reversion.ma-distance.200-10-ls` **Stretch from moving average 10.0% from MA(200) (long-short)** · executable · community
+- `reversion.ma-distance.50-10-long` **Stretch from moving average 10.0% from MA(50)** · executable · community
+- `reversion.ma-distance.50-10-ls` **Stretch from moving average 10.0% from MA(50) (long-short)** · executable · community
+- `reversion.ma-distance.20-3-long` **Stretch from moving average 3.0% from MA(20)** · executable · community
+- `reversion.ma-distance.20-3-ls` **Stretch from moving average 3.0% from MA(20) (long-short)** · executable · community
+- `reversion.ma-distance.200-3-long` **Stretch from moving average 3.0% from MA(200)** · executable · community
+- `reversion.ma-distance.200-3-ls` **Stretch from moving average 3.0% from MA(200) (long-short)** · executable · community
+- `reversion.ma-distance.50-3-long` **Stretch from moving average 3.0% from MA(50)** · executable · community
+- `reversion.ma-distance.50-3-ls` **Stretch from moving average 3.0% from MA(50) (long-short)** · executable · community
+- `reversion.ma-distance.20-5-long` **Stretch from moving average 5.0% from MA(20)** · executable · community
+- `reversion.ma-distance.20-5-ls` **Stretch from moving average 5.0% from MA(20) (long-short)** · executable · community
+- `reversion.ma-distance.200-5-long` **Stretch from moving average 5.0% from MA(200)** · executable · community
+- `reversion.ma-distance.200-5-ls` **Stretch from moving average 5.0% from MA(200) (long-short)** · executable · community
+- `reversion.ma-distance.50-5-long` **Stretch from moving average 5.0% from MA(50)** · executable · community
+- `reversion.ma-distance.50-5-ls` **Stretch from moving average 5.0% from MA(50) (long-short)** · executable · community
+- `reversion.vwap-band.20-1-long` **VWAP band reversion 1.0% over 20 bars** · executable · community
+- `reversion.vwap-band.20-1-ls` **VWAP band reversion 1.0% over 20 bars (long-short)** · executable · community
+- `reversion.vwap-band.50-1-long` **VWAP band reversion 1.0% over 50 bars** · executable · community
+- `reversion.vwap-band.50-1-ls` **VWAP band reversion 1.0% over 50 bars (long-short)** · executable · community
+- `reversion.vwap-band.20-2-long` **VWAP band reversion 2.0% over 20 bars** · executable · community
+- `reversion.vwap-band.20-2-ls` **VWAP band reversion 2.0% over 20 bars (long-short)** · executable · community
+- `reversion.vwap-band.50-2-long` **VWAP band reversion 2.0% over 50 bars** · executable · community
+- `reversion.vwap-band.50-2-ls` **VWAP band reversion 2.0% over 50 bars (long-short)** · executable · community
+- `reversion.vwap-band.20-3-long` **VWAP band reversion 3.0% over 20 bars** · executable · community
+- `reversion.vwap-band.20-3-ls` **VWAP band reversion 3.0% over 20 bars (long-short)** · executable · community
+- `reversion.vwap-band.50-3-long` **VWAP band reversion 3.0% over 50 bars** · executable · community
+- `reversion.vwap-band.50-3-ls` **VWAP band reversion 3.0% over 50 bars (long-short)** · executable · community
+- `reversion.williams-r.williams-r-14-80-20-long` **Williams %R(14) -80/-20 reversion** — aka Williams %R oversold/overbought bounce · executable · community
+- `reversion.williams-r.williams-r-14-80-20-ls` **Williams %R(14) -80/-20 reversion (long-short)** — aka Williams %R oversold/overbought bounce · executable · community
+- `reversion.williams-r.williams-r-14-90-10-long` **Williams %R(14) -90/-10 reversion** — aka Williams %R oversold/overbought bounce · executable · community
+- `reversion.williams-r.williams-r-14-90-10-ls` **Williams %R(14) -90/-10 reversion (long-short)** — aka Williams %R oversold/overbought bounce · executable · community
+- `reversion.williams-r.williams-r-28-80-20-long` **Williams %R(28) -80/-20 reversion** — aka Williams %R oversold/overbought bounce · executable · community
+- `reversion.williams-r.williams-r-28-80-20-ls` **Williams %R(28) -80/-20 reversion (long-short)** — aka Williams %R oversold/overbought bounce · executable · community
+
+### Momentum (46)
+
+- `momentum.time-series.126-skip0-long` **Absolute (time-series) momentum 126-bar (skip 0)** · executable · academic
+- `momentum.time-series.126-skip0-ls` **Absolute (time-series) momentum 126-bar (skip 0) (long-short)** · executable · academic
+- `momentum.time-series.126-skip21-long` **Absolute (time-series) momentum 126-bar (skip 21)** · executable · academic
+- `momentum.time-series.126-skip21-ls` **Absolute (time-series) momentum 126-bar (skip 21) (long-short)** · executable · academic
+- `momentum.time-series.21-skip0-long` **Absolute (time-series) momentum 21-bar (skip 0)** · executable · academic
+- `momentum.time-series.21-skip0-ls` **Absolute (time-series) momentum 21-bar (skip 0) (long-short)** · executable · academic
+- `momentum.time-series.21-skip21-long` **Absolute (time-series) momentum 21-bar (skip 21)** · executable · academic
+- `momentum.time-series.21-skip21-ls` **Absolute (time-series) momentum 21-bar (skip 21) (long-short)** · executable · academic
+- `momentum.time-series.252-skip0-long` **Absolute (time-series) momentum 252-bar (skip 0)** · executable · academic
+- `momentum.time-series.252-skip0-ls` **Absolute (time-series) momentum 252-bar (skip 0) (long-short)** · executable · academic
+- `momentum.time-series.252-skip21-long` **Absolute (time-series) momentum 252-bar (skip 21)** · executable · academic
+- `momentum.time-series.252-skip21-ls` **Absolute (time-series) momentum 252-bar (skip 21) (long-short)** · executable · academic
+- `momentum.time-series.63-skip0-long` **Absolute (time-series) momentum 63-bar (skip 0)** · executable · academic
+- `momentum.time-series.63-skip0-ls` **Absolute (time-series) momentum 63-bar (skip 0) (long-short)** · executable · academic
+- `momentum.time-series.63-skip21-long` **Absolute (time-series) momentum 63-bar (skip 21)** · executable · academic
+- `momentum.time-series.63-skip21-ls` **Absolute (time-series) momentum 63-bar (skip 21) (long-short)** · executable · academic
+- `momentum.rate-of-change.12-long` **Rate of change 12-bar** · executable · community
+- `momentum.rate-of-change.12-ls` **Rate of change 12-bar (long-short)** · executable · community
+- `momentum.rate-of-change.126-long` **Rate of change 126-bar** · executable · community
+- `momentum.rate-of-change.126-ls` **Rate of change 126-bar (long-short)** · executable · community
+- `momentum.rate-of-change.21-long` **Rate of change 21-bar** · executable · community
+- `momentum.rate-of-change.21-ls` **Rate of change 21-bar (long-short)** · executable · community
+- `momentum.rate-of-change.252-long` **Rate of change 252-bar** · executable · community
+- `momentum.rate-of-change.252-ls` **Rate of change 252-bar (long-short)** · executable · community
+- `momentum.rate-of-change.5-long` **Rate of change 5-bar** · executable · community
+- `momentum.rate-of-change.5-ls` **Rate of change 5-bar (long-short)** · executable · community
+- `momentum.rate-of-change.63-long` **Rate of change 63-bar** · executable · community
+- `momentum.rate-of-change.63-ls` **Rate of change 63-bar (long-short)** · executable · community
+- `momentum.rsi-trend.14-50-long` **RSI trend regime 50.0 (RSI 14)** · executable · community
+- `momentum.rsi-trend.14-50-ls` **RSI trend regime 50.0 (RSI 14) (long-short)** · executable · community
+- `momentum.rsi-trend.21-50-long` **RSI trend regime 50.0 (RSI 21)** · executable · community
+- `momentum.rsi-trend.21-50-ls` **RSI trend regime 50.0 (RSI 21) (long-short)** · executable · community
+- `momentum.rsi-trend.14-55-long` **RSI trend regime 55.0 (RSI 14)** · executable · community
+- `momentum.rsi-trend.14-55-ls` **RSI trend regime 55.0 (RSI 14) (long-short)** · executable · community
+- `momentum.rsi-trend.21-55-long` **RSI trend regime 55.0 (RSI 21)** · executable · community
+- `momentum.rsi-trend.21-55-ls` **RSI trend regime 55.0 (RSI 21) (long-short)** · executable · community
+- `momentum.rsi-trend.14-60-long` **RSI trend regime 60.0 (RSI 14)** · executable · community
+- `momentum.rsi-trend.14-60-ls` **RSI trend regime 60.0 (RSI 14) (long-short)** · executable · community
+- `momentum.rsi-trend.21-60-long` **RSI trend regime 60.0 (RSI 21)** · executable · community
+- `momentum.rsi-trend.21-60-ls` **RSI trend regime 60.0 (RSI 21) (long-short)** · executable · community
+- `momentum.volatility-scaled.126-long` **Volatility-scaled momentum 126-bar** · executable · community
+- `momentum.volatility-scaled.126-ls` **Volatility-scaled momentum 126-bar (long-short)** · executable · community
+- `momentum.volatility-scaled.252-long` **Volatility-scaled momentum 252-bar** · executable · community
+- `momentum.volatility-scaled.252-ls` **Volatility-scaled momentum 252-bar (long-short)** · executable · community
+- `momentum.volatility-scaled.63-long` **Volatility-scaled momentum 63-bar** · executable · community
+- `momentum.volatility-scaled.63-ls` **Volatility-scaled momentum 63-bar (long-short)** · executable · community
+
+### Multi-signal (12)
+
+- `combo.confirmed-trend.10-30-50-long` **Trend with oscillator and volume confirmation EMA 10/30, RSI>50** · executable · community
+- `combo.confirmed-trend.10-30-50-ls` **Trend with oscillator and volume confirmation EMA 10/30, RSI>50 (long-short)** · executable · community
+- `combo.confirmed-trend.10-30-55-long` **Trend with oscillator and volume confirmation EMA 10/30, RSI>55** · executable · community
+- `combo.confirmed-trend.10-30-55-ls` **Trend with oscillator and volume confirmation EMA 10/30, RSI>55 (long-short)** · executable · community
+- `combo.confirmed-trend.20-50-50-long` **Trend with oscillator and volume confirmation EMA 20/50, RSI>50** · executable · community
+- `combo.confirmed-trend.20-50-50-ls` **Trend with oscillator and volume confirmation EMA 20/50, RSI>50 (long-short)** · executable · community
+- `combo.confirmed-trend.20-50-55-long` **Trend with oscillator and volume confirmation EMA 20/50, RSI>55** · executable · community
+- `combo.confirmed-trend.20-50-55-ls` **Trend with oscillator and volume confirmation EMA 20/50, RSI>55 (long-short)** · executable · community
+- `combo.confirmed-trend.50-200-50-long` **Trend with oscillator and volume confirmation EMA 50/200, RSI>50** · executable · community
+- `combo.confirmed-trend.50-200-50-ls` **Trend with oscillator and volume confirmation EMA 50/200, RSI>50 (long-short)** · executable · community
+- `combo.confirmed-trend.50-200-55-long` **Trend with oscillator and volume confirmation EMA 50/200, RSI>55** · executable · community
+- `combo.confirmed-trend.50-200-55-ls` **Trend with oscillator and volume confirmation EMA 50/200, RSI>55 (long-short)** · executable · community
+
+### Options (26)
+
+- `options.structure.backspread` **Backspread** · unsupported · institutional
+- `options.structure.bear-put-spread` **Bear put spread** · unsupported · institutional
+- `options.structure.box-spread` **Box spread** · unsupported · institutional
+- `options.structure.bull-call-spread` **Bull call spread** · unsupported · institutional
+- `options.structure.butterfly` **Butterfly spread** · unsupported · institutional
+- `options.structure.calendar-spread` **Calendar spread** · unsupported · institutional
+- `options.structure.cash-secured-put` **Cash-secured put** · unsupported · institutional
+- `options.structure.collar` **Collar** · unsupported · institutional
+- `options.structure.conversion` **Conversion** · unsupported · institutional
+- `options.structure.covered-call` **Covered call** · unsupported · institutional
+- `options.structure.delta-hedge` **Delta hedging** · unsupported · institutional
+- `options.structure.diagonal-spread` **Diagonal spread** · unsupported · institutional
+- `options.structure.dispersion` **Dispersion trade** · unsupported · institutional
+- `options.structure.volatility-crush` **Earnings volatility crush** · unsupported · institutional
+- `options.structure.gamma-scalping` **Gamma scalping** · unsupported · institutional
+- `options.structure.iron-butterfly` **Iron butterfly** · unsupported · institutional
+- `options.structure.iron-condor` **Iron condor** · unsupported · institutional
+- `options.structure.straddle` **Long straddle** · unsupported · institutional
+- `options.structure.strangle` **Long strangle** · unsupported · institutional
+- `options.structure.protective-put` **Protective put** · unsupported · institutional
+- `options.structure.ratio-spread` **Ratio spread** · unsupported · institutional
+- `options.structure.reversal` **Reversal** · unsupported · institutional
+- `options.structure.skew-trade` **Skew trade** · unsupported · institutional
+- `options.structure.synthetic-stock` **Synthetic long stock** · unsupported · institutional
+- `options.structure.wheel` **The wheel** · unsupported · institutional
+- `options.structure.term-structure` **Volatility term structure** · unsupported · institutional
+
+### Portfolio and allocation (8)
+
+- `allocation.trend-filtered.ema-100-long` **Month-end trend filter EMA(100)** · executable · academic
+- `allocation.trend-filtered.ema-150-long` **Month-end trend filter EMA(150)** · executable · academic
+- `allocation.trend-filtered.ema-200-long` **Month-end trend filter EMA(200)** · executable · academic
+- `allocation.trend-filtered.ema-250-long` **Month-end trend filter EMA(250)** · executable · academic
+- `allocation.trend-filtered.sma-100-long` **Month-end trend filter SMA(100)** · executable · academic
+- `allocation.trend-filtered.sma-150-long` **Month-end trend filter SMA(150)** · executable · academic
+- `allocation.trend-filtered.sma-200-long` **Month-end trend filter SMA(200)** · executable · academic
+- `allocation.trend-filtered.sma-250-long` **Month-end trend filter SMA(250)** · executable · academic
+
+### Price action (50)
+
+- `price-action.candlestick.doji-ctx20-long` **Doji, 20-bar trend context** — aka Doji, Doji indecision candle · executable · historical
+- `price-action.candlestick.doji-ctx20-ls` **Doji, 20-bar trend context (long-short)** — aka Doji, Doji indecision candle · executable · historical
+- `price-action.candlestick.doji-ctx50-long` **Doji, 50-bar trend context** — aka Doji, Doji indecision candle · executable · historical
+- `price-action.candlestick.doji-ctx50-ls` **Doji, 50-bar trend context (long-short)** — aka Doji, Doji indecision candle · executable · historical
+- `price-action.candlestick.bullish-engulfing-ctx20-long` **Engulfing, 20-bar trend context** — aka Engulfing, Bullish/bearish engulfing · executable · historical
+- `price-action.candlestick.bullish-engulfing-ctx20-ls` **Engulfing, 20-bar trend context (long-short)** — aka Engulfing, Bullish/bearish engulfing · executable · historical
+- `price-action.candlestick.bullish-engulfing-ctx50-long` **Engulfing, 50-bar trend context** — aka Engulfing, Bullish/bearish engulfing · executable · historical
+- `price-action.candlestick.bullish-engulfing-ctx50-ls` **Engulfing, 50-bar trend context (long-short)** — aka Engulfing, Bullish/bearish engulfing · executable · historical
+- `price-action.candlestick.hammer-ctx20-long` **Hammer, 20-bar trend context** — aka Hammer, Hammer / hanging man · executable · historical
+- `price-action.candlestick.hammer-ctx20-ls` **Hammer, 20-bar trend context (long-short)** — aka Hammer, Hammer / hanging man · executable · historical
+- `price-action.candlestick.hammer-ctx50-long` **Hammer, 50-bar trend context** — aka Hammer, Hammer / hanging man · executable · historical
+- `price-action.candlestick.hammer-ctx50-ls` **Hammer, 50-bar trend context (long-short)** — aka Hammer, Hammer / hanging man · executable · historical
+- `price-action.candlestick.harami-ctx20-long` **Harami, 20-bar trend context** — aka Harami, Harami (inside body) · executable · historical
+- `price-action.candlestick.harami-ctx20-ls` **Harami, 20-bar trend context (long-short)** — aka Harami, Harami (inside body) · executable · historical
+- `price-action.candlestick.harami-ctx50-long` **Harami, 50-bar trend context** — aka Harami, Harami (inside body) · executable · historical
+- `price-action.candlestick.harami-ctx50-ls` **Harami, 50-bar trend context (long-short)** — aka Harami, Harami (inside body) · executable · historical
+- `price-action.structure.10-long` **Market structure 10-bar swings** · executable · community
+- `price-action.structure.10-ls` **Market structure 10-bar swings (long-short)** · executable · community
+- `price-action.structure.20-long` **Market structure 20-bar swings** · executable · community
+- `price-action.structure.20-ls` **Market structure 20-bar swings (long-short)** · executable · community
+- `price-action.structure.5-long` **Market structure 5-bar swings** · executable · community
+- `price-action.structure.5-ls` **Market structure 5-bar swings (long-short)** · executable · community
+- `price-action.candlestick.marubozu-ctx20-long` **Marubozu, 20-bar trend context** — aka Marubozu, Marubozu full-body candle · executable · historical
+- `price-action.candlestick.marubozu-ctx20-ls` **Marubozu, 20-bar trend context (long-short)** — aka Marubozu, Marubozu full-body candle · executable · historical
+- `price-action.candlestick.marubozu-ctx50-long` **Marubozu, 50-bar trend context** — aka Marubozu, Marubozu full-body candle · executable · historical
+- `price-action.candlestick.marubozu-ctx50-ls` **Marubozu, 50-bar trend context (long-short)** — aka Marubozu, Marubozu full-body candle · executable · historical
+- `price-action.candlestick.morning-star-ctx20-long` **Morning star, 20-bar trend context** — aka Morning star, Morning / evening star · executable · historical
+- `price-action.candlestick.morning-star-ctx20-ls` **Morning star, 20-bar trend context (long-short)** — aka Morning star, Morning / evening star · executable · historical
+- `price-action.candlestick.morning-star-ctx50-long` **Morning star, 50-bar trend context** — aka Morning star, Morning / evening star · executable · historical
+- `price-action.candlestick.morning-star-ctx50-ls` **Morning star, 50-bar trend context (long-short)** — aka Morning star, Morning / evening star · executable · historical
+- `price-action.candlestick.outside-bar-ctx20-long` **Outside bar, 20-bar trend context** — aka Outside bar, Outside / engulfing range bar · executable · historical
+- `price-action.candlestick.outside-bar-ctx20-ls` **Outside bar, 20-bar trend context (long-short)** — aka Outside bar, Outside / engulfing range bar · executable · historical
+- `price-action.candlestick.outside-bar-ctx50-long` **Outside bar, 50-bar trend context** — aka Outside bar, Outside / engulfing range bar · executable · historical
+- `price-action.candlestick.outside-bar-ctx50-ls` **Outside bar, 50-bar trend context (long-short)** — aka Outside bar, Outside / engulfing range bar · executable · historical
+- `price-action.candlestick.piercing-ctx20-long` **Piercing line, 20-bar trend context** — aka Piercing line, Piercing line / dark-cloud cover · executable · historical
+- `price-action.candlestick.piercing-ctx20-ls` **Piercing line, 20-bar trend context (long-short)** — aka Piercing line, Piercing line / dark-cloud cover · executable · historical
+- `price-action.candlestick.piercing-ctx50-long` **Piercing line, 50-bar trend context** — aka Piercing line, Piercing line / dark-cloud cover · executable · historical
+- `price-action.candlestick.piercing-ctx50-ls` **Piercing line, 50-bar trend context (long-short)** — aka Piercing line, Piercing line / dark-cloud cover · executable · historical
+- `price-action.candlestick.pin-bar-ctx20-long` **Pin bar, 20-bar trend context** — aka Pin bar, Pin bar rejection · executable · historical
+- `price-action.candlestick.pin-bar-ctx20-ls` **Pin bar, 20-bar trend context (long-short)** — aka Pin bar, Pin bar rejection · executable · historical
+- `price-action.candlestick.pin-bar-ctx50-long` **Pin bar, 50-bar trend context** — aka Pin bar, Pin bar rejection · executable · historical
+- `price-action.candlestick.pin-bar-ctx50-ls` **Pin bar, 50-bar trend context (long-short)** — aka Pin bar, Pin bar rejection · executable · historical
+- `price-action.candlestick.shooting-star-ctx20-long` **Shooting star, 20-bar trend context** — aka Shooting star, Shooting star / inverted hammer · executable · historical
+- `price-action.candlestick.shooting-star-ctx20-ls` **Shooting star, 20-bar trend context (long-short)** — aka Shooting star, Shooting star / inverted hammer · executable · historical
+- `price-action.candlestick.shooting-star-ctx50-long` **Shooting star, 50-bar trend context** — aka Shooting star, Shooting star / inverted hammer · executable · historical
+- `price-action.candlestick.shooting-star-ctx50-ls` **Shooting star, 50-bar trend context (long-short)** — aka Shooting star, Shooting star / inverted hammer · executable · historical
+- `price-action.candlestick.three-soldiers-ctx20-long` **Three white soldiers, 20-bar trend context** — aka Three white soldiers, Three white soldiers / three black crows · executable · historical
+- `price-action.candlestick.three-soldiers-ctx20-ls` **Three white soldiers, 20-bar trend context (long-short)** — aka Three white soldiers, Three white soldiers / three black crows · executable · historical
+- `price-action.candlestick.three-soldiers-ctx50-long` **Three white soldiers, 50-bar trend context** — aka Three white soldiers, Three white soldiers / three black crows · executable · historical
+- `price-action.candlestick.three-soldiers-ctx50-ls` **Three white soldiers, 50-bar trend context (long-short)** — aka Three white soldiers, Three white soldiers / three black crows · executable · historical
+
+### Risk and exit methods (18)
+
+- `risk.method.atr-stop` **ATR stop** · research-only · community
+- `risk.method.break-even-stop` **Break-even stop** · research-only · community
+- `risk.method.chandelier-exit` **Chandelier exit** · research-only · community
+- `risk.method.correlation-cap` **Correlation cap** · research-only · community
+- `risk.method.daily-loss-limit` **Daily loss limit** · research-only · community
+- `risk.method.equal-risk` **Equal-risk sizing** · research-only · community
+- `risk.method.fixed-fractional` **Fixed fractional sizing** · research-only · community
+- `risk.method.fixed-percent-stop` **Fixed percentage stop** · research-only · community
+- `risk.method.fractional-kelly` **Fractional Kelly** · research-only · community
+- `risk.method.inverse-volatility` **Inverse-volatility sizing** · research-only · community
+- `risk.method.kelly` **Kelly criterion** · research-only · community
+- `risk.method.position-cap` **Maximum position cap** · research-only · community
+- `risk.method.drawdown-stop` **Portfolio drawdown stop** · research-only · community
+- `risk.method.risk-parity` **Risk parity** · research-only · community
+- `risk.method.sector-cap` **Sector exposure cap** · research-only · community
+- `risk.method.time-stop` **Time stop** · research-only · community
+- `risk.method.trailing-stop` **Trailing stop** · research-only · community
+- `risk.method.volatility-target` **Volatility targeting** · research-only · community
+
+### Sentiment and alternative data (5)
+
+- `sentiment.news.news` **News sentiment** · requires-data · academic
+- `sentiment.options-flow.put-call` **Put-call ratio** · requires-data · academic
+- `sentiment.web.search-trends` **Search-trend signals** · requires-data · academic
+- `sentiment.positioning.short-interest` **Short interest** · requires-data · academic
+- `sentiment.social.social` **Social-media sentiment** · requires-data · academic
+
+### Statistical arbitrage (3)
+
+- `statarb.pairs.cointegration` **Cointegration pairs** · requires-data · academic
+- `statarb.pairs.pairs-distance` **Pairs trading (distance method)** · requires-data · academic
+- `statarb.market-neutral.residual-reversion` **Residual mean reversion** · requires-data · academic
+
+### Trend following (215)
+
+- `trend.adx-filtered.10-20-long` **ADX-filtered directional trend 10, ADX>20** · executable · community
+- `trend.adx-filtered.10-20-ls` **ADX-filtered directional trend 10, ADX>20 (long-short)** · executable · community
+- `trend.adx-filtered.10-25-long` **ADX-filtered directional trend 10, ADX>25** · executable · community
+- `trend.adx-filtered.10-25-ls` **ADX-filtered directional trend 10, ADX>25 (long-short)** · executable · community
+- `trend.adx-filtered.10-30-long` **ADX-filtered directional trend 10, ADX>30** · executable · community
+- `trend.adx-filtered.10-30-ls` **ADX-filtered directional trend 10, ADX>30 (long-short)** · executable · community
+- `trend.adx-filtered.14-20-long` **ADX-filtered directional trend 14, ADX>20** · executable · community
+- `trend.adx-filtered.14-20-ls` **ADX-filtered directional trend 14, ADX>20 (long-short)** · executable · community
+- `trend.adx-filtered.14-25-long` **ADX-filtered directional trend 14, ADX>25** · executable · community
+- `trend.adx-filtered.14-25-ls` **ADX-filtered directional trend 14, ADX>25 (long-short)** · executable · community
+- `trend.adx-filtered.14-30-long` **ADX-filtered directional trend 14, ADX>30** · executable · community
+- `trend.adx-filtered.14-30-ls` **ADX-filtered directional trend 14, ADX>30 (long-short)** · executable · community
+- `trend.adx-filtered.20-20-long` **ADX-filtered directional trend 20, ADX>20** · executable · community
+- `trend.adx-filtered.20-20-ls` **ADX-filtered directional trend 20, ADX>20 (long-short)** · executable · community
+- `trend.adx-filtered.20-25-long` **ADX-filtered directional trend 20, ADX>25** · executable · community
+- `trend.adx-filtered.20-25-ls` **ADX-filtered directional trend 20, ADX>25 (long-short)** · executable · community
+- `trend.adx-filtered.20-30-long` **ADX-filtered directional trend 20, ADX>30** · executable · community
+- `trend.adx-filtered.20-30-ls` **ADX-filtered directional trend 20, ADX>30 (long-short)** · executable · community
+- `trend.ma-crossover.dema-10-30-long` **Double exponential MA crossover 10/30 (long)** — aka DEMA 10/30 cross · executable · community
+- `trend.ma-crossover.dema-10-30-ls` **Double exponential MA crossover 10/30 (long-short)** — aka DEMA 10/30 cross · executable · community
+- `trend.ma-crossover.dema-100-200-long` **Double exponential MA crossover 100/200 (long)** — aka DEMA 100/200 cross · executable · community
+- `trend.ma-crossover.dema-100-200-ls` **Double exponential MA crossover 100/200 (long-short)** — aka DEMA 100/200 cross · executable · community
+- `trend.ma-crossover.dema-12-26-long` **Double exponential MA crossover 12/26 (long)** — aka DEMA 12/26 cross · executable · community
+- `trend.ma-crossover.dema-12-26-ls` **Double exponential MA crossover 12/26 (long-short)** — aka DEMA 12/26 cross · executable · community
+- `trend.ma-crossover.dema-20-50-long` **Double exponential MA crossover 20/50 (long)** — aka DEMA 20/50 cross · executable · community
+- `trend.ma-crossover.dema-20-50-ls` **Double exponential MA crossover 20/50 (long-short)** — aka DEMA 20/50 cross · executable · community
+- `trend.ma-crossover.dema-21-55-long` **Double exponential MA crossover 21/55 (long)** — aka DEMA 21/55 cross · executable · community
+- `trend.ma-crossover.dema-21-55-ls` **Double exponential MA crossover 21/55 (long-short)** — aka DEMA 21/55 cross · executable · community
+- `trend.ma-crossover.dema-34-89-long` **Double exponential MA crossover 34/89 (long)** — aka DEMA 34/89 cross · executable · community
+- `trend.ma-crossover.dema-34-89-ls` **Double exponential MA crossover 34/89 (long-short)** — aka DEMA 34/89 cross · executable · community
+- `trend.ma-crossover.dema-5-20-long` **Double exponential MA crossover 5/20 (long)** — aka DEMA 5/20 cross · executable · community
+- `trend.ma-crossover.dema-5-20-ls` **Double exponential MA crossover 5/20 (long-short)** — aka DEMA 5/20 cross · executable · community
+- `trend.ma-crossover.dema-50-100-long` **Double exponential MA crossover 50/100 (long)** — aka DEMA 50/100 cross · executable · community
+- `trend.ma-crossover.dema-50-100-ls` **Double exponential MA crossover 50/100 (long-short)** — aka DEMA 50/100 cross · executable · community
+- `trend.ma-crossover.dema-50-200-long` **Double exponential MA crossover 50/200 (long)** — aka DEMA 50/200 cross · executable · community
+- `trend.ma-crossover.dema-50-200-ls` **Double exponential MA crossover 50/200 (long-short)** — aka DEMA 50/200 cross · executable · community
+- `trend.ma-crossover.dema-9-21-long` **Double exponential MA crossover 9/21 (long)** — aka DEMA 9/21 cross · executable · community
+- `trend.ma-crossover.dema-9-21-ls` **Double exponential MA crossover 9/21 (long-short)** — aka DEMA 9/21 cross · executable · community
+- `trend.ma-crossover.ema-10-30-long` **Exponential MA crossover 10/30 (long)** — aka EMA 10/30 cross · executable · community
+- `trend.ma-crossover.ema-10-30-ls` **Exponential MA crossover 10/30 (long-short)** — aka EMA 10/30 cross · executable · community
+- `trend.ma-crossover.ema-100-200-long` **Exponential MA crossover 100/200 (long)** — aka EMA 100/200 cross · executable · community
+- `trend.ma-crossover.ema-100-200-ls` **Exponential MA crossover 100/200 (long-short)** — aka EMA 100/200 cross · executable · community
+- `trend.ma-crossover.ema-12-26-long` **Exponential MA crossover 12/26 (long)** — aka EMA 12/26 cross · executable · community
+- `trend.ma-crossover.ema-12-26-ls` **Exponential MA crossover 12/26 (long-short)** — aka EMA 12/26 cross · executable · community
+- `trend.ma-crossover.ema-20-50-long` **Exponential MA crossover 20/50 (long)** — aka EMA 20/50 cross · executable · community
+- `trend.ma-crossover.ema-20-50-ls` **Exponential MA crossover 20/50 (long-short)** — aka EMA 20/50 cross · executable · community
+- `trend.ma-crossover.ema-21-55-long` **Exponential MA crossover 21/55 (long)** — aka EMA 21/55 cross · executable · community
+- `trend.ma-crossover.ema-21-55-ls` **Exponential MA crossover 21/55 (long-short)** — aka EMA 21/55 cross · executable · community
+- `trend.ma-crossover.ema-34-89-long` **Exponential MA crossover 34/89 (long)** — aka EMA 34/89 cross · executable · community
+- `trend.ma-crossover.ema-34-89-ls` **Exponential MA crossover 34/89 (long-short)** — aka EMA 34/89 cross · executable · community
+- `trend.ma-crossover.ema-5-20-long` **Exponential MA crossover 5/20 (long)** — aka EMA 5/20 cross · executable · community
+- `trend.ma-crossover.ema-5-20-ls` **Exponential MA crossover 5/20 (long-short)** — aka EMA 5/20 cross · executable · community
+- `trend.ma-crossover.ema-50-100-long` **Exponential MA crossover 50/100 (long)** — aka EMA 50/100 cross · executable · community
+- `trend.ma-crossover.ema-50-100-ls` **Exponential MA crossover 50/100 (long-short)** — aka EMA 50/100 cross · executable · community
+- `trend.ma-crossover.ema-50-200-long` **Exponential MA crossover 50/200 (long)** — aka EMA 50/200 cross · executable · community
+- `trend.ma-crossover.ema-50-200-ls` **Exponential MA crossover 50/200 (long-short)** — aka EMA 50/200 cross · executable · community
+- `trend.ma-crossover.ema-9-21-long` **Exponential MA crossover 9/21 (long)** — aka EMA 9/21 cross · executable · community
+- `trend.ma-crossover.ema-9-21-ls` **Exponential MA crossover 9/21 (long-short)** — aka EMA 9/21 cross · executable · community
+- `trend.ma-crossover.hma-10-30-long` **Hull MA crossover 10/30 (long)** — aka HMA 10/30 cross · executable · community
+- `trend.ma-crossover.hma-10-30-ls` **Hull MA crossover 10/30 (long-short)** — aka HMA 10/30 cross · executable · community
+- `trend.ma-crossover.hma-100-200-long` **Hull MA crossover 100/200 (long)** — aka HMA 100/200 cross · executable · community
+- `trend.ma-crossover.hma-100-200-ls` **Hull MA crossover 100/200 (long-short)** — aka HMA 100/200 cross · executable · community
+- `trend.ma-crossover.hma-12-26-long` **Hull MA crossover 12/26 (long)** — aka HMA 12/26 cross · executable · community
+- `trend.ma-crossover.hma-12-26-ls` **Hull MA crossover 12/26 (long-short)** — aka HMA 12/26 cross · executable · community
+- `trend.ma-crossover.hma-20-50-long` **Hull MA crossover 20/50 (long)** — aka HMA 20/50 cross · executable · community
+- `trend.ma-crossover.hma-20-50-ls` **Hull MA crossover 20/50 (long-short)** — aka HMA 20/50 cross · executable · community
+- `trend.ma-crossover.hma-21-55-long` **Hull MA crossover 21/55 (long)** — aka HMA 21/55 cross · executable · community
+- `trend.ma-crossover.hma-21-55-ls` **Hull MA crossover 21/55 (long-short)** — aka HMA 21/55 cross · executable · community
+- `trend.ma-crossover.hma-34-89-long` **Hull MA crossover 34/89 (long)** — aka HMA 34/89 cross · executable · community
+- `trend.ma-crossover.hma-34-89-ls` **Hull MA crossover 34/89 (long-short)** — aka HMA 34/89 cross · executable · community
+- `trend.ma-crossover.hma-5-20-long` **Hull MA crossover 5/20 (long)** — aka HMA 5/20 cross · executable · community
+- `trend.ma-crossover.hma-5-20-ls` **Hull MA crossover 5/20 (long-short)** — aka HMA 5/20 cross · executable · community
+- `trend.ma-crossover.hma-50-100-long` **Hull MA crossover 50/100 (long)** — aka HMA 50/100 cross · executable · community
+- `trend.ma-crossover.hma-50-100-ls` **Hull MA crossover 50/100 (long-short)** — aka HMA 50/100 cross · executable · community
+- `trend.ma-crossover.hma-50-200-long` **Hull MA crossover 50/200 (long)** — aka HMA 50/200 cross · executable · community
+- `trend.ma-crossover.hma-50-200-ls` **Hull MA crossover 50/200 (long-short)** — aka HMA 50/200 cross · executable · community
+- `trend.ma-crossover.hma-9-21-long` **Hull MA crossover 9/21 (long)** — aka HMA 9/21 cross · executable · community
+- `trend.ma-crossover.hma-9-21-ls` **Hull MA crossover 9/21 (long-short)** — aka HMA 9/21 cross · executable · community
+- `trend.ichimoku.10-30-60-long` **Ichimoku cloud 10/30/60** · executable · community
+- `trend.ichimoku.10-30-60-ls` **Ichimoku cloud 10/30/60 (long-short)** · executable · community
+- `trend.ichimoku.7-22-44-long` **Ichimoku cloud 7/22/44** · executable · community
+- `trend.ichimoku.7-22-44-ls` **Ichimoku cloud 7/22/44 (long-short)** · executable · community
+- `trend.ichimoku.9-26-52-long` **Ichimoku cloud 9/26/52** · executable · community
+- `trend.ichimoku.9-26-52-ls` **Ichimoku cloud 9/26/52 (long-short)** · executable · community
+- `trend.linreg-slope.10-long` **Linear regression slope 10-bar** · executable · community
+- `trend.linreg-slope.10-ls` **Linear regression slope 10-bar (long-short)** · executable · community
+- `trend.linreg-slope.100-long` **Linear regression slope 100-bar** · executable · community
+- `trend.linreg-slope.100-ls` **Linear regression slope 100-bar (long-short)** · executable · community
+- `trend.linreg-slope.20-long` **Linear regression slope 20-bar** · executable · community
+- `trend.linreg-slope.20-ls` **Linear regression slope 20-bar (long-short)** · executable · community
+- `trend.linreg-slope.50-long` **Linear regression slope 50-bar** · executable · community
+- `trend.linreg-slope.50-ls` **Linear regression slope 50-bar (long-short)** · executable · community
+- `trend.macd.classic-12-26-9-long` **MACD 12/26/9 signal cross** — aka Moving average convergence divergence · executable · community
+- `trend.ma-ribbon.10-10-6-long` **Moving average ribbon base 10, step 10, 6 lines** · executable · community
+- `trend.ma-ribbon.10-10-6-ls` **Moving average ribbon base 10, step 10, 6 lines (long-short)** · executable · community
+- `trend.ma-ribbon.20-20-5-long` **Moving average ribbon base 20, step 20, 5 lines** · executable · community
+- `trend.ma-ribbon.20-20-5-ls` **Moving average ribbon base 20, step 20, 5 lines (long-short)** · executable · community
+- `trend.ma-ribbon.5-5-8-long` **Moving average ribbon base 5, step 5, 8 lines** · executable · community
+- `trend.ma-ribbon.5-5-8-ls` **Moving average ribbon base 5, step 5, 8 lines (long-short)** · executable · community
+- `trend.parabolic-sar.0p01-long` **Parabolic SAR step 0.01** · executable · community
+- `trend.parabolic-sar.0p01-ls` **Parabolic SAR step 0.01 (long-short)** · executable · community
+- `trend.parabolic-sar.0p02-long` **Parabolic SAR step 0.02** · executable · community
+- `trend.parabolic-sar.0p02-ls` **Parabolic SAR step 0.02 (long-short)** · executable · community
+- `trend.parabolic-sar.0p04-long` **Parabolic SAR step 0.04** · executable · community
+- `trend.parabolic-sar.0p04-ls` **Parabolic SAR step 0.04 (long-short)** · executable · community
+- `trend.price-vs-ma.ema-10-long` **Price above EMA(10)** · executable · community
+- `trend.price-vs-ma.ema-10-ls` **Price above EMA(10) (long-short)** · executable · community
+- `trend.price-vs-ma.ema-100-long` **Price above EMA(100)** · executable · community
+- `trend.price-vs-ma.ema-100-ls` **Price above EMA(100) (long-short)** · executable · community
+- `trend.price-vs-ma.ema-150-long` **Price above EMA(150)** · executable · community
+- `trend.price-vs-ma.ema-150-ls` **Price above EMA(150) (long-short)** · executable · community
+- `trend.price-vs-ma.ema-20-long` **Price above EMA(20)** · executable · community
+- `trend.price-vs-ma.ema-20-ls` **Price above EMA(20) (long-short)** · executable · community
+- `trend.price-vs-ma.ema-200-long` **Price above EMA(200)** · executable · community
+- `trend.price-vs-ma.ema-200-ls` **Price above EMA(200) (long-short)** · executable · community
+- `trend.price-vs-ma.ema-50-long` **Price above EMA(50)** · executable · community
+- `trend.price-vs-ma.ema-50-ls` **Price above EMA(50) (long-short)** · executable · community
+- `trend.price-vs-ma.sma-10-long` **Price above SMA(10)** · executable · community
+- `trend.price-vs-ma.sma-10-ls` **Price above SMA(10) (long-short)** · executable · community
+- `trend.price-vs-ma.sma-100-long` **Price above SMA(100)** · executable · community
+- `trend.price-vs-ma.sma-100-ls` **Price above SMA(100) (long-short)** · executable · community
+- `trend.price-vs-ma.sma-150-long` **Price above SMA(150)** · executable · community
+- `trend.price-vs-ma.sma-150-ls` **Price above SMA(150) (long-short)** · executable · community
+- `trend.price-vs-ma.sma-20-long` **Price above SMA(20)** · executable · community
+- `trend.price-vs-ma.sma-20-ls` **Price above SMA(20) (long-short)** · executable · community
+- `trend.price-vs-ma.sma-200-long` **Price above SMA(200)** — aka 200-day moving average rule · executable · academic
+- `trend.price-vs-ma.sma-200-ls` **Price above SMA(200) (long-short)** — aka 200-day moving average rule · executable · academic
+- `trend.price-vs-ma.sma-50-long` **Price above SMA(50)** · executable · community
+- `trend.price-vs-ma.sma-50-ls` **Price above SMA(50) (long-short)** · executable · community
+- `trend.ma-crossover.sma-10-30-long` **Simple MA crossover 10/30 (long)** — aka SMA 10/30 cross · executable · community
+- `trend.ma-crossover.sma-10-30-ls` **Simple MA crossover 10/30 (long-short)** — aka SMA 10/30 cross · executable · community
+- `trend.ma-crossover.sma-100-200-long` **Simple MA crossover 100/200 (long)** — aka SMA 100/200 cross · executable · community
+- `trend.ma-crossover.sma-100-200-ls` **Simple MA crossover 100/200 (long-short)** — aka SMA 100/200 cross · executable · community
+- `trend.ma-crossover.sma-12-26-long` **Simple MA crossover 12/26 (long)** — aka SMA 12/26 cross · executable · community
+- `trend.ma-crossover.sma-12-26-ls` **Simple MA crossover 12/26 (long-short)** — aka SMA 12/26 cross · executable · community
+- `trend.ma-crossover.sma-20-50-long` **Simple MA crossover 20/50 (long)** — aka SMA 20/50 cross · executable · community
+- `trend.ma-crossover.sma-20-50-ls` **Simple MA crossover 20/50 (long-short)** — aka SMA 20/50 cross · executable · community
+- `trend.ma-crossover.sma-21-55-long` **Simple MA crossover 21/55 (long)** — aka SMA 21/55 cross · executable · community
+- `trend.ma-crossover.sma-21-55-ls` **Simple MA crossover 21/55 (long-short)** — aka SMA 21/55 cross · executable · community
+- `trend.ma-crossover.sma-34-89-long` **Simple MA crossover 34/89 (long)** — aka SMA 34/89 cross · executable · community
+- `trend.ma-crossover.sma-34-89-ls` **Simple MA crossover 34/89 (long-short)** — aka SMA 34/89 cross · executable · community
+- `trend.ma-crossover.sma-5-20-long` **Simple MA crossover 5/20 (long)** — aka SMA 5/20 cross · executable · community
+- `trend.ma-crossover.sma-5-20-ls` **Simple MA crossover 5/20 (long-short)** — aka SMA 5/20 cross · executable · community
+- `trend.ma-crossover.sma-50-100-long` **Simple MA crossover 50/100 (long)** — aka SMA 50/100 cross · executable · community
+- `trend.ma-crossover.sma-50-100-ls` **Simple MA crossover 50/100 (long-short)** — aka SMA 50/100 cross · executable · community
+- `trend.ma-crossover.sma-50-200-long` **Simple MA crossover 50/200 (long)** — aka Golden cross, Death cross · executable · historical
+- `trend.ma-crossover.sma-50-200-ls` **Simple MA crossover 50/200 (long-short)** — aka Golden cross, Death cross · executable · historical
+- `trend.ma-crossover.sma-9-21-long` **Simple MA crossover 9/21 (long)** — aka SMA 9/21 cross · executable · community
+- `trend.ma-crossover.sma-9-21-ls` **Simple MA crossover 9/21 (long-short)** — aka SMA 9/21 cross · executable · community
+- `trend.supertrend.10-2p0-long` **SuperTrend 10/2.0** · executable · community
+- `trend.supertrend.10-2p0-ls` **SuperTrend 10/2.0 (long-short)** · executable · community
+- `trend.supertrend.10-3p0-long` **SuperTrend 10/3.0** · executable · community
+- `trend.supertrend.10-3p0-ls` **SuperTrend 10/3.0 (long-short)** · executable · community
+- `trend.supertrend.10-4p0-long` **SuperTrend 10/4.0** · executable · community
+- `trend.supertrend.10-4p0-ls` **SuperTrend 10/4.0 (long-short)** · executable · community
+- `trend.supertrend.14-2p0-long` **SuperTrend 14/2.0** · executable · community
+- `trend.supertrend.14-2p0-ls` **SuperTrend 14/2.0 (long-short)** · executable · community
+- `trend.supertrend.14-3p0-long` **SuperTrend 14/3.0** · executable · community
+- `trend.supertrend.14-3p0-ls` **SuperTrend 14/3.0 (long-short)** · executable · community
+- `trend.supertrend.14-4p0-long` **SuperTrend 14/4.0** · executable · community
+- `trend.supertrend.14-4p0-ls` **SuperTrend 14/4.0 (long-short)** · executable · community
+- `trend.supertrend.7-2p0-long` **SuperTrend 7/2.0** · executable · community
+- `trend.supertrend.7-2p0-ls` **SuperTrend 7/2.0 (long-short)** · executable · community
+- `trend.supertrend.7-3p0-long` **SuperTrend 7/3.0** · executable · community
+- `trend.supertrend.7-3p0-ls` **SuperTrend 7/3.0 (long-short)** · executable · community
+- `trend.supertrend.7-4p0-long` **SuperTrend 7/4.0** · executable · community
+- `trend.supertrend.7-4p0-ls` **SuperTrend 7/4.0 (long-short)** · executable · community
+- `trend.ma-crossover.tema-10-30-long` **Triple exponential MA crossover 10/30 (long)** — aka TEMA 10/30 cross · executable · community
+- `trend.ma-crossover.tema-10-30-ls` **Triple exponential MA crossover 10/30 (long-short)** — aka TEMA 10/30 cross · executable · community
+- `trend.ma-crossover.tema-100-200-long` **Triple exponential MA crossover 100/200 (long)** — aka TEMA 100/200 cross · executable · community
+- `trend.ma-crossover.tema-100-200-ls` **Triple exponential MA crossover 100/200 (long-short)** — aka TEMA 100/200 cross · executable · community
+- `trend.ma-crossover.tema-12-26-long` **Triple exponential MA crossover 12/26 (long)** — aka TEMA 12/26 cross · executable · community
+- `trend.ma-crossover.tema-12-26-ls` **Triple exponential MA crossover 12/26 (long-short)** — aka TEMA 12/26 cross · executable · community
+- `trend.ma-crossover.tema-20-50-long` **Triple exponential MA crossover 20/50 (long)** — aka TEMA 20/50 cross · executable · community
+- `trend.ma-crossover.tema-20-50-ls` **Triple exponential MA crossover 20/50 (long-short)** — aka TEMA 20/50 cross · executable · community
+- `trend.ma-crossover.tema-21-55-long` **Triple exponential MA crossover 21/55 (long)** — aka TEMA 21/55 cross · executable · community
+- `trend.ma-crossover.tema-21-55-ls` **Triple exponential MA crossover 21/55 (long-short)** — aka TEMA 21/55 cross · executable · community
+- `trend.ma-crossover.tema-34-89-long` **Triple exponential MA crossover 34/89 (long)** — aka TEMA 34/89 cross · executable · community
+- `trend.ma-crossover.tema-34-89-ls` **Triple exponential MA crossover 34/89 (long-short)** — aka TEMA 34/89 cross · executable · community
+- `trend.ma-crossover.tema-5-20-long` **Triple exponential MA crossover 5/20 (long)** — aka TEMA 5/20 cross · executable · community
+- `trend.ma-crossover.tema-5-20-ls` **Triple exponential MA crossover 5/20 (long-short)** — aka TEMA 5/20 cross · executable · community
+- `trend.ma-crossover.tema-50-100-long` **Triple exponential MA crossover 50/100 (long)** — aka TEMA 50/100 cross · executable · community
+- `trend.ma-crossover.tema-50-100-ls` **Triple exponential MA crossover 50/100 (long-short)** — aka TEMA 50/100 cross · executable · community
+- `trend.ma-crossover.tema-50-200-long` **Triple exponential MA crossover 50/200 (long)** — aka TEMA 50/200 cross · executable · community
+- `trend.ma-crossover.tema-50-200-ls` **Triple exponential MA crossover 50/200 (long-short)** — aka TEMA 50/200 cross · executable · community
+- `trend.ma-crossover.tema-9-21-long` **Triple exponential MA crossover 9/21 (long)** — aka TEMA 9/21 cross · executable · community
+- `trend.ma-crossover.tema-9-21-ls` **Triple exponential MA crossover 9/21 (long-short)** — aka TEMA 9/21 cross · executable · community
+- `trend.triple-ma.10-30-100-long` **Triple moving average 10/30/100** · executable · community
+- `trend.triple-ma.10-30-100-ls` **Triple moving average 10/30/100 (long-short)** · executable · community
+- `trend.triple-ma.20-50-200-long` **Triple moving average 20/50/200** · executable · community
+- `trend.triple-ma.20-50-200-ls` **Triple moving average 20/50/200 (long-short)** · executable · community
+- `trend.triple-ma.4-9-18-long` **Triple moving average 4/9/18** · executable · community
+- `trend.triple-ma.4-9-18-ls` **Triple moving average 4/9/18 (long-short)** · executable · community
+- `trend.triple-ma.5-20-50-long` **Triple moving average 5/20/50** · executable · community
+- `trend.triple-ma.5-20-50-ls` **Triple moving average 5/20/50 (long-short)** · executable · community
+- `trend.ma-crossover.wma-10-30-long` **Weighted MA crossover 10/30 (long)** — aka WMA 10/30 cross · executable · community
+- `trend.ma-crossover.wma-10-30-ls` **Weighted MA crossover 10/30 (long-short)** — aka WMA 10/30 cross · executable · community
+- `trend.ma-crossover.wma-100-200-long` **Weighted MA crossover 100/200 (long)** — aka WMA 100/200 cross · executable · community
+- `trend.ma-crossover.wma-100-200-ls` **Weighted MA crossover 100/200 (long-short)** — aka WMA 100/200 cross · executable · community
+- `trend.ma-crossover.wma-12-26-long` **Weighted MA crossover 12/26 (long)** — aka WMA 12/26 cross · executable · community
+- `trend.ma-crossover.wma-12-26-ls` **Weighted MA crossover 12/26 (long-short)** — aka WMA 12/26 cross · executable · community
+- `trend.ma-crossover.wma-20-50-long` **Weighted MA crossover 20/50 (long)** — aka WMA 20/50 cross · executable · community
+- `trend.ma-crossover.wma-20-50-ls` **Weighted MA crossover 20/50 (long-short)** — aka WMA 20/50 cross · executable · community
+- `trend.ma-crossover.wma-21-55-long` **Weighted MA crossover 21/55 (long)** — aka WMA 21/55 cross · executable · community
+- `trend.ma-crossover.wma-21-55-ls` **Weighted MA crossover 21/55 (long-short)** — aka WMA 21/55 cross · executable · community
+- `trend.ma-crossover.wma-34-89-long` **Weighted MA crossover 34/89 (long)** — aka WMA 34/89 cross · executable · community
+- `trend.ma-crossover.wma-34-89-ls` **Weighted MA crossover 34/89 (long-short)** — aka WMA 34/89 cross · executable · community
+- `trend.ma-crossover.wma-5-20-long` **Weighted MA crossover 5/20 (long)** — aka WMA 5/20 cross · executable · community
+- `trend.ma-crossover.wma-5-20-ls` **Weighted MA crossover 5/20 (long-short)** — aka WMA 5/20 cross · executable · community
+- `trend.ma-crossover.wma-50-100-long` **Weighted MA crossover 50/100 (long)** — aka WMA 50/100 cross · executable · community
+- `trend.ma-crossover.wma-50-100-ls` **Weighted MA crossover 50/100 (long-short)** — aka WMA 50/100 cross · executable · community
+- `trend.ma-crossover.wma-50-200-long` **Weighted MA crossover 50/200 (long)** — aka WMA 50/200 cross · executable · community
+- `trend.ma-crossover.wma-50-200-ls` **Weighted MA crossover 50/200 (long-short)** — aka WMA 50/200 cross · executable · community
+- `trend.ma-crossover.wma-9-21-long` **Weighted MA crossover 9/21 (long)** — aka WMA 9/21 cross · executable · community
+- `trend.ma-crossover.wma-9-21-ls` **Weighted MA crossover 9/21 (long-short)** — aka WMA 9/21 cross · executable · community
+
+### Volatility (9)
+
+- `volatility.atr-expansion.1p2-long` **ATR expansion 1.2x** · executable · community
+- `volatility.atr-expansion.1p2-ls` **ATR expansion 1.2x (long-short)** · executable · community
+- `volatility.atr-expansion.1p5-long` **ATR expansion 1.5x** · executable · community
+- `volatility.atr-expansion.1p5-ls` **ATR expansion 1.5x (long-short)** · executable · community
+- `volatility.atr-expansion.2p0-long` **ATR expansion 2.0x** · executable · community
+- `volatility.atr-expansion.2p0-ls` **ATR expansion 2.0x (long-short)** · executable · community
+- `volatility.regime-filter.30-long` **Low-volatility regime filter 30th percentile** · executable · community
+- `volatility.regime-filter.50-long` **Low-volatility regime filter 50th percentile** · executable · community
+- `volatility.regime-filter.70-long` **Low-volatility regime filter 70th percentile** · executable · community
+
+### Volume (36)
+
+- `volume.accumulation-trend.20-long` **Accumulation/distribution trend 20-bar** · executable · community
+- `volume.accumulation-trend.20-ls` **Accumulation/distribution trend 20-bar (long-short)** · executable · community
+- `volume.accumulation-trend.50-long` **Accumulation/distribution trend 50-bar** · executable · community
+- `volume.accumulation-trend.50-ls` **Accumulation/distribution trend 50-bar (long-short)** · executable · community
+- `volume.chaikin-money-flow.20-0p05-long` **Chaikin money flow 20-bar, ±0.05** · executable · community
+- `volume.chaikin-money-flow.20-0p05-ls` **Chaikin money flow 20-bar, ±0.05 (long-short)** · executable · community
+- `volume.chaikin-money-flow.20-0p1-long` **Chaikin money flow 20-bar, ±0.1** · executable · community
+- `volume.chaikin-money-flow.20-0p1-ls` **Chaikin money flow 20-bar, ±0.1 (long-short)** · executable · community
+- `volume.chaikin-money-flow.50-0p05-long` **Chaikin money flow 50-bar, ±0.05** · executable · community
+- `volume.chaikin-money-flow.50-0p05-ls` **Chaikin money flow 50-bar, ±0.05 (long-short)** · executable · community
+- `volume.chaikin-money-flow.50-0p1-long` **Chaikin money flow 50-bar, ±0.1** · executable · community
+- `volume.chaikin-money-flow.50-0p1-ls` **Chaikin money flow 50-bar, ±0.1 (long-short)** · executable · community
+- `volume.obv-trend.10-long` **On-balance volume trend 10-bar** · executable · community
+- `volume.obv-trend.10-ls` **On-balance volume trend 10-bar (long-short)** · executable · community
+- `volume.obv-trend.20-long` **On-balance volume trend 20-bar** · executable · community
+- `volume.obv-trend.20-ls` **On-balance volume trend 20-bar (long-short)** · executable · community
+- `volume.obv-trend.50-long` **On-balance volume trend 50-bar** · executable · community
+- `volume.obv-trend.50-ls` **On-balance volume trend 50-bar (long-short)** · executable · community
+- `volume.relative-volume.1p5-10-long` **Volume-confirmed breakout 1.5x, 10-bar** · executable · community
+- `volume.relative-volume.1p5-10-ls` **Volume-confirmed breakout 1.5x, 10-bar (long-short)** · executable · community
+- `volume.relative-volume.1p5-20-long` **Volume-confirmed breakout 1.5x, 20-bar** · executable · community
+- `volume.relative-volume.1p5-20-ls` **Volume-confirmed breakout 1.5x, 20-bar (long-short)** · executable · community
+- `volume.relative-volume.1p5-50-long` **Volume-confirmed breakout 1.5x, 50-bar** · executable · community
+- `volume.relative-volume.1p5-50-ls` **Volume-confirmed breakout 1.5x, 50-bar (long-short)** · executable · community
+- `volume.relative-volume.2p0-10-long` **Volume-confirmed breakout 2.0x, 10-bar** · executable · community
+- `volume.relative-volume.2p0-10-ls` **Volume-confirmed breakout 2.0x, 10-bar (long-short)** · executable · community
+- `volume.relative-volume.2p0-20-long` **Volume-confirmed breakout 2.0x, 20-bar** · executable · community
+- `volume.relative-volume.2p0-20-ls` **Volume-confirmed breakout 2.0x, 20-bar (long-short)** · executable · community
+- `volume.relative-volume.2p0-50-long` **Volume-confirmed breakout 2.0x, 50-bar** · executable · community
+- `volume.relative-volume.2p0-50-ls` **Volume-confirmed breakout 2.0x, 50-bar (long-short)** · executable · community
+- `volume.relative-volume.3p0-10-long` **Volume-confirmed breakout 3.0x, 10-bar** · executable · community
+- `volume.relative-volume.3p0-10-ls` **Volume-confirmed breakout 3.0x, 10-bar (long-short)** · executable · community
+- `volume.relative-volume.3p0-20-long` **Volume-confirmed breakout 3.0x, 20-bar** · executable · community
+- `volume.relative-volume.3p0-20-ls` **Volume-confirmed breakout 3.0x, 20-bar (long-short)** · executable · community
+- `volume.relative-volume.3p0-50-long` **Volume-confirmed breakout 3.0x, 50-bar** · executable · community
+- `volume.relative-volume.3p0-50-ls` **Volume-confirmed breakout 3.0x, 50-bar (long-short)** · executable · community
