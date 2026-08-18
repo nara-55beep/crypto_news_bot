@@ -146,3 +146,24 @@ def routes() -> list[web.AbstractRouteDef]:
         web.get("/api/strategies/batch/{job_id}", batch_state),
         web.post("/api/strategies/batch/{job_id}/cancel", cancel_batch),
     ]
+
+
+async def desk_loop(interval_seconds: float = 900.0) -> None:
+    """Keep every paper account current without needing the page open.
+
+    Daily bars only change once a session, so a quarter-hourly poll is ample; the
+    desk short-circuits when no account has an unprocessed bar, and a data outage
+    is logged and retried rather than killing the task.
+    """
+    import asyncio
+
+    while True:
+        try:
+            summary = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: service().paper_tick(force=True))
+            if summary.get("advanced"):
+                print(f"[strategy-desk] advanced {summary['advanced']} paper account(s) "
+                      f"on {summary['symbol']} through {summary['last_bar']}")
+        except Exception as exc:
+            print(f"[strategy-desk] tick failed: {type(exc).__name__}: {exc}")
+        await asyncio.sleep(interval_seconds)

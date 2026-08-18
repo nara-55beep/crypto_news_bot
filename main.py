@@ -82,6 +82,7 @@ import lucid_pass_audited_paper
 import lucid_continuous_paper
 from lucid_lab.paper import LucidLabPaperBot, manage_loop as manage_lucid_lab_paper
 import lucid_lab.web as lucid_lab_web
+import strategy_lab.web as strategy_lab_web
 import nq_mr_15m_paper
 import nr7_paper
 import nr7_aggr_paper
@@ -242,6 +243,7 @@ async def main():
              asyncio.create_task(apexvwapbot.manage_loop()),
              asyncio.create_task(lucid_pass_paper.manage_shared_loop([lucidcontbot, lucidpassbot])),
              asyncio.create_task(manage_lucid_lab_paper(lucidlabpaperbot)),
+             asyncio.create_task(strategy_lab_web.desk_loop()),
              asyncio.create_task(nqmr15bot.manage_loop()),
              asyncio.create_task(nr7bot.manage_loop()),
              asyncio.create_task(nr7aggrbot.manage_loop()),
