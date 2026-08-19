@@ -4514,44 +4514,61 @@ PAPER_HTML = r"""<!doctype html>
   }
   setInterval(paintUptimes,1000); paintUptimes();
 
-  // Pin any paper bot visually. Stored locally and re-applied after panel refreshes.
+  // Pin paper bots at the top in click order. Lucid Continuous remains the
+  // fixed first card, and unpinned cards retain their original desk order.
   const PIN_KEY='paper_pinned_bot_panels';
   const PIN_SEED_KEY='paper_pinned_bot_panels_seed_v5';
+  const PRIMARY_PAPER_PANEL_ID='lucidcont-panel';
   const DEFAULT_PINNED_BOTS=['lucidcont-panel','lucidpass-panel','nqmr15-panel','nr7-panel','nr7aggr-panel','apexvwap-panel','ictsm-panel'];
+  const pinRoot=document.getElementById('wrap');
+  const PAPER_PANEL_ORDER=pinRoot?Array.from(pinRoot.children).filter(el=>el.matches('.bot[id]')).map(el=>el.id):[];
   function getPinnedBots(){
-    let set;
-    try{set=new Set(JSON.parse(localStorage.getItem(PIN_KEY)||'[]'));}catch(e){set=new Set();}
+    let ids=[];
+    try{const saved=JSON.parse(localStorage.getItem(PIN_KEY)||'[]'); if(Array.isArray(saved)) ids=saved.filter(id=>typeof id==='string');}catch(e){}
+    ids=Array.from(new Set(ids));
     try{
       if(localStorage.getItem(PIN_SEED_KEY)!=='1'){
-        DEFAULT_PINNED_BOTS.forEach(id=>set.add(id));
-        localStorage.setItem(PIN_KEY, JSON.stringify(Array.from(set)));
+        DEFAULT_PINNED_BOTS.forEach(id=>{if(!ids.includes(id)) ids.push(id);});
+        localStorage.setItem(PIN_KEY, JSON.stringify(ids));
         localStorage.setItem(PIN_SEED_KEY, '1');
       }
     }catch(e){
-      DEFAULT_PINNED_BOTS.forEach(id=>set.add(id));
+      DEFAULT_PINNED_BOTS.forEach(id=>{if(!ids.includes(id)) ids.push(id);});
     }
-    return set;
+    return ids;
   }
-  function savePinnedBots(set){
-    try{localStorage.setItem(PIN_KEY, JSON.stringify(Array.from(set)));}catch(e){}
+  function savePinnedBots(ids){
+    try{localStorage.setItem(PIN_KEY, JSON.stringify(Array.from(new Set(ids))));}catch(e){}
   }
   function togglePaperPin(id){
-    const set=getPinnedBots();
-    if(set.has(id)) set.delete(id); else set.add(id);
-    savePinnedBots(set);
+    const ids=getPinnedBots();
+    const index=ids.indexOf(id);
+    if(index>=0) ids.splice(index,1); else ids.push(id);
+    savePinnedBots(ids);
     applyPaperPins();
   }
+  function orderedPaperPanels(panels,pinnedIds,baseIds){
+    const byId=new Map(panels.map(panel=>[panel.id,panel]));
+    const ordered=[]; const seen=new Set();
+    function add(id){const panel=byId.get(id); if(panel&&!seen.has(id)){ordered.push(panel);seen.add(id);}}
+    add(PRIMARY_PAPER_PANEL_ID);
+    pinnedIds.forEach(add);
+    baseIds.forEach(add);
+    panels.forEach(panel=>add(panel.id));
+    return ordered;
+  }
   function applyPaperPins(){
-    const set=getPinnedBots();
+    const pinnedIds=getPinnedBots();
+    const pinnedSet=new Set(pinnedIds);
     document.querySelectorAll('#wrap .bot[id]').forEach(panel=>{
-      const pinned=set.has(panel.id);
+      const pinned=pinnedSet.has(panel.id);
       panel.classList.toggle('pinned', pinned);
       const head=panel.querySelector('.bhead');
       if(!head || head.querySelector('.pinbtn')) return;
       const btn=document.createElement('button');
       btn.type='button';
       btn.className='pinbtn'+(pinned?' on':'');
-      btn.title='Pin/highlight this paper bot';
+      btn.title='Pin this paper bot at the top';
       btn.textContent='📌';
       btn.onclick=function(ev){ev.preventDefault(); ev.stopPropagation(); togglePaperPin(panel.id);};
       const spacer=head.querySelector('.spacer');
@@ -4559,11 +4576,22 @@ PAPER_HTML = r"""<!doctype html>
     });
     document.querySelectorAll('#wrap .bot[id] .pinbtn').forEach(btn=>{
       const panel=btn.closest('.bot[id]');
-      btn.classList.toggle('on', !!(panel && set.has(panel.id)));
+      btn.classList.toggle('on', !!(panel && pinnedSet.has(panel.id)));
     });
+    if(pinRoot){
+      const children=Array.from(pinRoot.children);
+      const panels=children.filter(el=>el.matches('.bot[id]'));
+      const ordered=orderedPaperPanels(panels,pinnedIds,PAPER_PANEL_ORDER);
+      let panelIndex=0;
+      const desiredChildren=children.map(child=>child.matches('.bot[id]')?ordered[panelIndex++]:child);
+      if(desiredChildren.some((child,index)=>child!==children[index])){
+        const fragment=document.createDocumentFragment();
+        desiredChildren.forEach(child=>fragment.appendChild(child));
+        pinRoot.appendChild(fragment);
+      }
+    }
   }
   let pinRAF=0;
-  const pinRoot=document.getElementById('wrap');
   if(pinRoot){
     new MutationObserver(function(){
       if(pinRAF) return;

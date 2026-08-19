@@ -1,5 +1,8 @@
 import json
 import os
+import re
+import shutil
+import subprocess
 import tempfile
 import time
 import unittest
@@ -312,6 +315,53 @@ class TestCryptalMakerPaper(unittest.TestCase):
         self.assertIn('web.post("/api/cryptalmaker/toggle"', dashboard)
         self.assertIn("asyncio.create_task(CRYPTALMAKER.manage_loop())", dashboard)
         self.assertIn("No private API or real-order code exists", dashboard)
+
+    def test_paper_pins_are_ordered_by_click_after_the_fixed_primary_card(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is unavailable")
+        dashboard = (Path(__file__).resolve().parents[1] / "dashboard.py").read_text(
+            encoding="utf-8")
+        match = re.search(
+            r"(function orderedPaperPanels\(panels,pinnedIds,baseIds\)\{.*?\n  \})"
+            r"\n  function applyPaperPins",
+            dashboard,
+            re.S,
+        )
+        self.assertIsNotNone(match, "pin-order helper must remain independently testable")
+        script = (
+            "const PRIMARY_PAPER_PANEL_ID='lucidcont-panel';\n"
+            + match.group(1)
+            + "\nconst panels=['s3','lucidcont-panel','s2','s1'].map(id=>({id}));"
+              "\nconst result=orderedPaperPanels(panels,['s1','s2'],"
+              "['lucidcont-panel','s3','s2','s1']).map(panel=>panel.id);"
+              "\nprocess.stdout.write(JSON.stringify(result));\n"
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "paper-pin-order.js"
+            path.write_text(script, encoding="utf-8")
+            done = subprocess.run(
+                [node, str(path)], capture_output=True, text=True, timeout=60,
+            )
+        self.assertEqual(done.returncode, 0, done.stderr[:800])
+        self.assertEqual(json.loads(done.stdout), ["lucidcont-panel", "s1", "s2", "s3"])
+
+    def test_complete_paper_page_script_parses_under_node(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is unavailable")
+        dashboard = (Path(__file__).resolve().parents[1] / "dashboard.py").read_text(
+            encoding="utf-8")
+        paper = dashboard.split('PAPER_HTML = r"""', 1)[1].split('"""', 1)[0]
+        script = re.search(r"<script>(.*?)</script>", paper, re.S)
+        self.assertIsNotNone(script)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "paper-page.js"
+            path.write_text(script.group(1), encoding="utf-8")
+            done = subprocess.run(
+                [node, "--check", str(path)], capture_output=True, text=True, timeout=60,
+            )
+        self.assertEqual(done.returncode, 0, done.stderr[:800])
 
 
 if __name__ == "__main__":
