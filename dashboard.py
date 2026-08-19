@@ -66,6 +66,7 @@ import apex_vwap_paper
 import ict_lab
 import lucid_lab.web as lucid_lab_web
 import strategy_lab.web as strategy_lab_web
+import reference_ladder.web as reference_ladder_web
 
 BINANCE_KLINES = "https://fapi.binance.com/fapi/v1/klines"
 CHART_SYMBOL = "BTCUSDT"
@@ -327,7 +328,7 @@ _TSBOT = None                         # set in start_dashboard (Trend-Sweep VWAP
 _APEXVWAPBOT = None                   # set in start_dashboard (Apex ES VWAP ORB paper bot)
 _LUCIDCONTBOT = None                  # set in start_dashboard (Lucid continuous basket paper bot)
 _LUCIDPASSBOT = None                  # set in start_dashboard (Lucid 50K monthly pass basket paper bot)
-_NQMR15BOT = None                     # set in start_dashboard (NQ 15m MR flat600 paper bot)
+_NQMR15BOT = None                     # set in start_dashboard (BTC 1m MR, $100/20x paper bot)
 _NR7BOT = None                        # set in start_dashboard (NR7 breakout ES+NQ+CL paper bot)
 _NR7AGGRBOT = None                    # set in start_dashboard (NR7 + NQ reversion aggressive paper bot)
 _OB_BOTS = {}                         # set in start_dashboard: {"1m":bot,"5m":bot,"15m":bot}
@@ -2590,7 +2591,7 @@ async def _lucidpass_reset(request: web.Request):
     return web.json_response(_LUCIDPASSBOT.reset())
 
 
-# ---- NQ 15m mean-reversion flat600 paper bot --------------------------------
+# ---- BTC 1m mean-reversion paper bot (legacy NQ display name) ----------------
 async def _nqmr15_state(request: web.Request):
     if _NQMR15BOT is None:
         return web.json_response({"enabled": False, "running": False,
@@ -3484,16 +3485,17 @@ PAPER_HTML = r"""<!doctype html>
     <a class="nav" href="/funding">Funding Bot →</a>
     <a class="nav" href="/lucid-lab" style="color:#f4bd4a;border-color:#6b4d19">Lucid Strategy Lab →</a>
     <a class="nav" href="/strategies" style="color:#19c37d;border-color:#1c5">All Strategies →</a>
+    <a class="nav" href="/reference-ladder" style="color:#a78bfa;border-color:#6d5aa8">Reference Ladder →</a>
     <a class="nav" href="http://127.0.0.1:8100" target="_blank" rel="noopener">Research Bot ↗</a>
     <span class="sub">multiple paper strategies, one page · simulated fills on real Lighter data · no real money</span>
     <span class="spacer"></span>
     <span class="sub" id="px">BTC —</span>
   </div>
   <div id="wrap">
+    <div class="bot pinned" id="lucidcont-panel" style="grid-column:1/-1;border:3px solid #22c55e;box-shadow:0 0 18px rgba(34,197,94,.55)"></div>
     <div class="bot cryptal-featured" id="cryptalmaker-panel"></div>
     <div class="bot cryptal-featured" id="cryptalgelmaker-panel"></div>
     <div class="bot cryptal-featured" id="cryptalgeo-panel"></div>
-    <div class="bot pinned" id="lucidcont-panel" style="grid-column:1/-1;border:3px solid #22c55e;box-shadow:0 0 18px rgba(34,197,94,.55)"></div>
     <div class="bot pinned" id="lucidpass-panel" style="grid-column:1/-1;border:3px solid #facc15;box-shadow:0 0 18px rgba(250,204,21,.6)"></div>
     <div class="bot pinned" id="nqmr15-panel" style="grid-column:1/-1;border:3px solid #fbbf24;box-shadow:0 0 16px rgba(251,191,36,.55)"></div>
     <div class="bot pinned" id="nr7-panel" style="grid-column:1/-1;border:3px solid #10b981;box-shadow:0 0 14px rgba(16,185,129,.55)"></div>
@@ -4930,22 +4932,22 @@ PAPER_HTML = r"""<!doctype html>
 
   async function loadNQMR15(){
     let s; try{ s=await(await fetch('/api/nqmr15/state')).json(); }catch(e){ return; }
-    if(!s.running){ $('nqmr15-panel').innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">NQ 15m Mean Reversion (paper)</span></div><div class="empty">bot not running</div>'; return; }
+    if(!s.running){ $('nqmr15-panel').innerHTML='<div class="bhead"><span class="dot off"></span><span class="bname">NQ 15m Mean Reversion (paper · BTC 1m · $100 · 20x)</span></div><div class="empty">bot not running</div>'; return; }
     const dot=s.enabled?'on':'off';
     const tgl=s.enabled?'Pause':'Enable'; const tglCls=s.enabled?'on':'off';
-    const apex='target left '+money(s.target_left)+' - drawdown room '+money(s.drawdown_room)+' - floor '+money(s.floor)+' - risk/trade '+money(s.risk_per_trade)+' - today '+fmt(s.day_pnl);
-    const phase='<span class="badge '+(s.trail_locked?'live':'')+'">'+esc(s.phase||'')+'</span>';
+    const account='BTC only - start '+money(s.start_balance)+' - max leverage '+fmt(s.leverage)+'x - current mark '+money(s.price);
+    const phase='<span class="badge live">'+esc(s.phase||'BTC 1m - isolated 20x')+'</span>';
     const errTxt=s.data_error? '<div class="sub" style="padding:6px 14px;color:var(--red)">data: '+esc(s.data_error)+'</div>':'';
     const note=s.backtest_note? '<div class="sub" style="padding:0 14px 8px;color:#fbbf24">'+esc(s.backtest_note)+'</div>':'';
     $('nqmr15-panel').innerHTML =
-      '<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">NQ 15m Mean Reversion (paper)</span>'+
-        '<span class="badge">'+esc(s.symbols||'')+' - '+esc(s.timeframe||'')+' - VWAP2s + TurtleSoup + 80-20</span>'+phase+
+      '<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">NQ 15m Mean Reversion (paper · BTC 1m · $100 · 20x)</span>'+
+        '<span class="badge">'+esc(s.symbols||'BTC/USDT')+' - '+esc(s.timeframe||'1m')+' - VWAP2s + TurtleSoup + 80-20</span>'+phase+
         '<span class="spacer"></span>'+
         '<button class="btn '+tglCls+'" onclick="toggleNQMR15()">'+tgl+'</button>'+
         '<button class="btn reset" onclick="resetNQMR15()">reset</button></div>'+
       statHead(s)+
       '<div class="sub" style="padding:7px 14px">'+esc(s.status||'')+'</div>'+
-      '<div class="sub" style="padding:0 14px 8px">'+apex+'</div>'+
+      '<div class="sub" style="padding:0 14px 8px">'+account+'</div>'+
       note+
       errTxt+
       '<div class="ph">Open positions</div>'+nr7PosBlock(s)+
@@ -4953,7 +4955,7 @@ PAPER_HTML = r"""<!doctype html>
       '<div class="ph">Closed trades</div><div class="hist">'+histBlock(s)+'</div>';
   }
   async function toggleNQMR15(){ let s; try{s=await(await fetch('/api/nqmr15/state')).json();}catch(e){return;} await fetch('/api/nqmr15/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadNQMR15(); }
-  async function resetNQMR15(){ if(!confirm('Reset the NQ 15m Mean Reversion paper account to $50,000? It will stay enabled.'))return; await fetch('/api/nqmr15/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadNQMR15(); }
+  async function resetNQMR15(){ if(!confirm('Reset the BTC 1m NQ Mean Reversion paper account to $100? It will stay enabled.'))return; await fetch('/api/nqmr15/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadNQMR15(); }
 
   async function loadNR7(){
     let s; try{ s=await(await fetch('/api/nr7/state')).json(); }catch(e){ return; }
@@ -5219,6 +5221,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.get("/paper", _paper_page),
         *lucid_lab_web.routes(),
         *strategy_lab_web.routes(),
+        *reference_ladder_web.routes(),
         web.get("/ict", _ictlab_page),
         web.get("/api/ictlab/state", _ictlab_state),
         web.post("/api/ictlab/toggle", _ictlab_toggle),

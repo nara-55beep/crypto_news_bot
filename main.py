@@ -138,7 +138,7 @@ async def main():
     lucid_alert_chat_id = getattr(config, "TELEGRAM_ALERT_CHAT_ID", "")
     lucidcontbot.set_telegram_bot(lucid_alert_token, lucid_alert_chat_id)
     lucidpassbot.set_telegram_bot(lucid_alert_token, lucid_alert_chat_id)
-    nqmr15bot = nq_mr_15m_paper.NQMR15PaperBot()  # NQ 15m MR flat600 PAPER bot
+    nqmr15bot = nq_mr_15m_paper.NQMR15PaperBot()  # BTC-only 1m port, $100 at 20x paper
     nr7bot = nr7_paper.NR7PaperBot()  # NR7 breakout Apex PAPER bot (ES+NQ+CL, lock-the-trail sprint) - PINNED TOP
     nr7aggrbot = nr7_aggr_paper.NR7AggressivePaperBot()  # NR7 + NQ reversion (aggressive) - PINNED below NR7
     # OB / Smart-Money PAPER bots (Reddit Freqtrade port) on three timeframes

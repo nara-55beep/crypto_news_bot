@@ -140,6 +140,7 @@ STRATEGY_LAB_HTML = r"""<!doctype html>
   <span class="ticker">STRATEGY<span class="dot">.</span>LIBRARY</span>
   <a class="nav" href="/paper">← Paper Trading</a>
   <a class="nav" href="/">Chart</a>
+  <a class="nav" href="/reference-ladder">Reference Ladder</a>
   <span class="spacer"></span>
   <span class="sub" id="headline">loading catalog…</span>
 </header>

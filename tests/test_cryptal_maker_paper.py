@@ -304,8 +304,9 @@ class TestCryptalMakerPaper(unittest.TestCase):
             'class="bot cryptal-featured" id="cryptalmaker-panel"', dashboard)
         self.assertIn('cryptal-new-badge">NEW STRATEGY', dashboard)
         self.assertLess(
-            dashboard.index('id="cryptalmaker-panel"'),
             dashboard.index('id="lucidcont-panel"'),
+            dashboard.index('id="cryptalmaker-panel"'),
+            "Lucid Continuous must remain the first Paper Trading card",
         )
         self.assertIn('web.get("/api/cryptalmaker/state"', dashboard)
         self.assertIn('web.post("/api/cryptalmaker/toggle"', dashboard)
