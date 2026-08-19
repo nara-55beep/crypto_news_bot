@@ -18,7 +18,8 @@ from reference_ladder.config import LadderConfig
 from reference_ladder.data import BinanceMinuteLoader
 from reference_ladder.engine import LadderBacktester
 from reference_ladder.page import REFERENCE_LADDER_HTML
-from reference_ladder.signals import BollingerRsiSmaSignal
+from reference_ladder.research import run_research
+from reference_ladder.signals import BollingerRsiSmaSignal, MultiTimeframeDipSignal
 from reference_ladder.web import routes
 
 
@@ -46,6 +47,7 @@ def signal_for(data: pd.DataFrame, positions: dict[int, int]) -> pd.Series:
 def clean_config(**overrides) -> LadderConfig:
     base = LadderConfig(
         starting_capital=1_000_000.0,
+        distance_mode="fixed",
         sizing_mode="fixed",
         fixed_ladder_sizes=(1.0, 1.0, 1.0, 1.0),
         spread_round_turn_usd=0.0,
@@ -53,6 +55,8 @@ def clean_config(**overrides) -> LadderConfig:
         base_slippage_usd=0.0,
         slippage_usd_per_btc=0.0,
         funding_rate_8h=0.0,
+        max_loss_per_cycle_pct=None,
+        max_cycle_duration_hours=None,
         curve_every_bars=1,
     )
     return base.with_overrides(overrides)
@@ -66,11 +70,29 @@ class LadderConfigTests(unittest.TestCase):
         self.assertEqual(config.trigger_distance, 800.0)
         self.assertEqual(config.ladder_step, 500.0)
         self.assertEqual(config.fixed_ladder_sizes, (10.0, 20.0, 40.0, 80.0))
-        self.assertEqual(config.leverage, 100.0)
-        self.assertIsNone(config.max_loss_per_cycle_pct)
+        self.assertEqual(config.signal_name, "multitimeframe-dip")
+        self.assertEqual(config.signal_timeframe, "4h")
+        self.assertEqual(config.distance_mode, "percent")
+        self.assertEqual(config.sizing_mode, "equity_fraction")
+        self.assertEqual(config.level_multipliers, (1.0, 0.75, 0.5, 0.25))
+        self.assertEqual(config.leverage, 5.0)
+        self.assertEqual(config.equity_fraction_per_level, 0.20)
+        self.assertEqual(config.max_loss_per_cycle_pct, 0.08)
+        self.assertEqual(config.max_cycle_duration_hours, 336.0)
 
     def test_auto_sizing_scales_with_balance(self):
-        self.assertEqual(LadderConfig().sizes_for_equity(1_000.0), (0.05, 0.1, 0.2, 0.4))
+        config = LadderConfig(
+            sizing_mode="auto", level_multipliers=(1.0, 2.0, 4.0, 8.0),
+        )
+        self.assertEqual(config.sizes_for_equity(1_000.0), (0.05, 0.1, 0.2, 0.4))
+
+    def test_equity_fraction_sizing_is_price_invariant_not_fixed_btc(self):
+        config = LadderConfig()
+        for actual, expected in zip(
+            config.sizes_for_equity(100_000.0, 50_000.0),
+            (0.4, 0.3, 0.2, 0.1),
+        ):
+            self.assertAlmostEqual(actual, expected)
 
     def test_invalid_or_unknown_config_is_rejected(self):
         with self.assertRaises(ValueError):
@@ -98,17 +120,53 @@ class ReferenceSignalTests(unittest.TestCase):
             pd.Series(range(120, 90, -1), dtype=float)
         )
         data = frame([(value, value + 1, value - 4, value) for value in closes])
-        generated = BollingerRsiSmaSignal().generate(data, LadderConfig())
+        legacy = LadderConfig(signal_name="bollinger-rsi-sma", regime_filter=False)
+        generated = BollingerRsiSmaSignal().generate(data, legacy)
         self.assertEqual(int(generated.iloc[-1]), 1)
 
     def test_short_side_is_off_by_default(self):
         closes = [100.0] * 200 + list(pd.Series(range(90, 110), dtype=float))
         data = frame([(value, value + 4, value - 1, value) for value in closes])
-        generated = BollingerRsiSmaSignal().generate(data, LadderConfig())
+        legacy = LadderConfig(signal_name="bollinger-rsi-sma", regime_filter=False)
+        generated = BollingerRsiSmaSignal().generate(data, legacy)
         self.assertFalse((generated < 0).any())
+
+    def test_multitimeframe_signal_is_written_only_after_completed_bar(self):
+        index = pd.date_range("2024-01-01", periods=6 * 24 * 60, freq="1min", tz="UTC")
+        hourly = [100.0] * (4 * 24) + [110.0] * 40 + list(range(110, 85, -1))
+        hourly = (hourly + [85.0] * 200)[: len(index) // 60]
+        closes = pd.Series(hourly, index=pd.date_range(index[0], periods=len(hourly),
+                                                       freq="1h", tz="UTC"))
+        minute_close = closes.reindex(index, method="ffill")
+        data = pd.DataFrame({
+            "open": minute_close, "high": minute_close + 0.5,
+            "low": minute_close - 2.0, "close": minute_close,
+            "volume": 100.0,
+        }, index=index)
+        config = LadderConfig(
+            signal_timeframe="1h", bb_length=5, rsi_length=2, rsi_oversold=40,
+            trend_sma_length=2, regime_slope_lookback=1,
+        )
+        generated = MultiTimeframeDipSignal().generate(data, config)
+        event_times = generated[generated > 0].index
+        self.assertGreater(len(event_times), 0)
+        self.assertTrue(all(timestamp.minute == 59 for timestamp in event_times))
 
 
 class LadderEngineTests(unittest.TestCase):
+    def test_percent_distances_scale_from_reference_price(self):
+        config = clean_config(
+            distance_mode="percent", trigger_reference_pct=0.02,
+            step_reference_pct=0.01,
+        )
+        data = frame([
+            (10_000, 10_010, 9_990, 10_000),
+            (10_000, 10_010, 9_990, 10_000),
+            (9_850, 9_900, 9_810, 9_850),
+            (9_800, 9_850, 9_790, 9_800),
+        ])
+        result = LadderBacktester(config).run(data, signal_override=signal_for(data, {1: 1}))
+        self.assertEqual(result.cycles[0]["entries"][0]["raw_price"], 9_800.0)
     def test_waits_for_trigger_distance_before_first_real_entry(self):
         data = frame([
             (10_000, 10_010, 9_990, 10_000),
@@ -311,6 +369,19 @@ class NQBTCConversionTests(unittest.TestCase):
 
 
 class IntegrationTests(unittest.TestCase):
+    def test_research_grid_uses_reference_percentages(self):
+        data = frame([(100, 101, 99, 100)] * 400)
+        report = run_research(data, LadderConfig(
+            bb_length=2, rsi_length=2, trend_sma_length=2,
+            regime_slope_lookback=1, curve_every_bars=60,
+        ))
+        self.assertEqual(
+            [row["trigger_reference_pct"] for row in report["trigger_sensitivity"]],
+            [0.015, 0.02, 0.025, 0.03],
+        )
+        self.assertTrue(report["heatmap"])
+        self.assertTrue(all("step_reference_pct" in row for row in report["heatmap"]))
+
     def test_dashboard_order_and_routes(self):
         dashboard = (ROOT / "dashboard.py").read_text(encoding="utf-8")
         self.assertLess(dashboard.index('id="lucidcont-panel"'),
@@ -323,6 +394,7 @@ class IntegrationTests(unittest.TestCase):
             "Max equity DD", "Worst cycle", "Ladder reach", "stress windows",
             "Capacity study", "Walk-forward", "parameter heatmap", "Floating P&amp;L",
             "Trading start hour UTC", "Size slippage", "Maintenance margin rate",
+            "Reference trigger (%)", "Equity notional / level (%)", "4h RSI oversold",
         ):
             self.assertIn(marker, REFERENCE_LADDER_HTML)
 

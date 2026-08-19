@@ -8,7 +8,7 @@ import pandas as pd
 
 from .config import LadderConfig
 from .engine import LadderBacktester, LadderResult
-from .signals import BollingerRsiSmaSignal
+from .signals import reference_signal
 
 
 STRESS_PERIODS = {
@@ -83,7 +83,7 @@ def detect_large_moves(frame: pd.DataFrame, *, threshold: float = 0.20,
 def run_research(frame: pd.DataFrame, config: LadderConfig | None = None,
                  *, full: bool = True) -> dict[str, Any]:
     base = (config or LadderConfig()).validate()
-    base_signals = BollingerRsiSmaSignal().generate(frame, base)
+    base_signals = reference_signal(base).generate(frame, base)
     baseline_result = LadderBacktester(base).run(frame, signal_override=base_signals)
     report: dict[str, Any] = {
         "baseline": baseline_result.to_dict(),
@@ -98,11 +98,15 @@ def run_research(frame: pd.DataFrame, config: LadderConfig | None = None,
     if not baseline_result.ok or not full:
         return report
 
-    for distance in (500.0, 750.0, 800.0, 1000.0, 1250.0, 1500.0):
-        result = baseline_result if distance == base.trigger_distance else LadderBacktester(
-            replace(base, trigger_distance=distance),
+    for distance in (0.015, 0.020, 0.025, 0.030):
+        result = baseline_result if distance == base.trigger_reference_pct else LadderBacktester(
+            replace(base, trigger_reference_pct=distance, curve_every_bars=1440),
         ).run(frame, signal_override=base_signals)
-        report["trigger_sensitivity"].append({"trigger_distance": distance, **summary(result)})
+        report["trigger_sensitivity"].append({
+            "trigger_reference_pct": distance,
+            "trigger_distance": f"{distance * 100:.1f}%",
+            **summary(result),
+        })
 
     periods: list[tuple[str, str, str, float | None]] = [
         (name, start, end, None) for name, (start, end) in STRESS_PERIODS.items()
@@ -125,23 +129,35 @@ def run_research(frame: pd.DataFrame, config: LadderConfig | None = None,
         report["stress_tests"].append(row)
 
     variants = {
-        "Regime filter": replace(base, regime_filter=True),
-        "ATR-scaled distances": replace(base, distance_mode="atr"),
+        "No rising-daily regime": replace(base, regime_filter=False),
+        "RSI threshold 28": replace(base, rsi_oversold=28.0),
+        "RSI threshold 32": replace(base, rsi_oversold=32.0),
         "Flat level sizing": replace(base, level_multipliers=(1.0, 1.0, 1.0, 1.0)),
-        "Shrinking level sizing": replace(base, level_multipliers=(1.0, 0.75, 0.5, 0.25)),
+        "Double execution and funding costs": replace(
+            base, spread_round_turn_usd=base.spread_round_turn_usd * 2.0,
+            commission_rate=base.commission_rate * 2.0,
+            base_slippage_usd=base.base_slippage_usd * 2.0,
+            slippage_usd_per_btc=base.slippage_usd_per_btc * 2.0,
+            funding_rate_8h=base.funding_rate_8h * 2.0,
+        ),
     }
     for name, variant in variants.items():
-        variant_signals = (
-            BollingerRsiSmaSignal().generate(frame, variant)
-            if variant.regime_filter else base_signals
+        variant = replace(variant, curve_every_bars=1440)
+        signal_changed = (
+            variant.signal_name != base.signal_name
+            or variant.signal_timeframe != base.signal_timeframe
+            or variant.rsi_length != base.rsi_length
+            or variant.rsi_oversold != base.rsi_oversold
+            or variant.regime_filter != base.regime_filter
         )
+        variant_signals = reference_signal(variant).generate(frame, variant) if signal_changed else base_signals
         report["improvements"].append({
             "variant": name,
             **summary(LadderBacktester(variant).run(frame, signal_override=variant_signals)),
         })
 
-    for capital in (10_000.0, 50_000.0, 100_000.0, 500_000.0, 1_000_000.0):
-        variant = replace(base, starting_capital=capital)
+    for capital in (25_000.0, 100_000.0, 500_000.0):
+        variant = replace(base, starting_capital=capital, curve_every_bars=1440)
         report["capacity"].append({
             "starting_capital": capital,
             **summary(LadderBacktester(variant).run(frame, signal_override=base_signals)),
@@ -152,33 +168,39 @@ def run_research(frame: pd.DataFrame, config: LadderConfig | None = None,
     train = frame.iloc[:split]
     test = frame.iloc[max(0, split - 500):]
     candidates = []
-    for distance in (500.0, 800.0, 1100.0, 1500.0):
-        result = LadderBacktester(replace(base, trigger_distance=distance)).run(
+    for distance in (0.015, 0.020, 0.025):
+        result = LadderBacktester(replace(
+            base, trigger_reference_pct=distance, curve_every_bars=1440,
+        )).run(
             train, signal_override=base_signals.reindex(train.index),
         )
-        candidates.append({"trigger_distance": distance, **summary(result)})
+        candidates.append({"trigger_reference_pct": distance, **summary(result)})
     viable = [row for row in candidates if row.get("ok") and not row.get("liquidations")]
     ranked = viable or [row for row in candidates if row.get("ok")]
     best = max(ranked, key=lambda row: row.get("total_return_pct") or -10**12) if ranked else None
     out_of_sample = None
     if best is not None:
         out_of_sample = LadderBacktester(
-            replace(base, trigger_distance=float(best["trigger_distance"])),
+            replace(base, trigger_reference_pct=float(best["trigger_reference_pct"]),
+                    curve_every_bars=1440),
         ).run(
             test, signal_override=base_signals.reindex(test.index),
             start_trading_at=split_time,
         )
     report["walk_forward"] = {
         "split_time": split_time.isoformat(), "training_candidates": candidates,
-        "selected_trigger_distance": best.get("trigger_distance") if best else None,
+        "selected_trigger_reference_pct": best.get("trigger_reference_pct") if best else None,
         "out_of_sample": summary(out_of_sample) if out_of_sample else None,
     }
 
-    for trigger in (500.0, 800.0, 1100.0, 1500.0):
-        for step in (250.0, 500.0, 750.0):
-            variant = replace(base, trigger_distance=trigger, ladder_step=step)
+    for trigger in (0.015, 0.020, 0.025):
+        for step in (0.0075, 0.010):
+            variant = replace(
+                base, trigger_reference_pct=trigger, step_reference_pct=step,
+                curve_every_bars=1440,
+            )
             report["heatmap"].append({
-                "trigger_distance": trigger, "ladder_step": step,
+                "trigger_reference_pct": trigger, "step_reference_pct": step,
                 **summary(LadderBacktester(variant).run(frame, signal_override=base_signals)),
             })
     return report

@@ -2,12 +2,13 @@
 
 from .config import LadderConfig
 from .engine import LadderBacktester, LadderResult
-from .signals import BollingerRsiSmaSignal, ReferenceSignal
+from .signals import BollingerRsiSmaSignal, MultiTimeframeDipSignal, ReferenceSignal
 
 __all__ = [
     "BollingerRsiSmaSignal",
     "LadderBacktester",
     "LadderConfig",
     "LadderResult",
+    "MultiTimeframeDipSignal",
     "ReferenceSignal",
 ]
