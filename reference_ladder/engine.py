@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from .config import LadderConfig
-from .signals import BollingerRsiSmaSignal, ReferenceSignal
+from .signals import ReferenceSignal, reference_signal
 
 
 @dataclass
@@ -50,7 +50,7 @@ class LadderBacktester:
     def __init__(self, config: LadderConfig | None = None,
                  signal: ReferenceSignal | None = None) -> None:
         self.config = (config or LadderConfig()).validate()
-        self.signal = signal or BollingerRsiSmaSignal()
+        self.signal = signal or reference_signal(self.config)
 
     def _edge(self, qty: float) -> float:
         c = self.config
@@ -366,6 +366,9 @@ class LadderBacktester:
                 if c.distance_mode == "atr" and np.isfinite(atr[bar]) and atr[bar] > 0:
                     trigger = atr[bar] * c.trigger_atr_multiple
                     step = atr[bar] * c.step_atr_multiple
+                elif c.distance_mode == "percent":
+                    trigger = reference * c.trigger_reference_pct
+                    step = reference * c.step_reference_pct
                 levels = [
                     reference - direction * (trigger + level * step)
                     for level in range(c.max_levels)
@@ -374,7 +377,7 @@ class LadderBacktester:
                     "id": uuid.uuid4().hex[:10], "signal_time": iso(bar),
                     "start_bar": bar, "reference_entry_price": reference,
                     "direction": direction, "levels": levels,
-                    "sizes": c.sizes_for_equity(balance), "next_level": 0,
+                    "sizes": c.sizes_for_equity(balance, reference), "next_level": 0,
                     "entries": [], "starting_balance": balance,
                     "deepest_floating_loss_usd": 0.0,
                     "max_adverse_excursion_points": 0.0,

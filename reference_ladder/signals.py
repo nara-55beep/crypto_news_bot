@@ -72,3 +72,68 @@ class BollingerRsiSmaSignal:
         result.loc[long_signal.fillna(False)] = 1
         result.loc[short_signal.fillna(False)] = -1
         return result
+
+
+class MultiTimeframeDipSignal:
+    """Causal 4-hour dip signal inside a prior-day rising BTC regime.
+
+    A signal is emitted only when a completed higher-timeframe bar first enters
+    an oversold state: its low touches the lower Bollinger Band, RSI is below
+    the configured threshold, and the previous completed UTC day was above a
+    rising 200-day EMA. The event is written to the last minute of the completed
+    higher-timeframe bar, so the ladder cannot trade within the signal bar.
+    """
+
+    name = "multitimeframe-dip"
+
+    def generate(self, frame: pd.DataFrame, config: LadderConfig) -> pd.Series:
+        rule = config.signal_timeframe
+        hours = int(rule[:-1])
+        interval = pd.Timedelta(hours=hours)
+        coarse = frame.resample(rule, label="left", closed="left").agg({
+            "open": "first", "high": "max", "low": "min", "close": "last",
+            "volume": "sum",
+        }).dropna(subset=["open", "high", "low", "close"])
+        completed = coarse.index + interval - pd.Timedelta(minutes=1) <= frame.index[-1]
+        coarse = coarse[completed]
+
+        close = coarse["close"].astype(float)
+        middle = close.rolling(config.bb_length, min_periods=config.bb_length).mean()
+        deviation = close.rolling(config.bb_length, min_periods=config.bb_length).std()
+        lower = middle - config.bb_deviations * deviation
+        strength = rsi(close, config.rsi_length)
+
+        daily_close = frame["close"].resample("1D").last().dropna().astype(float)
+        daily_ema = daily_close.ewm(
+            span=config.trend_sma_length, adjust=False,
+            min_periods=config.trend_sma_length,
+        ).mean()
+        daily_regime = (
+            (daily_close > daily_ema)
+            & (daily_ema > daily_ema.shift(config.regime_slope_lookback))
+        )
+        # At any time during UTC day D, only day D-1 is fully known.
+        if config.regime_filter:
+            regime = daily_regime.shift(1).reindex(coarse.index, method="ffill").fillna(False)
+        else:
+            regime = pd.Series(True, index=coarse.index)
+        oversold = (
+            (coarse["low"].astype(float) <= lower)
+            & (strength < config.rsi_oversold)
+            & regime.astype(bool)
+        )
+        prior_oversold = oversold.shift(1, fill_value=False).astype(bool)
+        events = oversold & ~prior_oversold
+
+        result = pd.Series(0, index=frame.index, dtype=np.int8)
+        event_times = coarse.index[events] + interval - pd.Timedelta(minutes=1)
+        result.loc[result.index.intersection(event_times)] = 1
+        return result
+
+
+def reference_signal(config: LadderConfig) -> ReferenceSignal:
+    if config.signal_name == MultiTimeframeDipSignal.name:
+        return MultiTimeframeDipSignal()
+    if config.signal_name == BollingerRsiSmaSignal.name:
+        return BollingerRsiSmaSignal()
+    raise ValueError(f"unsupported reference signal: {config.signal_name}")
