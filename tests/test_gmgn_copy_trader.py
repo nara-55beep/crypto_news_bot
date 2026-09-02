@@ -1,4 +1,4 @@
-from gmgn_copy_trader import GMGNCopyTrader, _extract_trades
+from gmgn_copy_trader import GMGNCopyTrader, POLL_SECONDS, _extract_trades
 
 
 def test_extracts_nested_trade_records():
@@ -34,3 +34,7 @@ def test_first_feed_is_baseline_not_a_trade():
     bot._baselined = True
     assert bot.balance == 50.0
     assert bot.positions == {}
+
+
+def test_default_poll_interval_is_rate_limit_safe():
+    assert POLL_SECONDS == 10.0
