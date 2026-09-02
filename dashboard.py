@@ -107,7 +107,7 @@ def _pick_free_port() -> int:
 WHALES = orderbook.WhaleTracker()    # background tape of trades
 MANUAL = manual_trader.ManualTrader() # your hand-clicked paper account
 COPY = copy_trader.CopyTrader()      # paper copy-trading of 4 Hyperliquid wallets
-GMGN_COPY = gmgn_copy_trader.GMGNCopyTrader()  # trenchflippermoney, paper-only GMGN copy
+GMGN_COPY = gmgn_copy_trader.GMGNCopyTrader()  # trenchflippermoney paper shadow + guarded live copy
 FUNDING = funding_bot.FundingBot()   # paper funding-settlement timing bot (Lighter)
 NEWSAI = news_reactor_bot.NewsReactorBot()   # News Reactor: AI reads the feed, paper-trades the call
 SNIPER = news_sniper_bot.NewsSniperBot()     # News Sniper: NO-AI rules engine, reacts instantly
@@ -3276,6 +3276,24 @@ async def _gmgn_copy_reset(request: web.Request):
     return web.json_response(GMGN_COPY.reset())
 
 
+async def _gmgn_copy_close_live(request: web.Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    result = await GMGN_COPY.liquidate_live(str(body.get("confirmation", "")))
+    return web.json_response(result, status=200 if result.get("ok") else 400)
+
+
+async def _gmgn_copy_wallet(request: web.Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    result = await GMGN_COPY.set_live_wallet(str(body.get("address", "")))
+    return web.json_response(result, status=200 if result.get("ok") else 400)
+
+
 async def _funding_page(request: web.Request):
     return web.Response(text=FUNDING_HTML, content_type="text/html")
 
@@ -3506,7 +3524,7 @@ PAPER_HTML = r"""<!doctype html>
     <a class="nav" href="/strategies" style="color:#19c37d;border-color:#1c5">All Strategies →</a>
     <a class="nav" href="/reference-ladder" style="color:#a78bfa;border-color:#6d5aa8">Reference Ladder →</a>
     <a class="nav" href="http://127.0.0.1:8100" target="_blank" rel="noopener">Research Bot ↗</a>
-    <span class="sub">multiple paper strategies, one page · simulated fills on real Lighter data · no real money</span>
+    <span class="sub">paper strategies plus the separately armed trenchflippermoney live copier</span>
     <span class="spacer"></span>
     <span class="sub" id="px">BTC —</span>
   </div>
@@ -5137,14 +5155,39 @@ PAPER_HTML = r"""<!doctype html>
     const pos=s.positions||[];
     const positionHtml=pos.length?pos.map(p=>'<div class="posrow"><div class="top"><span>'+esc(p.token)+'</span><span>'+p.qty.toPrecision(5)+' @ '+px1(p.entry)+'</span></div></div>').join(''):'<div class="empty">No open positions.</div>';
     const events=s.events&&s.events.length?s.events.slice(0,12).map(e=>'<div class="frow"><span class="t">'+new Date(e.ts).toLocaleTimeString()+'</span><span class="'+(e.kind==='buy'?'pos':'neg')+'">'+esc(e.note)+(e.observed_ts?'<small class="sub"> observed '+new Date(e.observed_ts).toLocaleTimeString()+'</small>':'')+'</span></div>').join(''):'<div class="empty">No observed trades yet.</div>';
-    $('gmgn-copy-panel').innerHTML='<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">🧱 trenchflippermoney</span><span class="badge">'+(s.online?'feed live':'feed unavailable')+'</span><span class="spacer"></span><button id="gmgn-sound" class="btn" onclick="toggleGMGNSound()">'+(gmgnSound?'🔔 sound on':'🔕 sound off')+'</button><button class="btn '+(s.enabled?'on':'off')+'" onclick="toggleGMGN()">'+(s.enabled?'Pause':'Enable')+'</button><button class="btn reset" onclick="resetGMGN()">reset</button></div>'+
-      '<div class="sub" style="padding:7px 14px">Paper-only copy of <a href="https://gmgn.ai/robinhood/address/'+s.address+'" target="_blank" rel="noopener">'+s.address+'</a> · polls the configured feed about every second · starting $50</div>'+
+    const l=s.live||{}, lp=l.positions||[], le=l.events||[];
+    const liveBadge=l.ready?'LIVE ARMED':(l.enabled?'LIVE BLOCKED':'PAPER ONLY');
+    const liveColor=l.ready?'var(--red)':(l.enabled?'#f59e0b':'var(--muted)');
+    const wallet=l.wallet_address?'<a href="https://robinhoodchain.blockscout.com/address/'+encodeURIComponent(l.wallet_address)+'" target="_blank" rel="noopener">'+esc(l.wallet_address)+'</a>':'not configured';
+    const livePositions=lp.length?lp.map(p=>'<div class="posrow"><div class="top"><span>'+esc(p.token)+'</span><span>$'+Number(p.cost_usd||0).toFixed(2)+' allocated</span></div><small class="sub">'+esc(p.token_address||'')+'</small></div>').join(''):'<div class="empty">No live positions recorded by this bot.</div>';
+    const liveEvents=le.length?le.slice(0,12).map(e=>{const note=esc(e.note||'');const tx=e.tx_hash?'<a href="https://robinhoodchain.blockscout.com/tx/'+encodeURIComponent(e.tx_hash)+'" target="_blank" rel="noopener"> tx ↗</a>':'';return '<div class="frow"><span class="t">'+new Date(e.ts).toLocaleTimeString()+'</span><span class="'+(e.kind==='buy'?'pos':'neg')+'">'+note+tx+'</span></div>';}).join(''):'<div class="empty">No live orders yet.</div>';
+    $('gmgn-copy-panel').innerHTML='<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">🧱 trenchflippermoney</span><span class="badge">'+(s.online?'feed live':'feed unavailable')+'</span><span class="badge" style="color:'+liveColor+'">'+liveBadge+'</span><span class="spacer"></span><button class="btn" onclick="connectGMGNPhantom()">Connect Phantom</button><button id="gmgn-sound" class="btn" onclick="toggleGMGNSound()">'+(gmgnSound?'🔔 sound on':'🔕 sound off')+'</button><button class="btn '+(s.enabled?'on':'off')+'" onclick="toggleGMGN()">'+(s.enabled?'Pause':'Enable')+'</button><button class="btn reset" onclick="resetGMGN()">reset paper</button>'+(lp.length?'<button class="btn reset" onclick="closeGMGNLive()">CLOSE LIVE</button>':'')+'</div>'+
+      '<div class="sub" style="padding:7px 14px">Paper shadow + opt-in real copy of <a href="https://gmgn.ai/robinhood/address/'+s.address+'" target="_blank" rel="noopener">'+s.address+'</a> · Robinhood Chain · polls every 10 seconds</div>'+
       (s.error?'<div class="sub" style="padding:6px 14px;color:var(--red)">feed: '+esc(s.error)+' · set GMGN_TRADE_FEED_URL to a supported JSON feed</div>':'')+
       '<div class="stats"><div class="stat"><div class="k">Equity</div><div class="v">'+money(s.equity)+'</div></div><div class="stat"><div class="k">Balance</div><div class="v">'+money(s.balance)+'</div></div><div class="stat"><div class="k">P&amp;L</div><div class="v '+(s.pnl>=0?'pos':'neg')+'">'+fmt(s.pnl)+'</div></div><div class="stat"><div class="k">Positions</div><div class="v">'+pos.length+'</div></div></div>'+
-      '<div class="ph mine">Open positions</div>'+positionHtml+'<div class="loghdr">Observed buys and sells</div><div class="feed">'+events+'</div>';
+      '<div class="ph mine">Paper positions</div>'+positionHtml+'<div class="loghdr">Observed buys and sells</div><div class="feed">'+events+'</div>'+
+      '<div class="ph mine" style="color:'+liveColor+'">Real-money copy · wallet '+wallet+'</div>'+
+      '<div class="sub" style="padding:7px 14px;color:'+liveColor+'">'+esc(l.status||'live status unavailable')+' · max $'+Number(l.budget_usd||0).toFixed(2)+' · allocated $'+Number(l.allocated_usd||0).toFixed(2)+' · available $'+Number(l.available_usd||0).toFixed(2)+' · slippage '+Number(l.slippage_percent||0).toFixed(1)+'%</div>'+
+      (l.error?'<div class="sub" style="padding:6px 14px;color:var(--red)">live: '+esc(l.error)+'</div>':'')+livePositions+'<div class="loghdr">Real-money order log</div><div class="feed">'+liveEvents+'</div>';
   }
   async function toggleGMGN(){let s=await(await fetch('/api/gmgn-copy/state')).json();await fetch('/api/gmgn-copy/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})});loadGMGN();}
-  async function resetGMGN(){if(!confirm('Reset trenchflippermoney to $50?'))return;await fetch('/api/gmgn-copy/reset',{method:'POST'});gmgnLastEvent='';loadGMGN();}
+  async function resetGMGN(){if(!confirm('Reset only the trenchflippermoney paper ledger to $50? Live positions will not be touched.'))return;await fetch('/api/gmgn-copy/reset',{method:'POST'});gmgnLastEvent='';loadGMGN();}
+  async function connectGMGNPhantom(){
+    const provider=window.phantom&&window.phantom.ethereum;
+    if(!provider){alert('Phantom browser extension with Robinhood Chain enabled was not found.');return;}
+    try{
+      await provider.request({method:'wallet_switchEthereumChain',params:[{chainId:'0x1237'}]});
+      const accounts=await provider.request({method:'eth_requestAccounts'});
+      if(!accounts||!accounts[0])throw new Error('Phantom returned no EVM account');
+      const r=await fetch('/api/gmgn-copy/wallet',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:accounts[0]})});
+      const d=await r.json(); if(!r.ok)throw new Error(d.error||'Wallet connection failed'); loadGMGN();
+    }catch(e){alert(e&&e.message?e.message:String(e));}
+  }
+  async function closeGMGNLive(){
+    if(!confirm('SELL every live position recorded by trenchflippermoney now? This sends irreversible real-money transactions.'))return;
+    const r=await fetch('/api/gmgn-copy/close-live',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'CLOSE LIVE POSITIONS'})});
+    const d=await r.json(); if(!r.ok) alert(d.error||'Live close failed. Check the order log.'); loadGMGN();
+  }
 
   function loadAll(){ loadGMGN(); loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadCryptalGelMaker(); loadCryptalGeo(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
   loadAll(); setInterval(loadAll, 2000);
@@ -5205,6 +5248,8 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.get("/api/gmgn-copy/state", _gmgn_copy_state),
         web.post("/api/gmgn-copy/toggle", _gmgn_copy_toggle),
         web.post("/api/gmgn-copy/reset", _gmgn_copy_reset),
+        web.post("/api/gmgn-copy/wallet", _gmgn_copy_wallet),
+        web.post("/api/gmgn-copy/close-live", _gmgn_copy_close_live),
         web.get("/api/candles", _candles),
         web.get("/ict", _ictsm_page),
         web.get("/api/ictsm", _ictsm_data),
@@ -5405,7 +5450,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
     asyncio.create_task(_lighter_tape_feed())  # feed Lighter's own trades into that tape
     asyncio.create_task(_manual_mark_loop())   # mark manual positions
     asyncio.create_task(COPY.run())            # paper copy-trading of Hyperliquid wallets
-    asyncio.create_task(GMGN_COPY.run())       # trenchflippermoney, paper-only GMGN copy
+    asyncio.create_task(GMGN_COPY.run())       # trenchflippermoney paper shadow + guarded live copy
     asyncio.create_task(FUNDING.run())         # funding-settlement timing bot (Lighter, paper)
     NEWSAI.attach(market)                       # give the AI news bot the live price feed
     asyncio.create_task(NEWSAI.manage_loop())   # AI news bot: mark/exit loop
