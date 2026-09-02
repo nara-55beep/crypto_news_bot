@@ -11,6 +11,8 @@ def test_extracts_nested_trade_records():
 
 def test_copy_buy_and_sell_updates_paper_balance():
     bot = GMGNCopyTrader()
+    bot.reset()
+    bot._baselined = True
     bot._apply_once({"id": "buy", "side": "buy", "token": "TEST",
                      "price": 2.0, "qty": 5.0, "usd": 10.0})
     bot._apply_once({"id": "sell", "side": "sell", "token": "TEST",
@@ -18,10 +20,13 @@ def test_copy_buy_and_sell_updates_paper_balance():
     assert bot.balance == 55.0
     assert bot.positions == {}
     assert bot.history[0]["pnl"] == 5.0
+    assert bot.events[0]["ts"] > 0
+    assert bot.events[0]["observed_ts"] > 0
 
 
 def test_first_feed_is_baseline_not_a_trade():
     bot = GMGNCopyTrader()
+    bot.reset()
     bot._baselined = False
     trades = [{"id": "old", "side": "buy", "token": "TEST",
                "price": 2.0, "qty": 5.0, "usd": 10.0}]

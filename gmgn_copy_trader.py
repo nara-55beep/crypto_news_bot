@@ -116,7 +116,7 @@ class GMGNCopyTrader:
                             self._save()
                             await asyncio.sleep(POLL_SECONDS)
                             continue
-                        for trade in reversed(trades):
+                        for trade in sorted(trades, key=lambda item: item.get("ts", 0)):
                             self._apply_once(trade)
                         self._save()
                     except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as exc:
@@ -166,6 +166,8 @@ class GMGNCopyTrader:
         if len(self._seen) > 2000:
             self._seen = set(list(self._seen)[-1000:])
         token, side = trade["token"], trade["side"]
+        source_ts = int(float(trade.get("ts", time.time())) * 1000)
+        observed_ts = int(time.time() * 1000)
         price, qty, usd = trade["price"], trade["qty"], trade["usd"]
         if price is None and qty and usd:
             price = usd / qty
@@ -188,7 +190,8 @@ class GMGNCopyTrader:
                 pos["qty"] = total
             else:
                 self.positions[token] = {"qty": qty, "entry": price}
-            self._event("buy", token, f"BUY {token} · ${spend:.2f} @ {price:g}")
+            self._event("buy", token, f"BUY {token} · ${spend:.2f} @ {price:g}",
+                        source_ts, observed_ts, trade_id)
         else:
             pos = self.positions.get(token)
             if not pos:
@@ -201,13 +204,17 @@ class GMGNCopyTrader:
             if pos["qty"] <= 1e-12:
                 self.positions.pop(token)
             self.history.insert(0, {"token": token, "side": "sell", "price": price,
-                                    "pnl": pnl, "ts": int(time.time() * 1000)})
+                                    "pnl": pnl, "ts": source_ts,
+                                    "observed_ts": observed_ts, "trade_id": trade_id})
             self.history = self.history[:100]
-            self._event("sell", token, f"SELL {token} · {closed:g} @ {price:g} · P&L {pnl:+.2f}")
+            self._event("sell", token, f"SELL {token} · {closed:g} @ {price:g} · P&L {pnl:+.2f}",
+                        source_ts, observed_ts, trade_id)
 
-    def _event(self, kind: str, token: str, note: str):
-        self.events.insert(0, {"id": f"{time.time_ns()}", "kind": kind, "token": token,
-                               "note": note, "ts": int(time.time() * 1000)})
+    def _event(self, kind: str, token: str, note: str, source_ts: int,
+               observed_ts: int, trade_id: str):
+        self.events.insert(0, {"id": trade_id, "kind": kind, "token": token,
+                               "note": note, "ts": source_ts,
+                               "observed_ts": observed_ts})
         self.events = self.events[:MAX_EVENTS]
 
     def toggle(self, enabled: bool | None = None) -> dict:
