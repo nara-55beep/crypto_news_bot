@@ -20,7 +20,8 @@ ADDRESS = "0x3ad83204e37fb98cd83ac523dfb65f7f99bb716d"
 PAGE_URL = f"https://gmgn.ai/robinhood/address/{ADDRESS}"
 FEED_URL = os.getenv("GMGN_TRADE_FEED_URL", PAGE_URL)
 START_BALANCE = 50.0
-POLL_SECONDS = 1.0
+POLL_SECONDS = 10.0
+MAX_BACKOFF_SECONDS = 300.0
 MAX_EVENTS = 100
 STATE_PATH = os.path.join(os.path.dirname(__file__), "data", "trenchflippermoney_state.json")
 
@@ -87,6 +88,7 @@ class GMGNCopyTrader:
         self._seen: set[str] = set()
         self._baselined = False
         self._task: asyncio.Task | None = None
+        self._backoff_seconds = POLL_SECONDS
         self._load()
 
     async def run(self):
@@ -122,7 +124,18 @@ class GMGNCopyTrader:
                     except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as exc:
                         self.online = False
                         self.error = f"{type(exc).__name__}: {exc}"
-                await asyncio.sleep(POLL_SECONDS)
+                        if "429" in str(exc) or "RATE_LIMIT" in str(exc):
+                            self._backoff_seconds = min(
+                                max(self._backoff_seconds * 2, 30.0),
+                                MAX_BACKOFF_SECONDS,
+                            )
+                        else:
+                            self._backoff_seconds = POLL_SECONDS
+                else:
+                    self._backoff_seconds = POLL_SECONDS
+                await asyncio.sleep(self._backoff_seconds)
+                if self.online:
+                    self._backoff_seconds = POLL_SECONDS
         self.running = False
 
     async def _cli_payload(self) -> Any:
