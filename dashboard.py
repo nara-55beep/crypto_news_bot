@@ -39,6 +39,7 @@ import manual_trader
 import journal
 import lighter_live
 import copy_trader
+import gmgn_copy_trader
 import funding_bot
 import lighter_stats
 import lighter_markets
@@ -67,6 +68,7 @@ import ict_lab
 import lucid_lab.web as lucid_lab_web
 import strategy_lab.web as strategy_lab_web
 import reference_ladder.web as reference_ladder_web
+import memecoin_lab.web as memecoin_lab_web
 
 BINANCE_KLINES = "https://fapi.binance.com/fapi/v1/klines"
 CHART_SYMBOL = "BTCUSDT"
@@ -105,6 +107,7 @@ def _pick_free_port() -> int:
 WHALES = orderbook.WhaleTracker()    # background tape of trades
 MANUAL = manual_trader.ManualTrader() # your hand-clicked paper account
 COPY = copy_trader.CopyTrader()      # paper copy-trading of 4 Hyperliquid wallets
+GMGN_COPY = gmgn_copy_trader.GMGNCopyTrader()  # trenchflippermoney, paper-only GMGN copy
 FUNDING = funding_bot.FundingBot()   # paper funding-settlement timing bot (Lighter)
 NEWSAI = news_reactor_bot.NewsReactorBot()   # News Reactor: AI reads the feed, paper-trades the call
 SNIPER = news_sniper_bot.NewsSniperBot()     # News Sniper: NO-AI rules engine, reacts instantly
@@ -3257,6 +3260,22 @@ async def _copy_reset(request: web.Request):
     return web.json_response({"ok": True})
 
 
+async def _gmgn_copy_state(request: web.Request):
+    return web.json_response(GMGN_COPY.snapshot())
+
+
+async def _gmgn_copy_toggle(request: web.Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    return web.json_response(GMGN_COPY.toggle(body.get("enabled")))
+
+
+async def _gmgn_copy_reset(request: web.Request):
+    return web.json_response(GMGN_COPY.reset())
+
+
 async def _funding_page(request: web.Request):
     return web.Response(text=FUNDING_HTML, content_type="text/html")
 
@@ -3492,6 +3511,7 @@ PAPER_HTML = r"""<!doctype html>
     <span class="sub" id="px">BTC —</span>
   </div>
   <div id="wrap">
+    <div class="bot pinned" id="gmgn-copy-panel" style="grid-column:1/-1;border:3px solid #ef4444;box-shadow:0 0 16px rgba(239,68,68,.45)"></div>
     <div class="bot pinned" id="lucidcont-panel" style="grid-column:1/-1;border:3px solid #22c55e;box-shadow:0 0 18px rgba(34,197,94,.55)"></div>
     <div class="bot cryptal-featured" id="cryptalmaker-panel"></div>
     <div class="bot cryptal-featured" id="cryptalgelmaker-panel"></div>
@@ -5097,7 +5117,36 @@ PAPER_HTML = r"""<!doctype html>
   async function toggleCOT(){ let s; try{s=await(await fetch('/api/cotbot/state')).json();}catch(e){return;} await fetch('/api/cotbot/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})}); loadCOT(); }
   async function resetCOT(){ if(!confirm('Reset the COT paper account?'))return; await fetch('/api/cotbot/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); loadCOT(); }
 
-  function loadAll(){ loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadCryptalGelMaker(); loadCryptalGeo(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
+  let gmgnLastEvent = '';
+  let gmgnSound = false;
+  let gmgnAudio;
+  function gmgnBeep(){
+    if(!gmgnSound) return;
+    gmgnAudio=gmgnAudio||new (window.AudioContext||window.webkitAudioContext)();
+    const o=gmgnAudio.createOscillator(), g=gmgnAudio.createGain();
+    o.frequency.value=880; g.gain.setValueAtTime(.08,gmgnAudio.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,gmgnAudio.currentTime+.18);
+    o.connect(g); g.connect(gmgnAudio.destination); o.start(); o.stop(gmgnAudio.currentTime+.18);
+  }
+  function toggleGMGNSound(){ gmgnSound=!gmgnSound; $('gmgn-sound').textContent=gmgnSound?'🔔 sound on':'🔕 sound off'; if(gmgnSound) gmgnBeep(); }
+  async function loadGMGN(){
+    let s; try{s=await(await fetch('/api/gmgn-copy/state')).json();}catch(e){return;}
+    const dot=s.enabled?(s.online?'on':'blocked'):'off';
+    const latest=s.events&&s.events[0];
+    if(latest && latest.id!==gmgnLastEvent){ if(gmgnLastEvent) gmgnBeep(); gmgnLastEvent=latest.id; }
+    const pos=s.positions||[];
+    const positionHtml=pos.length?pos.map(p=>'<div class="posrow"><div class="top"><span>'+esc(p.token)+'</span><span>'+p.qty.toPrecision(5)+' @ '+px1(p.entry)+'</span></div></div>').join(''):'<div class="empty">No open positions.</div>';
+    const events=s.events&&s.events.length?s.events.slice(0,12).map(e=>'<div class="frow"><span class="t">'+new Date(e.ts).toLocaleTimeString()+'</span><span class="'+(e.kind==='buy'?'pos':'neg')+'">'+esc(e.note)+'</span></div>').join(''):'<div class="empty">No observed trades yet.</div>';
+    $('gmgn-copy-panel').innerHTML='<div class="bhead"><span class="dot '+dot+'"></span><span class="bname">🧱 trenchflippermoney</span><span class="badge">'+(s.online?'feed live':'feed unavailable')+'</span><span class="spacer"></span><button id="gmgn-sound" class="btn" onclick="toggleGMGNSound()">'+(gmgnSound?'🔔 sound on':'🔕 sound off')+'</button><button class="btn '+(s.enabled?'on':'off')+'" onclick="toggleGMGN()">'+(s.enabled?'Pause':'Enable')+'</button><button class="btn reset" onclick="resetGMGN()">reset</button></div>'+
+      '<div class="sub" style="padding:7px 14px">Paper-only copy of <a href="https://gmgn.ai/robinhood/address/'+s.address+'" target="_blank" rel="noopener">'+s.address+'</a> · polls the configured feed about every second · starting $50</div>'+
+      (s.error?'<div class="sub" style="padding:6px 14px;color:var(--red)">feed: '+esc(s.error)+' · set GMGN_TRADE_FEED_URL to a supported JSON feed</div>':'')+
+      '<div class="stats"><div class="stat"><div class="k">Equity</div><div class="v">'+money(s.equity)+'</div></div><div class="stat"><div class="k">Balance</div><div class="v">'+money(s.balance)+'</div></div><div class="stat"><div class="k">P&amp;L</div><div class="v '+(s.pnl>=0?'pos':'neg')+'">'+fmt(s.pnl)+'</div></div><div class="stat"><div class="k">Positions</div><div class="v">'+pos.length+'</div></div></div>'+
+      '<div class="ph mine">Open positions</div>'+positionHtml+'<div class="loghdr">Observed buys and sells</div><div class="feed">'+events+'</div>';
+  }
+  async function toggleGMGN(){let s=await(await fetch('/api/gmgn-copy/state')).json();await fetch('/api/gmgn-copy/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:!s.enabled})});loadGMGN();}
+  async function resetGMGN(){if(!confirm('Reset trenchflippermoney to $50?'))return;await fetch('/api/gmgn-copy/reset',{method:'POST'});gmgnLastEvent='';loadGMGN();}
+
+  function loadAll(){ loadGMGN(); loadLucidCont(); loadLucidPass(); loadNQMR15(); loadNR7(); loadNR7Aggr(); loadApexVWAP(); loadNewsAI(); loadSniper(); loadArb(); loadCryptalMaker(); loadCryptalGelMaker(); loadCryptalGeo(); loadFV(); loadTrend(); loadAINews(); loadClaudeHaiku(); loadTVStrats(); loadMeanRev(); loadNewsMomo(); loadRSI2NoATR(); loadRSI2ATR(); loadPatternBots(); loadNewsPaper(); loadICTSM(); loadICT(); loadICTFreq(); loadFreq(); loadFreqTP(); loadFreqTrend(); loadFreq5(); loadFreqTF(); loadTS(); loadOB('1m'); loadOB('5m'); loadOB('15m'); loadCOT(); loadNW(); loadOnchain(); loadPoly(); }
   loadAll(); setInterval(loadAll, 2000);
 </script>
 </body>
@@ -5153,6 +5202,9 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.get("/copytrade", _copy_page),
         web.get("/api/copytrade", _copy_state),
         web.post("/api/copytrade/reset", _copy_reset),
+        web.get("/api/gmgn-copy/state", _gmgn_copy_state),
+        web.post("/api/gmgn-copy/toggle", _gmgn_copy_toggle),
+        web.post("/api/gmgn-copy/reset", _gmgn_copy_reset),
         web.get("/api/candles", _candles),
         web.get("/ict", _ictsm_page),
         web.get("/api/ictsm", _ictsm_data),
@@ -5247,6 +5299,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.post("/api/penny/reset", _penny_reset),
         web.post("/api/penny/scan", _penny_scan),
         web.get("/paper", _paper_page),
+        *memecoin_lab_web.routes(),
         *lucid_lab_web.routes(),
         *strategy_lab_web.routes(),
         *reference_ladder_web.routes(),
@@ -5339,6 +5392,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
         web.post("/api/lighterbot/close", _lighterbot_close),
         web.post("/api/lighterbot/reset", _lighterbot_reset),
     ])
+    memecoin_lab_web.attach_lifecycle(app)
     runner = web.AppRunner(app)
     await runner.setup()
     global PORT
@@ -5351,6 +5405,7 @@ async def start_dashboard(market=None, broker=None, nwbot=None,
     asyncio.create_task(_lighter_tape_feed())  # feed Lighter's own trades into that tape
     asyncio.create_task(_manual_mark_loop())   # mark manual positions
     asyncio.create_task(COPY.run())            # paper copy-trading of Hyperliquid wallets
+    asyncio.create_task(GMGN_COPY.run())       # trenchflippermoney, paper-only GMGN copy
     asyncio.create_task(FUNDING.run())         # funding-settlement timing bot (Lighter, paper)
     NEWSAI.attach(market)                       # give the AI news bot the live price feed
     asyncio.create_task(NEWSAI.manage_loop())   # AI news bot: mark/exit loop
@@ -5647,8 +5702,27 @@ PAGE_HTML = r"""<!doctype html>
     to{box-shadow:0 0 26px rgba(253,224,71,.85),0 2px 10px rgba(0,0,0,.35)}
   }
   @keyframes airdropSheen{0%,62%{left:-60%}100%{left:130%}}
+  /* Standalone Solana memecoin intelligence cockpit. */
+  .memecoin-btn{
+    position:relative;isolation:isolate;overflow:hidden;display:inline-flex;align-items:center;gap:8px;
+    min-height:31px;padding:5px 15px;margin-left:6px;border:1px solid #40f298;border-radius:7px;
+    color:#eafff1!important;text-decoration:none;font-size:11px;font-weight:800;letter-spacing:.09em;
+    text-transform:uppercase;background:linear-gradient(105deg,#082d1c,#0d7442 42%,#11995a 58%,#0a3b25);
+    background-size:240% 100%;box-shadow:0 0 0 1px rgba(57,242,140,.08),0 0 18px rgba(57,242,140,.3);
+    animation:memecoinSweep 4.2s linear infinite,memecoinGlow 1.8s ease-in-out infinite alternate
+  }
+  .memecoin-btn::before{content:"";width:7px;height:7px;border-radius:50%;background:#8dffbd;
+    box-shadow:0 0 0 0 rgba(141,255,189,.5);animation:memecoinPulse 1.8s ease-out infinite}
+  .memecoin-btn::after{content:"";position:absolute;z-index:-1;inset:-2px auto -2px -48%;width:34%;
+    transform:skewX(-20deg);background:linear-gradient(90deg,transparent,rgba(215,255,230,.48),transparent);
+    animation:memecoinSheen 3.2s ease-in-out infinite}
+  .memecoin-btn:hover{border-color:#9dffc5;filter:brightness(1.12);box-shadow:0 0 27px rgba(57,242,140,.52)}
+  @keyframes memecoinSweep{to{background-position:240% 0}}
+  @keyframes memecoinGlow{from{box-shadow:0 0 0 1px rgba(57,242,140,.08),0 0 12px rgba(57,242,140,.25)}to{box-shadow:0 0 0 1px rgba(57,242,140,.17),0 0 25px rgba(57,242,140,.48)}}
+  @keyframes memecoinPulse{75%,100%{box-shadow:0 0 0 8px rgba(141,255,189,0)}}
+  @keyframes memecoinSheen{0%,58%{left:-48%}100%{left:128%}}
   @media (prefers-reduced-motion:reduce){
-    .airdrop-btn,.airdrop-btn::after{animation:none}
+    .airdrop-btn,.airdrop-btn::after,.memecoin-btn,.memecoin-btn::before,.memecoin-btn::after{animation:none}
   }
 </style>
 </head>
@@ -5660,6 +5734,7 @@ PAGE_HTML = r"""<!doctype html>
       <input id="mktq" placeholder="Search market…" autocomplete="off" oninput="renderMktDrop()">
       <div id="mktlist"></div>
     </div>
+    <a class="memecoin-btn" href="/memecoin-intelligence">Memecoin Intelligence <span aria-hidden="true">→</span></a>
     <a class="airdrop-btn" href="/airdrops">✦ Airdrops</a>
     <a class="nav" href="/treeofalpha" style="color:#58c1ff;border-color:#235">📰 Tree of Alpha →</a>
     <a class="nav" href="/orderbook">Order Book + Trades →</a>
