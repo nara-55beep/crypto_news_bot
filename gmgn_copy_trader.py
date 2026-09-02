@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
+import sys
 import time
 from typing import Any
 
@@ -52,15 +54,16 @@ def _extract_trades(payload: Any) -> list[dict]:
     """Extract trade-shaped records from either JSON or embedded page data."""
     records = []
     for item in _walk(payload):
-        side = str(item.get("side", item.get("type", item.get("action", "")))).lower()
+        side = str(item.get("side", item.get("event_type",
+                                           item.get("type", item.get("action", ""))))).lower()
         if side not in ("buy", "sell"):
             continue
         token = item.get("token") or item.get("symbol") or item.get("token_symbol") or item.get("coin")
         if isinstance(token, dict):
             token = token.get("symbol") or token.get("address")
-        price = _number(item.get("price") or item.get("token_price") or item.get("price_usd"))
+        price = _number(item.get("price_usd") or item.get("price") or item.get("token_price"))
         qty = _number(item.get("quantity") or item.get("qty") or item.get("amount_token") or item.get("token_amount"))
-        usd = _number(item.get("usd") or item.get("amount_usd") or item.get("value") or item.get("volume"))
+        usd = _number(item.get("cost_usd") or item.get("usd") or item.get("amount_usd") or item.get("value") or item.get("volume"))
         if token and (price or qty or usd):
             records.append({"id": _trade_id(item), "side": side, "token": str(token),
                             "price": price, "qty": qty, "usd": usd,
@@ -91,23 +94,59 @@ class GMGNCopyTrader:
             while self.running:
                 if self.enabled:
                     try:
-                        async with session.get(FEED_URL) as response:
-                            if response.status >= 400:
-                                raise RuntimeError(f"feed returned HTTP {response.status}")
-                            text = await response.text()
-                            try:
-                                payload = json.loads(text)
-                            except json.JSONDecodeError:
-                                payload = text
-                            trades = _extract_trades(payload)
-                            self.online, self.error = True, ""
-                            for trade in reversed(trades):
-                                self._apply_once(trade)
+                        if FEED_URL == PAGE_URL:
+                            payload = await self._cli_payload()
+                        else:
+                            async with session.get(FEED_URL) as response:
+                                if response.status >= 400:
+                                    raise RuntimeError(f"feed returned HTTP {response.status}")
+                                text = await response.text()
+                                try:
+                                    payload = json.loads(text)
+                                except json.JSONDecodeError:
+                                    payload = text
+                        trades = _extract_trades(payload)
+                        self.online, self.error = True, ""
+                        for trade in reversed(trades):
+                            self._apply_once(trade)
                     except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as exc:
                         self.online = False
                         self.error = f"{type(exc).__name__}: {exc}"
                 await asyncio.sleep(POLL_SECONDS)
         self.running = False
+
+    async def _cli_payload(self) -> Any:
+        """Use GMGN's official authenticated read CLI (credentials stay local)."""
+        cli = shutil.which("gmgn-cli")
+        if cli is None:
+            cli = "gmgn-cli.cmd" if sys.platform == "win32" else "gmgn-cli"
+            if shutil.which(cli) is None:
+                npx = shutil.which("npx.cmd" if sys.platform == "win32" else "npx")
+                if npx is None:
+                    raise RuntimeError("gmgn-cli is not installed; run npm install -g gmgn-cli")
+                command = [npx, "--yes", "gmgn-cli"]
+            else:
+                command = [cli]
+        else:
+            command = [cli]
+        command += ["portfolio", "activity", "--chain", "robinhood", "--wallet",
+                    ADDRESS, "--limit", "100", "--raw"]
+        proc = await asyncio.create_subprocess_exec(
+            *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise RuntimeError("gmgn-cli query timed out")
+        if proc.returncode:
+            detail = stderr.decode(errors="replace").strip()
+            raise RuntimeError(detail or f"gmgn-cli exited with code {proc.returncode}")
+        try:
+            return json.loads(stdout.decode(errors="replace"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("gmgn-cli returned invalid JSON") from exc
 
     def _apply_once(self, trade: dict):
         trade_id = trade["id"]
