@@ -18,3 +18,14 @@ def test_copy_buy_and_sell_updates_paper_balance():
     assert bot.balance == 55.0
     assert bot.positions == {}
     assert bot.history[0]["pnl"] == 5.0
+
+
+def test_first_feed_is_baseline_not_a_trade():
+    bot = GMGNCopyTrader()
+    bot._baselined = False
+    trades = [{"id": "old", "side": "buy", "token": "TEST",
+               "price": 2.0, "qty": 5.0, "usd": 10.0}]
+    bot._seen.update(t["id"] for t in trades)
+    bot._baselined = True
+    assert bot.balance == 50.0
+    assert bot.positions == {}
