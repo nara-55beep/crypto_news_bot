@@ -22,6 +22,7 @@ FEED_URL = os.getenv("GMGN_TRADE_FEED_URL", PAGE_URL)
 START_BALANCE = 50.0
 POLL_SECONDS = 1.0
 MAX_EVENTS = 100
+STATE_PATH = os.path.join(os.path.dirname(__file__), "data", "trenchflippermoney_state.json")
 
 
 def _number(value: Any) -> float | None:
@@ -84,7 +85,9 @@ class GMGNCopyTrader:
         self.history: list[dict] = []
         self.events: list[dict] = []
         self._seen: set[str] = set()
+        self._baselined = False
         self._task: asyncio.Task | None = None
+        self._load()
 
     async def run(self):
         self.running = True
@@ -107,8 +110,15 @@ class GMGNCopyTrader:
                                     payload = text
                         trades = _extract_trades(payload)
                         self.online, self.error = True, ""
+                        if not self._baselined:
+                            self._seen.update(trade["id"] for trade in trades)
+                            self._baselined = True
+                            self._save()
+                            await asyncio.sleep(POLL_SECONDS)
+                            continue
                         for trade in reversed(trades):
                             self._apply_once(trade)
+                        self._save()
                     except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as exc:
                         self.online = False
                         self.error = f"{type(exc).__name__}: {exc}"
@@ -210,8 +220,36 @@ class GMGNCopyTrader:
         self.history.clear()
         self.events.clear()
         self._seen.clear()
+        self._baselined = False
         self.error = ""
+        self._save()
         return self.snapshot()
+
+    def _load(self):
+        try:
+            with open(STATE_PATH, encoding="utf-8") as handle:
+                state = json.load(handle)
+            self._seen = set(state.get("seen", []))
+            self._baselined = bool(state.get("baselined", False))
+            self.balance = float(state.get("balance", START_BALANCE))
+            self.positions = state.get("positions", {})
+            self.history = state.get("history", [])[:100]
+            self.events = state.get("events", [])[:MAX_EVENTS]
+        except FileNotFoundError:
+            return
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            self._seen.clear()
+            self._baselined = False
+
+    def _save(self):
+        os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
+        state = {"seen": list(self._seen)[-2000:], "baselined": self._baselined,
+                 "balance": self.balance, "positions": self.positions,
+                 "history": self.history, "events": self.events}
+        temp_path = STATE_PATH + ".tmp"
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            json.dump(state, handle)
+        os.replace(temp_path, STATE_PATH)
 
     def snapshot(self) -> dict:
         invested = sum(p["qty"] * p["entry"] for p in self.positions.values())
